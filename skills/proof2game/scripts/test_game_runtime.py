@@ -86,7 +86,7 @@ print(json.dumps({'type':'turn.completed'}))
 @unittest.skipUnless(shutil.which('node'), 'Node.js is unavailable')
 class GameRuntimeTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='paper-game-test-')
+        self.temp = tempfile.TemporaryDirectory(prefix='proof2game-test-')
         self.root = Path(self.temp.name)
         shutil.copyfile(RUNTIME, self.root/'server.mjs')
         shutil.copyfile(DIAGRAM, self.root/DIAGRAM.name)
@@ -111,7 +111,7 @@ class GameRuntimeTests(unittest.TestCase):
         cli = self.root/'fake-codex'
         cli.write_text(FAKE_CLI)
         cli.chmod(0o700)
-        self.env = dict(os.environ, MATHGROVE_CODEX=str(cli))
+        self.env = dict(os.environ, PROOF2GAME_CODEX=str(cli))
         self.proc = None
         self.start()
 
@@ -327,7 +327,7 @@ class GameRuntimeTests(unittest.TestCase):
 
     def test_codex_environment_executable_is_used_without_override(self):
         self.stop()
-        executable = self.env.pop('MATHGROVE_CODEX')
+        executable = self.env.pop('PROOF2GAME_CODEX')
         self.env['CODEX_CLI_PATH'] = executable
         self.start()
         self.assertEqual(self.payload['connection']['cli_source'], 'codex_environment')
@@ -347,10 +347,18 @@ class GameRuntimeTests(unittest.TestCase):
         self.choose_guide()
         self.assertEqual(self.action('start')[0], 200)
 
+    def test_previous_override_is_used_when_proof2game_override_is_absent(self):
+        self.stop()
+        self.env['MATHGROVE_CODEX'] = self.env.pop('PROOF2GAME_CODEX')
+        self.start()
+        self.assertEqual(self.payload['connection']['cli_version'], 'codex-cli controlled-test')
+        self.assertEqual(self.action('start')[0], 200)
+
     def test_missing_explicit_override_is_reported_without_fallback(self):
         self.stop()
-        self.env['CODEX_CLI_PATH'] = self.env['MATHGROVE_CODEX']
-        self.env['MATHGROVE_CODEX'] = str(self.root/'missing-executable')
+        self.env['CODEX_CLI_PATH'] = self.env['PROOF2GAME_CODEX']
+        self.env['MATHGROVE_CODEX'] = self.env['PROOF2GAME_CODEX']
+        self.env['PROOF2GAME_CODEX'] = str(self.root/'missing-executable')
         self.start()
         self.assertEqual(self.payload['connection']['cli_source'], 'explicit_override')
         self.assertFalse(self.payload['connection']['available'])
@@ -762,7 +770,7 @@ class GameRuntimeTests(unittest.TestCase):
         shutil.copytree(original_root/'snapshot', self.root/'snapshot')
         shutil.copyfile(original_root/'fake-codex', self.root/'fake-codex')
         (self.root/'fake-codex').chmod(0o700)
-        self.env['MATHGROVE_CODEX'] = str(self.root/'fake-codex')
+        self.env['PROOF2GAME_CODEX'] = str(self.root/'fake-codex')
         self.start()
         self.assertEqual(self.payload['progress']['levels'], {})
         self.assertEqual(self.action('save_import', save=exported)[0], 200)
@@ -781,6 +789,24 @@ class GameRuntimeTests(unittest.TestCase):
         image['svg'] = image['svg'].replace('</svg>', '<script>alert(1)</script></svg>')
         self.assertEqual(self.action('save_import', save=unsafe)[0], 400)
         self.assertEqual(self.get()['progress'], original)
+
+    def test_current_download_preserves_previous_release_save_format(self):
+        self.assertEqual(self.action('understand_all')[0], 200)
+        status, headers, body = self.call('GET', '/api/save/export')
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['Content-Disposition'], 'attachment; filename="proof2game-current.json"')
+        saved = json.loads(body)
+        self.assertEqual(saved['kind'], 'mathgrove-save')
+        self.assertEqual(saved['schema'], 1)
+        target = self.payload['undo']['id']
+        self.assertEqual(self.action('undo_action', target_id=target)[0], 200)
+        old_save = dict(saved, label='Previous release export')
+        self.assertEqual(self.action('save_import', save=old_save)[0], 200)
+        self.assertEqual(self.payload['progress']['completed'], ['a'])
+        self.assertEqual(self.payload['undo']['id'], target)
+        old_save['snapshot_digest'] = 'other-script-snapshot'
+        self.assertEqual(self.action('save_import', save=old_save)[0], 400)
+        self.assertEqual(self.payload['progress']['completed'], ['a'])
 
     def test_bad_and_cross_snapshot_imports_leave_everything_unchanged(self):
         self.action('start');original=self.get()['progress'];disk=(self.root/'player-save.json').read_bytes()

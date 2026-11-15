@@ -15,6 +15,7 @@ import uuid
 import zipfile
 
 import intake
+from intake import resolve_task_path
 import manuscript
 
 GATES = {
@@ -609,7 +610,6 @@ def git(project, *args, okay=False):
 
 
 def repository(task):
-    require(task.parent.name == ".mathgrove", "task must be a directory in the project's .mathgrove folder")
     project = task.parent.parent
     if git(project, "rev-parse", "--is-inside-work-tree", okay=True).returncode:
         git(project, "init")
@@ -632,9 +632,9 @@ def ensure_checkpoint(task, state):
     git(root, "--literal-pathspecs", "add", "--force", "--", *pathspec)
     different = git(root, "--literal-pathspecs", "diff", "--cached", "--quiet", "--", *pathspec, okay=True)
     if different.returncode == 1:
-        git(root, "--literal-pathspecs", "-c", "user.name=MathGrove checkpoint",
-            "-c", "user.email=checkpoint@mathgrove.invalid", "commit", "--only", "-m",
-            f"MathGrove checkpoint {task.name} {live_digest(state)[:12]}", "--", *pathspec)
+        git(root, "--literal-pathspecs", "-c", "user.name=Proof2Game checkpoint",
+            "-c", "user.email=checkpoint@proof2game.invalid", "commit", "--only", "-m",
+            f"Proof2Game checkpoint {task.name} {live_digest(state)[:12]}", "--", *pathspec)
     else:
         require(different.returncode == 0, different.stderr.decode(errors="replace"))
     commit = git(root, "rev-parse", "HEAD").stdout.decode().strip()
@@ -1215,7 +1215,7 @@ def display(state, *, stale=None, pending=False):
 
 
 def transact(task, request):
-    task = Path(task).resolve(strict=True)
+    task = resolve_task_path(task)
     path = task / STATE_FILE
     pending = task / JOURNAL_FILE
     op = request.get("op")

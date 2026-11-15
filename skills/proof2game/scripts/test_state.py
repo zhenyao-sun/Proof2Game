@@ -15,10 +15,10 @@ ASSETS = Path(__file__).resolve().parents[1] / "assets"
 
 class Ledger(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="mathgrove-ledger-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="proof2game-ledger-")
         self.addCleanup(self.temporary.cleanup)
         self.project = Path(self.temporary.name).resolve()
-        self.task = self.project / ".mathgrove" / "target-a"
+        self.task = self.project / ".proof2game" / "target-a"
         self.task.mkdir(parents=True)
         shutil.copyfile(ASSETS / "script-template.tex", self.task / "main.tex")
         shutil.copytree(ASSETS / "script-example", self.task / "components")
@@ -236,6 +236,27 @@ class Ledger(unittest.TestCase):
         with self.assertRaisesRegex(state.Rejected, "outside the saved transaction"):
             self.change("advance")
         self.assertEqual(state.read_json(self.task / "state.json")["revision"], before)
+
+    def test_legacy_task_keeps_active_review_and_git_checkpoint_at_original_path(self):
+        current = self.task
+        self.task = self.project / ".mathgrove" / current.name
+        self.task.parent.mkdir()
+        current.rename(self.task)
+        self.init()
+        self.change("advance")
+        reviewer = self.bind(self.action(role="reviewer", component="main"))
+        previous = (self.task / state.STATE_FILE).read_bytes()
+        actual = state.transact(current, {"op": "status"})
+        self.assertFalse(actual["stale"])
+        self.assertEqual((self.task / state.STATE_FILE).read_bytes(), previous)
+        self.assertFalse(current.exists())
+        self.assertEqual(actual["state"]["actions"][reviewer["token"]]["identity"], reviewer["identity"])
+        checkpoint = actual["state"]["checkpoints"][0]["commit"]
+        stored = state.git(self.project, "show", f"{checkpoint}:.mathgrove/{self.task.name}/main.tex").stdout
+        self.assertEqual(stored, (self.task / "main.tex").read_bytes())
+        self.data = state.transact(current, {"op": "checkpoint", "expected_revision": actual["state"]["revision"]})
+        self.assertEqual(self.data["state"]["checkpoints"][0]["commit"], checkpoint)
+        self.assertFalse(current.exists())
 
     def test_edit_during_compile_is_never_overwritten(self):
         self.init(kind="public")

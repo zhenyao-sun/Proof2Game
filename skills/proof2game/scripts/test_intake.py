@@ -1,3 +1,4 @@
+import fcntl
 import hashlib
 from pathlib import Path
 import shutil
@@ -61,11 +62,57 @@ class IntakeTest(unittest.TestCase):
         first = self.target(version="v1")
         second = self.target(version="v2")
         self.assertNotEqual(first["directory"], second["directory"])
+        self.assertEqual(Path(first["directory"]).parent, self.project / ".proof2game")
         self.assertEqual(first["cutoff"], "2025-01-15")
         self.assertEqual(Path(first["directory"], first["original_path"]).read_bytes(), "# 原始稿件\n".encode())
         self.assertEqual(first["directory"], self.target(version="v1")["directory"])
         with self.assertRaisesRegex(ValueError, "exact saved target"):
             intake.cutoff_for(self.project, {"task_id": first["id"], "cutoff": "2025-01-16"})
+
+    def test_existing_target_and_source_decisions_stay_in_legacy_directory(self):
+        first = self.target(version="v1")
+        modern = Path(first["directory"])
+        legacy = self.project / ".mathgrove" / first["id"]
+        modern.parent.rename(legacy.parent)
+        initial_receipt = (legacy / "target.json").read_bytes()
+        with intake.lock(self.project):
+            repeated = self.target(version="v1")
+            self.assertEqual(Path(repeated["directory"]), legacy)
+            self.assertEqual(intake.resolve_task_path(modern), legacy)
+            intake.record_unavailable(self.project, {"task_id": first["id"], "work_key": "original-work",
+                                                      "resolution": "waived_optional", "reason": "User waiver"})
+        self.assertTrue((legacy.parent / "intake.lock").is_file())
+        self.assertFalse(modern.parent.exists())
+        self.assertEqual((legacy / "target.json").read_bytes(), initial_receipt)
+        self.assertTrue((legacy / "unavailable-sources" / "original-work.json").is_file())
+        with intake.lock(self.project):
+            new = self.target(version="v2")
+        self.assertEqual(Path(new["directory"]).parent, modern.parent)
+        self.assertEqual(intake.record_path(self.project, "target", first["id"]), legacy / "target.json")
+        self.assertFalse((modern.parent / "intake.lock").exists())
+
+    def test_duplicate_saved_ids_stop_without_overwriting_either_receipt(self):
+        first = self.target(version="v1")
+        modern = Path(first["directory"])
+        legacy = self.project / ".mathgrove" / first["id"]
+        shutil.copytree(modern, legacy)
+        with self.assertRaisesRegex(ValueError, "exists in both work directories"):
+            self.target(version="v1")
+        with self.assertRaisesRegex(ValueError, "exists in both work directories"):
+            intake.resolve_task_path(modern)
+        self.assertEqual((modern / "target.json").read_bytes(), (legacy / "target.json").read_bytes())
+
+    def test_shared_references_use_old_lock_and_preserve_existing_modern_lock(self):
+        paths = [self.project / namespace / "intake.lock" for namespace in (".proof2game", ".mathgrove")]
+        with intake.lock(self.project):
+            self.assertTrue(paths[0].exists())
+            self.assertFalse(paths[1].parent.exists())
+        paths[1].parent.mkdir()
+        with intake.lock(self.project):
+            for path in paths:
+                with self.subTest(path=path), path.open("a+b") as contender:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(contender.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def test_arxiv_edition_pin(self):
         self.assertEqual(intake.arxiv_link("https://arxiv.org/pdf/2501.01234v2.pdf"),

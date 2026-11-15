@@ -27,6 +27,10 @@ from sources import (
     url,
 )
 
+TASK_STORAGE = ".proof2game"
+LEGACY_TASK_STORAGE = ".mathgrove"
+TASK_NAMESPACES = (TASK_STORAGE, LEGACY_TASK_STORAGE)
+
 
 def digest(path):
     with path.open("rb") as stream:
@@ -69,12 +73,43 @@ def inside(project, path):
     return resolved
 
 
+def task_directory(project, name):
+    """Find a saved target version without relocating it, or choose its new path."""
+    name = identifier(name)
+    current, legacy = (inside(project, project / namespace / name) for namespace in TASK_NAMESPACES)
+    if current != legacy and current.exists() and legacy.exists():
+        raise ValueError(f"Target {name} exists in both work directories. Preserve both and resolve which is authoritative: "
+                         f"{current}, {legacy}")
+    return legacy if legacy.exists() else current
+
+
+def resolve_task_path(path):
+    """Resolve an explicit target version path written with either storage name."""
+    path = Path(path).expanduser()
+    if path.parent.name not in TASK_NAMESPACES:
+        raise ValueError(f"The task must be in the project's {TASK_STORAGE} or legacy {LEGACY_TASK_STORAGE} directory.")
+    project = path.parent.parent.resolve(strict=True)
+    task = task_directory(project, path.name).resolve(strict=True)
+    if not task.is_dir():
+        raise ValueError(f"Expected a task work directory: {task}")
+    return task
+
+
 @contextlib.contextmanager
 def lock(project):
-    base = inside(project, project / ".mathgrove")
-    base.mkdir(exist_ok=True)
-    with inside(project, base / "intake.lock").open("a+b") as stream:
-        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+    # An installed v0.1.0 client uses this lock for its task metadata and the
+    # shared references/ catalog. Use it wherever the legacy root exists, and
+    # also keep any modern lock already used here before the old client ran.
+    modern = inside(project, project / TASK_STORAGE / "intake.lock")
+    legacy = inside(project, project / LEGACY_TASK_STORAGE / "intake.lock")
+    with contextlib.ExitStack() as locks:
+        if modern == legacy or modern.exists() or not legacy.parent.exists():
+            modern.parent.mkdir(exist_ok=True)
+            stream = locks.enter_context(modern.open("a+b"))
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        if legacy.parent.exists() and legacy != modern:
+            stream = locks.enter_context(legacy.open("a+b"))
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
         yield
 
 
@@ -189,7 +224,7 @@ def init_target(project, request):
     identity = [sha, project_type, version["version"], version["public_date"], version["source_url"]]
     suffix = hashlib.sha256(json_bytes(identity)).hexdigest()[:16]
     task_id = identifier(request.get("id", f"target-{suffix}"))
-    task = inside(project, project / ".mathgrove" / task_id)
+    task = task_directory(project, task_id)
     record = inside(project, task / "target.json")
     original = inside(project, task / f"original{extension}")
     metadata = {
@@ -283,7 +318,7 @@ def copy_target_transcription(project, target_id, record, reference):
 def record_path(project, kind, name):
     name = identifier(name)
     if kind == "target":
-        return inside(project, project / ".mathgrove" / name / "target.json")
+        return inside(project, task_directory(project, name) / "target.json")
     if kind == "reference":
         return inside(project, project / "references" / name / "source.json")
     raise ValueError("kind must be target or reference")
@@ -468,7 +503,7 @@ def missing_path(project, request):
     task_id = identifier(request.get("task_id"))
     checked_record(project, "target", task_id)
     work = identifier(request.get("work_key"))
-    return inside(project, project / ".mathgrove" / task_id / "unavailable-sources" / f"{work}.json")
+    return inside(project, task_directory(project, task_id) / "unavailable-sources" / f"{work}.json")
 
 
 def record_unavailable(project, request):
@@ -568,7 +603,7 @@ def main():
     args = parser.parse_args()
     try:
         if sys.platform != "darwin":
-            raise ValueError("MathGrove's authoring environment is macOS with ChatGPT Desktop/Codex.")
+            raise ValueError("Proof2Game's authoring environment is macOS with ChatGPT Desktop/Codex.")
         project = args.project.expanduser().resolve(strict=True)
         if not project.is_dir():
             raise ValueError("The project location must be an existing folder.")
@@ -592,7 +627,7 @@ def main():
             record = record_path(project, kind, args.input)
             result = public_record(record, checked_record(project, kind, args.input))
     except (ValueError, OSError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
-        parser.exit(2, f"MathGrove intake: {error}\n")
+        parser.exit(2, f"Proof2Game intake: {error}\n")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

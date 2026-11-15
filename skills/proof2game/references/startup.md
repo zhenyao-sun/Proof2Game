@@ -4,6 +4,8 @@
 
 Use macOS with ChatGPT Desktop/Codex and a real local checkout. At first use in this user-facing session, identify the loaded release, then run `python3 scripts/release.py check` from the skill folder. The helper derives its repository from its own location and compares the actual Git commit and stable tags at the configured public upstream. Record the release tag, commit, and resolved entrypoint. The record is local to the task. For successive uses in the same main session, reuse the verified selection. Internal sessions run with paths and the release supplied by the coordinator. They do not contact GitHub.
 
+An installation made by the v0.1.0 updater may remain in its existing release cache and have its original Git remote. Use the canonical entrypoint returned by the verifier. Use the existing project task directory when resuming. The intake helper recognizes its original storage location.
+
 - `current`: continue.
 - `offline`: say what prevented checking and continue with the verified installed release. A first installation requires obtaining the package.
 - `needs-confirmation`: show the installed and proposed versions and pause for approval. On skip, keep the installed release. On approval, run `python3 scripts/release.py apply --tag TAG --commit SHA` using the exact approved pair. Verify the returned entrypoint and read it before any task mutation. A newer proposal requires its own approval. Use the ledger's [select-release operation](state.md#initialization-dispatch-and-completion) to bind the new release to an existing task at a supported boundary. Preserve the task's target edition, Goal, research data and the older installation. Save and report any compatibility failure.

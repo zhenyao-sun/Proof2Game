@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select an installed MathGrove release without writing to a research project."""
+"""Select an installed Proof2Game release without writing to a research project."""
 
 import argparse
 import json
@@ -10,8 +10,9 @@ import subprocess
 import sys
 import tempfile
 
-UPSTREAM = "https://github.com/zhenyao-sun/MathGrove.git"
-CACHE = Path.home() / "Library/Application Support/MathGrove/releases"
+UPSTREAM = "https://github.com/zhenyao-sun/Proof2Game.git"
+LEGACY_UPSTREAM = "https://github.com/zhenyao-sun/MathGrove.git"
+CACHE = Path.home() / "Library/Application Support/Proof2Game/releases"
 TAG = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 OID = re.compile(r"[0-9a-f]{40}\Z")
 OFFLINE_ERRORS = (
@@ -63,8 +64,9 @@ def verify(repo):
     repo = Path(repo).resolve()
     if Path(git("rev-parse", "--show-toplevel", cwd=repo)).resolve() != repo:
         raise ReleaseError("The release must be the root of its own Git checkout")
-    if git("config", "--get", "remote.origin.url", cwd=repo) != UPSTREAM:
-        raise ReleaseError("The checkout origin differs from the MathGrove upstream")
+    origin = git("config", "--get", "remote.origin.url", cwd=repo)
+    if origin not in (UPSTREAM, LEGACY_UPSTREAM):
+        raise ReleaseError("The checkout origin differs from the Proof2Game upstream")
     if git("status", "--porcelain=v1", "--untracked-files=all", cwd=repo):
         raise ReleaseError("The installed checkout contains local changes. Preserve it and use a clean release.")
     tag = (repo / "VERSION").read_text(encoding="ascii").strip()
@@ -72,7 +74,9 @@ def verify(repo):
     head = git("rev-parse", "--verify", "HEAD^{commit}", cwd=repo)
     if git("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}", cwd=repo) != head:
         raise ReleaseError("The loaded commit does not match the release tag")
-    entry = repo / "skills/mathgrove/SKILL.md"
+    entry = repo / "skills/proof2game/SKILL.md"
+    if tag == "v0.1.0" and not entry.is_file():
+        entry = repo / "skills/mathgrove/SKILL.md"
     if not entry.is_file() or entry.resolve() != entry:
         raise ReleaseError("The release is missing its local skill entrypoint")
     return {"tag": tag, "commit": head, "entrypoint": str(entry)}
@@ -98,7 +102,7 @@ def remote_tags():
             (annotated if peeled else tags)[name] = oid
     tags.update(annotated)
     if not tags:
-        raise ReleaseError("Upstream supplied no stable MathGrove release tags")
+        raise ReleaseError("Upstream supplied no stable Proof2Game release tags")
     return tags
 
 
@@ -133,7 +137,7 @@ def apply(repo, tag, commit, cache=CACHE):
     if destination.is_symlink():
         raise ReleaseError("The update destination is a symbolic link")
     if not destination.exists():
-        with tempfile.TemporaryDirectory(prefix=".mathgrove-stage-", dir=cache) as stage:
+        with tempfile.TemporaryDirectory(prefix=".proof2game-stage-", dir=cache) as stage:
             clone = Path(stage) / "release"
             git("clone", "--quiet", "--depth", "1", "--branch", tag, UPSTREAM, str(clone))
             if verify(clone)["commit"] != commit:
@@ -162,7 +166,7 @@ def main():
     args = parser.parse_args()
     try:
         if sys.platform != "darwin":
-            raise ReleaseError("MathGrove requires macOS")
+            raise ReleaseError("Proof2Game requires macOS")
         if args.command == "apply":
             if not OID.fullmatch(args.commit):
                 raise ReleaseError("Invalid approved commit")

@@ -200,7 +200,7 @@ def verified_numbers(main, files, full):
     engine = next((shutil.which(name) for name in engines if shutil.which(name)), None)
     if not engine:
         raise Rejected('Verified manuscript numbering requires an available TeX engine on the author computer; readiness checking does not require compilation.')
-    with tempfile.TemporaryDirectory(prefix='paper-game-numbering-') as folder:
+    with tempfile.TemporaryDirectory(prefix='proof2game-numbering-') as folder:
         root = Path(folder)
         instrumented = dict(files)
         for component in full['components']:
@@ -526,7 +526,7 @@ def make_game(main, approval=None, source_bindings=None, references_dir=None,
                                  references=references, layout='canonical-components-v1',
                                  project_type=record['project_type'], cutoff=record['cutoff'],
                                  original_sha256=record.get('original_sha256'))))
-    game = dict(schema=1, id=binding, app_name='MathGrove', language='English',
+    game = dict(schema=1, id=binding, app_name='Proof2Game', language='English',
         model=model, reasoning_effort=reasoning, snapshot_digest=binding,
         approval_snapshot_digest=clean['snapshot_digest'],
         project_type=record['project_type'], cutoff=record['cutoff'],
@@ -539,20 +539,20 @@ def make_game(main, approval=None, source_bindings=None, references_dir=None,
     return game, files, reference_files
 
 
-START = '''# MathGrove
+START = '''# Proof2Game
 
 On macOS, hand the ZIP to ChatGPT Desktop or Codex and say:
-“Extract this MathGrove game and start it in my browser.”
+“Extract this Proof2Game game and start it in my browser.”
 
 The assistant extracts it into a writable folder and runs `node server.mjs`
 there. Node.js 20 or later and an authenticated Codex command-line program
 are required. The game looks for the desktop app's bundled Codex and then
-for `codex` on PATH. Set `MATHGROVE_CODEX` to name a specific executable.
+for `codex` on PATH. Set `PROOF2GAME_CODEX` to name a specific executable.
 Use your own Codex account and allowance. The tutor uses the model and reasoning
 specified in game.json. Local play still requires online model inference.
 
 The fixed paper and mathematics sources and cited PDFs are included. No other
-author folders or separate skill installation are needed. MathGrove opens directly
+author folders or separate skill installation are needed. Proof2Game opens directly
 on its main map. It starts in English. Use the language menu on the map or in a
 level to switch the interface, manuscript and new AI replies between English and
 中文. Your last selection, existing conversations and progress are saved locally.
@@ -592,7 +592,7 @@ Each revision of the game script needs a new game package.
 def export(main, output, approval=None, source_bindings=None, references_dir=None, translation=None,
            model='gpt-6.1-sol', reasoning='medium'):
     if sys.platform != 'darwin':
-        raise Rejected('MathGrove generation is supported on macOS.')
+        raise Rejected('Proof2Game generation is supported on macOS.')
     output = Path(output).resolve()
     if output.suffix.lower() != '.zip':
         raise Rejected('Output must be a .zip archive.')
@@ -611,14 +611,14 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     runtime = script.parents[1] / 'assets/game-runtime'
     release_license = script.parents[3] / 'LICENSE'
     if not release_license.is_file():
-        raise Rejected('The MathGrove release license is missing from the installation.')
+        raise Rejected('The Proof2Game release license is missing from the installation.')
     required = ('server.mjs', 'guide-diagram.mjs', 'index.html', 'app.js', 'style.css', 'vendor/katex.min.js',
                 'vendor/katex.min.css', 'vendor/auto-render.min.js', 'vendor/LICENSE-KaTeX.txt',
                 'vendor/fonts/OFL.txt')
     if not all((runtime / name).is_file() for name in required):
         raise Rejected('The installed game runtime is incomplete.')
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix='paper-game-export-') as td:
+    with tempfile.TemporaryDirectory(prefix='proof2game-export-') as td:
         archive = Path(td) / 'game.zip'
         with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
             for p in sorted(runtime.rglob('*')):
@@ -632,11 +632,11 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
                 z.writestr(name, data)
             z.writestr('game.json', json.dumps(game, ensure_ascii=False, indent=2) + '\n')
             z.writestr('START.md', START)
-            z.write(release_license, 'LICENSE-MathGrove.txt')
-            z.writestr('AGENTS.md', '# MathGrove\n\nOn a user request to start this game on macOS, read START.md and run `node server.mjs` in this extracted folder. Use the player\'s own Codex account. Preserve the included snapshot and local saves. Do not edit the paper or silently substitute the tutor model. No separate skill is required.\n')
+            z.write(release_license, 'LICENSE-Proof2Game.txt')
+            z.writestr('AGENTS.md', '# Proof2Game\n\nOn a user request to start this game on macOS, read START.md and run `node server.mjs` in this extracted folder. Use the player\'s own Codex account. Preserve the included snapshot and local saves. Do not edit the paper or silently substitute the tutor model. No separate skill is required.\n')
         # Stage on the destination filesystem, then publish atomically without
         # overwriting an earlier delivery, even if another process creates it.
-        fd, staged = tempfile.mkstemp(prefix='.paper-game-', suffix='.zip', dir=output.parent)
+        fd, staged = tempfile.mkstemp(prefix='.proof2game-', suffix='.zip', dir=output.parent)
         try:
             with os.fdopen(fd, 'wb') as f:
                 f.write(archive.read_bytes())

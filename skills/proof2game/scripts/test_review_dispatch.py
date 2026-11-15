@@ -23,8 +23,8 @@ class ReviewDispatchTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
-        self.task = root / "task"
-        self.task.mkdir()
+        self.task = root / ".proof2game" / "task"
+        self.task.mkdir(parents=True)
         self.scratch = root / "packets"
         self.scratch.mkdir()
         self.main = self.task / "main.tex"
@@ -144,7 +144,8 @@ class ReviewDispatchTest(unittest.TestCase):
             read = subprocess.run(command, check=True, capture_output=True, text=True)
             self.assertEqual(json.loads(read.stdout.split("\n", 1)[1])["token"], action["token"])
             action["identity"] = {"session": "continued-session"}
-            continued = review_dispatch.prepare(self.task, action["token"])
+            previous_location = self.task.parent.parent / ".mathgrove" / self.task.name
+            continued = review_dispatch.prepare(previous_location, action["token"])
             self.assertEqual(continued["operation"], "continue")
             self.assertEqual(continued["session"], "continued-session")
             with self.assertRaisesRegex(ValueError, "current assignment"):

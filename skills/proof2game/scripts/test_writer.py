@@ -14,7 +14,7 @@ ASSETS = Path(__file__).resolve().parent.parent / "assets"
 
 class WriterTests(unittest.TestCase):
     def setUp(self):
-        self.workspace = TemporaryDirectory(prefix="mathgrove-writer-test-")
+        self.workspace = TemporaryDirectory(prefix="proof2game-writer-test-")
         self.addCleanup(self.workspace.cleanup)
         self.task = Path(self.workspace.name)
         self.snapshot = self.task / "snapshot"

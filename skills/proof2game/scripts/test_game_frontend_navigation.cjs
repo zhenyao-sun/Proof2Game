@@ -23,7 +23,7 @@ const nodes=new Map(),html=fs.readFileSync(path.join(assets,'index.html'),'utf8'
 for(const match of html.matchAll(/\bid="([^"]+)"/g))nodes.set(match[1],new Node('div'));
 const special=new Map(['.garden','.composer-hint','.component-scroll'].map(key=>[key,new Node('div')]));
 const descendants=node=>[node,...node.children.filter(x=>x instanceof Node).flatMap(descendants)];
-const document={...new Node('document'),title:'MathGrove',hidden:false,documentElement:{},createTextNode:text=>new Node('#text',text),createElement:tag=>new Node(tag),createElementNS:(_,tag)=>new Node(tag),getElementById:id=>nodes.get(id)||descendants(nodes.get('level-original')).find(node=>node.id===id),querySelector:key=>special.get(key),querySelectorAll:key=>key==='[data-i18n]'?[]:key==='.level-node'?descendants(nodes.get('forest')).filter(node=>node.dataset.levelId):[]};
+const document={...new Node('document'),title:html.match(/<title>([^<]+)<\/title>/)?.[1],hidden:false,documentElement:{},createTextNode:text=>new Node('#text',text),createElement:tag=>new Node(tag),createElementNS:(_,tag)=>new Node(tag),getElementById:id=>nodes.get(id)||descendants(nodes.get('level-original')).find(node=>node.id===id),querySelector:key=>special.get(key),querySelectorAll:key=>key==='[data-i18n]'?[]:key==='.level-node'?descendants(nodes.get('forest')).filter(node=>node.dataset.levelId):[]};
 document.addEventListener=Node.prototype.addEventListener;document.fire=Node.prototype.fire;
 let url=new URL('http://localhost/'),entries=[url.href],cursor=0;
 const window=new Node('window');window.innerWidth=1200;window.location={};
@@ -56,7 +56,7 @@ vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(assets,'app.
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 (async()=>{
  await settle();assert.equal(nodes.get('level-dialog').open,false);
- assert.equal(document.documentElement.lang,'en');assert.equal(document.title,'MathGrove');
+ assert.equal(document.documentElement.lang,'en');assert.equal(document.title,'Proof2Game');
  assert(!nodes.has('language-dialog'));assert(!nodes.has('language-open'));
  assert(nodes.get('forest').children.length>0,'main map renders without any entry action');
  assert.equal(calls.length,0,'loading the map does not select a language or start a lesson');
@@ -71,7 +71,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal(cardTitle('one').textContent,'Lemma 1.1A statement');
  game.levels[0].title='Main Results';game.levels[0].section_title='Main Results';
  progress.language='中文';await nodes.get('connection-check').fire('click');await settle();
- assert.equal(document.documentElement.lang,'en');assert.equal(document.title,'MathGrove');
+ assert.equal(document.documentElement.lang,'en');assert.equal(document.title,'Proof2Game');
  assert(calls.every(call=>call.action!=='language'));calls.length=0;
  assert.equal(cardTitle('convention').textContent,'Convention','different source names do not change the card label');
 
@@ -81,7 +81,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal(nodes.get('language-map').hidden,false);
  nodes.get('language-map').value='中文';await nodes.get('language-map').fire('change');await settle();
  assert.equal(calls[0].action,'language');assert.equal(document.documentElement.lang,'zh-CN');
- assert.equal(document.title,'MathGrove');
+ assert.equal(document.title,'Proof2Game');
  assert.equal(cardTitle('convention').textContent,'约定');
  assert.equal(cardTitle('one').textContent,'引理 1.1一个陈述');
  assert.equal(nodes.get('progress-count').textContent,'1 / 3');
@@ -152,7 +152,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  statuses={entry:'open',convention:'hidden',one:'hidden',proof:'hidden'};
  await nodes.get('connection-check').fire('click');await settle();calls.length=0;
  assert(!nodes.has('game-authors'));
- assert.equal(document.title,'MathGrove');
+ assert.equal(document.title,'Proof2Game');
  assert.equal(cardTitle('entry').textContent,'Convention');
  assert.equal(cardTitle('entry').children.length,1,'Convention has no redundant subtitle');
  await nodes.get('next-level').fire('click');await settle();

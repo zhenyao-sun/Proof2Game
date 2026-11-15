@@ -576,7 +576,7 @@ def materialize_snapshot(source_main, destination):
     citations = set().union(*(cited_keys(text) for text in kept_sources))
     assembled = prefix + prune_bibliography(selected, citations) + suffix
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix='.mathgrove-snapshot-', dir=destination.parent) as scratch:
+    with tempfile.TemporaryDirectory(prefix='.proof2game-snapshot-', dir=destination.parent) as scratch:
         staged = Path(scratch) / 'snapshot'
         staged.mkdir()
         for item in active:
@@ -712,7 +712,7 @@ def verify_numbering(main):
         r'(?:^LaTeX Warning: (?:Reference|Citation) .+ undefined|There were undefined references)'
         r'|(?:Package [^ ]+ Warning: Undefined citation)', re.M
     )
-    with tempfile.TemporaryDirectory(prefix='mathgrove-numbering-') as folder:
+    with tempfile.TemporaryDirectory(prefix='proof2game-numbering-') as folder:
         # The work draft may contain archived sources and gaps. Compile the
         # exact assembly a player will receive and compare its new numbering.
         compiled = materialize_snapshot(main, Path(folder) / 'build')

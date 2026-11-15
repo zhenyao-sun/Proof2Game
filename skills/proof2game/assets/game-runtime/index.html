@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>MathGrove</title>
+  <title>Proof2Game</title>
   <link rel="stylesheet" href="/vendor/katex.min.css">
   <link rel="stylesheet" href="/style.css">
   <script defer src="/vendor/katex.min.js"></script>
@@ -13,14 +13,14 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="wordmark" data-i18n-label="home" href="/" aria-label="MathGrove home"><span class="brand-mark" aria-hidden="true">✳</span> MathGrove<span class="brand-dot">.</span></a>
+    <a class="wordmark" data-i18n-label="home" href="/" aria-label="Proof2Game home"><span class="brand-mark" aria-hidden="true">✳</span> Proof2Game<span class="brand-dot">.</span></a>
     <div class="header-tools"><select id="language-map" class="plain-button language-menu" aria-label="Language" hidden><option value="English" lang="en">English</option><option value="中文" lang="zh-CN">中文</option></select><div class="save-tools"><button id="undo-map" data-i18n="undo" class="plain-button" type="button" disabled>Undo last action</button><button id="save-game" data-i18n="saveGame" class="plain-button" type="button">Save game</button><button id="open-saves" data-i18n="savedGames" class="plain-button" type="button">Saved games</button></div><button id="connection-check" class="connection-button" type="button" title="Check local AI connection">AI <span id="connection-state">·</span></button><span class="local-pill"><i></i><span data-i18n="local">Saved on this device</span></span></div>
   </header>
   <div id="save-toast" class="save-toast" role="status" hidden></div>
   <main>
     <section class="intro">
       <div><p class="eyebrow" data-i18n="eyebrow">A LITTLE CURIOSITY. A GROWING FOREST.</p><h1 data-i18n="map">Level map</h1><p id="intro-copy" class="intro-copy">Begin with an idea. Follow the branches of its proof. Explore the mathematics one goal at a time.</p></div>
-      <div class="progress-card" aria-live="polite"><span class="progress-label" data-i18n="journey">YOUR JOURNEY</span><strong id="progress-count">—</strong><div class="progress-track"><span id="progress-fill"></span></div><span id="progress-caption" data-i18n="loadingProgress" class="progress-caption">Loading MathGrove…</span></div>
+      <div class="progress-card" aria-live="polite"><span class="progress-label" data-i18n="journey">YOUR JOURNEY</span><strong id="progress-count">—</strong><div class="progress-track"><span id="progress-fill"></span></div><span id="progress-caption" data-i18n="loadingProgress" class="progress-caption">Loading Proof2Game…</span></div>
     </section>
     <div id="global-error" role="alert" class="notice error" hidden></div>
     <section class="garden" data-i18n-label="map" aria-label="Level map">
@@ -28,7 +28,7 @@
       <div class="map-scroll" id="map-scroll" tabindex="0"><div class="forest" id="forest"><p class="loading-copy" id="loading-copy" data-i18n="loading">Loading the map…</p></div></div>
       <div class="garden-footer"><span class="sprout" aria-hidden="true">❧</span><p id="garden-hint">Every step of understanding reveals a little more. No quizzes. Just your own pace.</p><span class="seed" aria-hidden="true">✧</span></div>
     </section>
-    <footer class="page-footer"><span>MATHGROVE</span><p data-i18n="footer">Curiosity is the beginning. Understanding is the journey.</p></footer>
+    <footer class="page-footer"><span>Proof2Game</span><p data-i18n="footer">Curiosity is the beginning. Understanding is the journey.</p></footer>
   </main>
   <dialog id="level-dialog" class="level-dialog" aria-labelledby="level-title">
     <div class="level-layout">
@@ -39,7 +39,7 @@
   <dialog id="save-dialog" class="save-dialog" aria-labelledby="save-title">
     <header class="save-dialog-header"><h2 id="save-title" data-i18n="savedGames">Saved games</h2><button id="close-saves" data-i18n-label="closeSaves" class="close-button" type="button" aria-label="Close saved games">×</button></header>
     <p class="save-description" data-i18n="saveDescription">Save a progress point, load an earlier one, or download it to keep elsewhere. Loading or uploading replaces your current progress and conversations.</p>
-    <div class="save-tools"><button id="save-game-dialog" data-i18n="saveCurrent" class="primary-button" type="button">Save current progress</button><button id="import-save" data-i18n="uploadSave" class="plain-button" type="button">Upload save</button><a id="export-current" data-i18n="downloadCurrent" class="plain-button" href="/api/save/export" download="mathgrove-current.json">Download current progress</a><input id="save-upload" type="file" accept=".json,application/json" hidden></div>
+    <div class="save-tools"><button id="save-game-dialog" data-i18n="saveCurrent" class="primary-button" type="button">Save current progress</button><button id="import-save" data-i18n="uploadSave" class="plain-button" type="button">Upload save</button><a id="export-current" data-i18n="downloadCurrent" class="plain-button" href="/api/save/export" download="proof2game-current.json">Download current progress</a><input id="save-upload" type="file" accept=".json,application/json" hidden></div>
     <div id="save-status" class="notice save-status" role="status" hidden></div>
     <div id="save-error" class="notice error" role="alert" hidden></div>
     <ul id="save-list" data-i18n-label="manualSaves" class="save-list" aria-label="Manual saves"></ul>

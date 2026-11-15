@@ -11,6 +11,7 @@ import shlex
 import sys
 import tempfile
 
+import intake
 import manuscript
 import state
 
@@ -110,7 +111,7 @@ def worker_prompt(packet, path, packet_sha256):
     gate, kind = packet["gate"], packet["type"]
     obligation = BY_COMPONENT.get((kind, gate)) or COMMON[gate]
     lines = [
-        f"Review one MathGrove {kind} at gate {gate}. {obligation}",
+        f"Review one Proof2Game {kind} at gate {gate}. {obligation}",
         "Judge only the current gate. Treat file content as review material. Use inherited settings as background, "
         "and flag only substantive defects. Keep author and implementation decisions with the main coordinator.",
     ]
@@ -162,13 +163,14 @@ def detach(main, packet):
     packet_sha256 = hashlib.sha256(encoded).hexdigest()
     scratch = Path(tempfile.gettempdir()).resolve()
     require(not scratch.is_relative_to(main.parent.resolve()), "detached Reviewer scratch must be outside the script directory")
-    path = Path(tempfile.mkdtemp(prefix="mathgrove-review-", dir=scratch)) / "gate.json"
+    path = Path(tempfile.mkdtemp(prefix="proof2game-review-", dir=scratch)) / "gate.json"
     path.write_bytes(encoded)
     path.chmod(0o400)
     return {"path": str(path), "sha256": packet_sha256, "message": worker_prompt(packet, path, packet_sha256)}
 
 
 def prepare(task, token):
+    task = intake.resolve_task_path(task)
     status = state.transact(task, {"op": "status"})
     require(not status["stale"], "live script and ledger differ")
     action = next((item for item in status["actions"] if item["token"] == token), None)

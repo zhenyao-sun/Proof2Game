@@ -40,7 +40,7 @@ reviewed snapshot. Correct a translation-only defect in the game translation.
    Omit `--source-bindings` when there are no external citations. The default
    tutor is `gpt-6.1-sol / medium`. Use `--tutor-model` and
    `--tutor-reasoning` for a player tutor override from the role configuration.
-   A valid ZIP needs no author-specific directory or separate MathGrove
+   A valid ZIP needs no author-specific directory or separate Proof2Game
    installation. Delivery includes the ZIP and the startup note.
 
 ## Check delivery
@@ -62,4 +62,5 @@ it to extract and start the game. The included Node runtime script binds
 to loopback and opens the browser. The recipient uses their own installed
 Node 20+ and authenticated Codex CLI and quota. AI replies require their normal
 connection to Codex. Player progress and diagrams live in the extracted folder
-and can be exported independently.
+and can be exported independently. A save can move between releases when the
+snapshot ID matches, including games exported before the project rename.

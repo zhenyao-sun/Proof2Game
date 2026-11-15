@@ -36,14 +36,14 @@
     understandComponent:{convention:'I understand this convention',statement:'I understand this statement',proof:'I understand this proof'}
   };
   Object.assign(en,{
-    home:'MathGrove home',language:'Language',history:'Level history',back:'Back',forward:'Forward',
+    home:'Proof2Game home',language:'Language',history:'Level history',back:'Back',forward:'Forward',
     conversation:'AI conversation',conversationMode:'Conversation mode',guideMode:'Step by step guide',chatMode:'Regular chat',
     saveGame:'Save game',savedGames:'Saved games',closeSaves:'Close saved games',saveCurrent:'Save current progress',
     uploadSave:'Upload save',downloadCurrent:'Download current progress',manualSaves:'Manual saves',
     saveDescription:'Save a progress point, load an earlier one, or download it to keep elsewhere. Loading or uploading replaces your current progress and conversations.',
     inputLabel:'Tell the AI what is on your mind',checkConnection:'Check local AI connection',
     aiUnavailable:'unavailable',aiCheckLogin:'check login',aiConnected:'connected',aiReady:'ready to connect',
-    loading:'Loading the map…',loadingProgress:'Loading MathGrove…',untitled:'Let understanding grow.',
+    loading:'Loading the map…',loadingProgress:'Loading Proof2Game…',untitled:'Let understanding grow.',
     reload:'Please restart the game and refresh this page.',level:'Level',seed:'A SEED OF UNDERSTANDING',
     lockedShort:'Locked',lockedError:'This level is locked.',reference:'Reference',formulaSource:'Formula — view source',
     proofOf:name=>'Proof of '+name,pairedProof:()=> 'Proof location: ',understood:'Understood ✓',assistant:'ASSISTANT',
@@ -69,14 +69,14 @@
     placeholder:'哪里还不清楚？也可以告诉引导调整步长。',empty:'我们从这里开始。',you:'你',guide:'逐步引导',
     unavailable:'本关尚未开放。',map:'关卡地图',close:'关闭关卡',send:'发送消息',
     convention:'约定',understandComponent:{convention:'我理解了本关约定',statement:'我理解了本关陈述',proof:'我理解了本关证明'},
-    home:'MathGrove 首页',language:'语言',history:'关卡浏览记录',back:'后退',forward:'前进',
+    home:'Proof2Game 首页',language:'语言',history:'关卡浏览记录',back:'后退',forward:'前进',
     conversation:'AI 对话',conversationMode:'对话模式',guideMode:'逐步引导',chatMode:'普通聊天',
     saveGame:'保存游戏',savedGames:'存档',closeSaves:'关闭存档',saveCurrent:'保存当前进度',
     uploadSave:'上传存档',downloadCurrent:'下载当前进度',manualSaves:'手动存档',
     saveDescription:'可保存、载入或下载进度。载入或上传会替换当前的进度和对话。',
     inputLabel:'输入你的问题或想法',checkConnection:'检查本地 AI 连接',
     aiUnavailable:'不可用',aiCheckLogin:'请检查登录',aiConnected:'已连接',aiReady:'待连接',
-    loading:'正在加载地图…',loadingProgress:'正在加载 MathGrove…',untitled:'MathGrove',
+    loading:'正在加载地图…',loadingProgress:'正在加载 Proof2Game…',untitled:'Proof2Game',
     reload:'请重新启动游戏并刷新页面。',level:'关卡',seed:'起点',
     lockedShort:'未解锁',lockedError:'此关尚未解锁。',reference:'引用',formulaSource:'查看公式源码',
     proofOf:name=>name+'的证明',pairedProof:()=> '证明位置：',understood:'已理解 ✓',assistant:'助手',
@@ -710,7 +710,7 @@
       if(Number.isInteger(record.completed_count))info.append(element('span','',words().levelsComplete(record.completed_count,levels().length)));
       const controls=element('div','save-record-actions');
       const load=element('button','plain-button',t('load'));load.type='button';load.disabled=busy||saveBusy;load.setAttribute('aria-label',t('load')+' '+label);load.addEventListener('click',()=>saveAction('save_load',{save_id:record.id}));
-      const download=element('a','plain-button',t('download'));download.href='/api/saves/'+encodeURIComponent(record.id)+'/download';download.download='mathgrove-save.json';download.setAttribute('aria-label',t('download')+' '+label);
+      const download=element('a','plain-button',t('download'));download.href='/api/saves/'+encodeURIComponent(record.id)+'/download';download.download='proof2game-save.json';download.setAttribute('aria-label',t('download')+' '+label);
       const remove=element('button','plain-button save-delete',t('remove'));remove.type='button';remove.disabled=busy||saveBusy;remove.setAttribute('aria-label',t('remove')+' '+label);remove.addEventListener('click',()=>saveAction('save_delete',{save_id:record.id}));
       controls.append(load,download,remove);row.append(info,controls);rows.append(row);
     }

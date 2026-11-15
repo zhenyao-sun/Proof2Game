@@ -12,12 +12,12 @@ class ReleaseTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.checkout = Path(tmp.name)
+        self.checkout = Path(tmp.name).resolve()
         env = dict(os.environ, GIT_AUTHOR_NAME="Example", GIT_AUTHOR_EMAIL="test@example.com",
                    GIT_COMMITTER_NAME="Example", GIT_COMMITTER_EMAIL="test@example.com")
         subprocess.run(["git", "init", "-q", self.checkout], env=env, check=True)
         release.git("remote", "add", "origin", release.UPSTREAM, cwd=self.checkout)
-        entry = self.checkout / "skills/mathgrove/SKILL.md"
+        entry = self.checkout / "skills/proof2game/SKILL.md"
         entry.parent.mkdir(parents=True)
         entry.write_text("example", encoding="utf-8")
         (self.checkout / "VERSION").write_text("v0.1.0\n", encoding="ascii")
@@ -51,9 +51,17 @@ class ReleaseTests(unittest.TestCase):
                 release.check(self.checkout)
 
     def test_edited_release_cannot_be_reused_offline(self):
-        (self.checkout / "skills/mathgrove/SKILL.md").write_text("local change", encoding="utf-8")
+        (self.checkout / "skills/proof2game/SKILL.md").write_text("local change", encoding="utf-8")
         with self.assertRaisesRegex(release.ReleaseError, "local changes"):
             release.check(self.checkout)
+
+    def test_checkout_from_previous_repository_url_uses_the_new_skill(self):
+        release.git("remote", "set-url", "origin", release.LEGACY_UPSTREAM, cwd=self.checkout)
+        selected = release.verify(self.checkout)
+        self.assertEqual(selected["entrypoint"], str(self.checkout / "skills/proof2game/SKILL.md"))
+        release.git("remote", "set-url", "origin", "https://github.com/other/Proof2Game.git", cwd=self.checkout)
+        with self.assertRaisesRegex(release.ReleaseError, "checkout origin"):
+            release.verify(self.checkout)
 
     def test_updates_install_separately_and_verify_the_approved_commit(self):
         with tempfile.TemporaryDirectory() as workspace:

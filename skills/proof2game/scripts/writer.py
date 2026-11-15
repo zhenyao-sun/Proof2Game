@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Internal MathGrove writer delivery checks. Model judgments stay with the writer."""
+"""Internal Proof2Game writer delivery checks. Model judgments stay with the writer."""
 
 import argparse
 from datetime import date

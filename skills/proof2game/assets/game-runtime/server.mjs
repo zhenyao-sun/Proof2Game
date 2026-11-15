@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Local paper game. Requires Node.js >= 20 and the player's authenticated Codex CLI. */
+/* Local Proof2Game runtime. Requires Node.js >= 20 and the player's authenticated Codex CLI. */
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,6 +12,8 @@ import {diagramSchema, renderGuideDiagram, validGuideImage} from './guide-diagra
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ENGLISH = 'English';
 const CHINESE = '中文';
+// Keep the version 1 save marker so either release can read a same-snapshot save.
+const SAVE_FORMAT = 'mathgrove-save';
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (message, status=400, code) => {
   const error=new Error(message);
@@ -26,8 +28,8 @@ const safePath = relative => {
   if(fs.realpathSync(target)!==target) fail('Package files must not be symbolic links.');
   return target;
 };
-if(process.platform!=='darwin')fail('MathGrove runs on macOS.');
-if(Number(process.versions.node.split('.')[0])<20)fail('MathGrove requires Node.js 20 or later.');
+if(process.platform!=='darwin')fail('Proof2Game runs on macOS.');
+if(Number(process.versions.node.split('.')[0])<20)fail('Proof2Game requires Node.js 20 or later.');
 const json = target => JSON.parse(fs.readFileSync(target,'utf8'));
 const game = json(path.join(ROOT,'game.json'));
 const MODEL=game.model,EFFORT=game.reasoning_effort;
@@ -248,11 +250,11 @@ function atomicJson(target,value){
   catch(error){try{fs.unlinkSync(temporary);}catch{}throw error;}
 }
 function savedEnvelope(value,label='Manual save'){
-  return {schema:1,kind:'mathgrove-save',game_id:game.id,snapshot_digest:game.snapshot_digest,created_at:new Date().toISOString(),label,progress:copy(value)};
+  return {schema:1,kind:SAVE_FORMAT,game_id:game.id,snapshot_digest:game.snapshot_digest,created_at:new Date().toISOString(),label,progress:copy(value)};
 }
 function importProgress(value){
   if(Buffer.byteLength(JSON.stringify(value))>MAX_SAVE_BYTES)fail('Save file is larger than 16 MiB.',413,'saveTooLarge');
-  if(value?.kind==='mathgrove-save'){
+  if(value?.kind===SAVE_FORMAT){
     if(value.schema!==1||value.game_id!==game.id||value.snapshot_digest!==game.snapshot_digest)fail('Save does not match this game snapshot.',400,'saveMismatch');
     value=value.progress;
   }
@@ -268,7 +270,7 @@ function readRecord(id){
   if(!fs.existsSync(file))fail('This save was not found.',404,'saveMissing');
   if(!fs.lstatSync(file).isFile()||fs.realpathSync(file)!==file||fs.statSync(file).size>MAX_SAVE_BYTES)fail('Invalid saved record.');
   const record=json(file);
-  if(record?.kind!=='mathgrove-save'||typeof record.created_at!=='string'||!Number.isFinite(Date.parse(record.created_at))||typeof record.label!=='string'||record.label.length>150)fail('Invalid saved record.');
+  if(record?.kind!==SAVE_FORMAT||typeof record.created_at!=='string'||!Number.isFinite(Date.parse(record.created_at))||typeof record.label!=='string'||record.label.length>150)fail('Invalid saved record.');
   importProgress(record);return record;
 }
 function listSaves(){
@@ -338,7 +340,9 @@ function isExecutable(candidate){
   try{fs.accessSync(candidate,fs.constants.X_OK);return fs.statSync(candidate).isFile();}catch{return false;}
 }
 function resolveCli(){
-  if(process.env.MATHGROVE_CODEX)return {command:process.env.MATHGROVE_CODEX,source:'explicit_override'};
+  // Honor the override from existing launch setups when the new one is absent.
+  const override=process.env.PROOF2GAME_CODEX||process.env.MATHGROVE_CODEX;
+  if(override)return {command:override,source:'explicit_override'};
   if(process.env.CODEX_CLI_PATH&&isExecutable(process.env.CODEX_CLI_PATH))return {command:process.env.CODEX_CLI_PATH,source:'codex_environment'};
   for(const candidate of ['/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex','/Applications/Codex.app/Contents/Resources/codex']){
     if(isExecutable(candidate))return {command:candidate,source:'desktop_app'};
@@ -352,8 +356,8 @@ function checkCli(){
   const metadata={cli_source:cliSelection.source,cli_version:version.status===0?String(version.stdout||'').trim().slice(0,100):null};
   function health(value){return {...metadata,...value};}
   const help=spawnSync(CLI,['exec','--help'],{encoding:'utf8',timeout:15000,windowsHide:true});
-  if(help.error || help.status!==0)return health({available:false,authenticated:false,message:'Codex CLI was not found. Ask Codex to make its command-line executable available, or set MATHGROVE_CODEX to its executable, then restart the game.'});
-  if(!['--ignore-user-config','--output-schema','--ephemeral','--image'].every(flag=>help.stdout.includes(flag)))return health({available:false,authenticated:false,message:'This Codex CLI is too old for this game. Update Codex or set MATHGROVE_CODEX to a recent desktop-app executable, then restart.'});
+  if(help.error || help.status!==0)return health({available:false,authenticated:false,message:'Codex CLI was not found. Ask Codex to make its command-line executable available, or set PROOF2GAME_CODEX to its executable, then restart the game.'});
+  if(!['--ignore-user-config','--output-schema','--ephemeral','--image'].every(flag=>help.stdout.includes(flag)))return health({available:false,authenticated:false,message:'This Codex CLI is too old for this game. Update Codex or set PROOF2GAME_CODEX to a recent desktop-app executable, then restart.'});
   const auth=spawnSync(CLI,['login','status'],{encoding:'utf8',timeout:15000,windowsHide:true});
   const report=String(auth.stdout||'')+' '+String(auth.stderr||'');
   if(auth.error || /Error loading configuration|TOML|config\.toml/i.test(report))return health({available:true,authenticated:null,message:'Codex is available. The separate login-status check could not load its configuration; the next tutor request will verify the connection without loading that configuration.'});
@@ -412,7 +416,7 @@ function askTutor(next,level,action,message,control={},mode='guide'){
   if(!cliHealth.available||cliHealth.authenticated===false)fail(cliHealth.message,503,'checkConnectionError');
   const prompt=makePrompt(next,level,action,message,mode);
   return new Promise((resolve,reject)=>{
-    const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'paper-game-turn-'));
+    const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'proof2game-turn-'));
     const schemaFile=path.join(temporary,'response-schema.json');
     const outputFile=path.join(temporary,'response.json');
     const regular=mode==='chat',turnSchema=copy(regular?regularSchema:schema);
@@ -661,7 +665,7 @@ const server=http.createServer(async(req,res)=>{
         const record=download?readRecord(download[1]):savedEnvelope(progress,'Current progress');
         importProgress(record);
         const body=JSON.stringify(record)+'\n';
-        res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="mathgrove-'+(download?download[1]:'current')+'.json"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(body);return;
+        res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="proof2game-'+(download?download[1]:'current')+'.json"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(body);return;
       }
       if(req.method==='POST'&&url.pathname==='/api/action'){
         if(req.headers.origin!==origin || !String(req.headers['content-type']||'').startsWith('application/json'))fail('Use the game page to send actions.',403);
@@ -704,7 +708,7 @@ let port=0;
 for(let i=0;i<args.length;i++)if(args[i]==='--port'){port=Number(args[++i]);if(!Number.isSafeInteger(port)||port<0||port>65535)fail('Invalid port.');}else if(args[i]!=='--no-open')fail('Unknown argument: '+args[i]);
 server.listen(port,'127.0.0.1',()=>{
   origin='http://127.0.0.1:'+server.address().port;
-  cookieName='paper_game_'+server.address().port;
+  cookieName='proof2game_'+server.address().port;
   console.log(JSON.stringify({url:origin,game_id:game.id,save_path:progressFile,connection:cliHealth}));
   if(!args.includes('--no-open')){
     const opener=['open',[origin]];

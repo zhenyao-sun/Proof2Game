@@ -17,7 +17,7 @@ ASSETS = Path(__file__).resolve().parents[1] / 'assets'
 
 class GameExportTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix='mathgrove-export-check-')
+        self.tmp = tempfile.TemporaryDirectory(prefix='proof2game-export-check-')
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.script = self.root / 'script'
@@ -92,6 +92,10 @@ class GameExportTests(unittest.TestCase):
         with zipfile.ZipFile(output) as archive:
             data = json.loads(archive.read('game.json'))
             self.assertEqual(data['approval_snapshot_digest'], record['snapshot_digest'])
+            self.assertEqual(data['app_name'], 'Proof2Game')
+            self.assertIn(b'<title>Proof2Game</title>', archive.read('index.html'))
+            self.assertIn(b'Proof2Game game', archive.read('START.md'))
+            self.assertIn(b'PROOF2GAME_CODEX', archive.read('START.md'))
             self.assertEqual([level['id'] for level in data['levels']], record['components'])
             self.assertNotIn('title', data)
             self.assertNotIn('authors', data)
@@ -101,7 +105,7 @@ class GameExportTests(unittest.TestCase):
             self.assertEqual(archive.read('references/fixture.pdf'), original.read_bytes())
             self.assertEqual(archive.read('snapshot/main.tex'), self.main.read_bytes())
             self.assertNotIn('references/uncited.pdf', archive.namelist())
-            self.assertEqual(archive.read('LICENSE-MathGrove.txt'), (ASSETS.parents[2] / 'LICENSE').read_bytes())
+            self.assertEqual(archive.read('LICENSE-Proof2Game.txt'), (ASSETS.parents[2] / 'LICENSE').read_bytes())
             self.assertEqual(archive.read('vendor/fonts/OFL.txt'), (ASSETS / 'game-runtime/vendor/fonts/OFL.txt').read_bytes())
             self.assertNotIn('approval.json', archive.namelist())
             self.assertNotIn('sources.json', archive.namelist())

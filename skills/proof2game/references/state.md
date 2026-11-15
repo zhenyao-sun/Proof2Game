@@ -1,7 +1,11 @@
 # State and checkpoint commands
 
 Run `python3 scripts/state.py --task TASK --status` from the skill directory.
-`TASK` is the target-version work directory `PROJECT/.mathgrove/<id>`. Its entrypoints are
+`TASK` is the target-version work directory reported by intake. New tasks use
+`PROJECT/.proof2game/<id>`. Existing `PROJECT/.mathgrove/<id>` tasks are opened
+in place with their original Git and source records. The command resolves the
+work directory by version ID in either location and stops if the ID occurs in
+both. Its entrypoints are
 `target.json` (intake receipt), `main.tex` (working assembly), and `state.json` (the verification
 ledger). The original named by `target.json` is checked before using the ledger. Use script
 operations to change the ledger. The commands record accepted judgments and real host
