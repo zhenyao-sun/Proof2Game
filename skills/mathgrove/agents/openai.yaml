@@ -1,0 +1,4 @@
+interface:
+  display_name: "MathGrove"
+  short_description: "Verify a math draft and build a learning game"
+  default_prompt: "Use $mathgrove to work through my manuscript, verify its game script, and build the applicable deliverables with a Codex Goal."

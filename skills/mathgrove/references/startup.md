@@ -1,0 +1,21 @@
+# Main-session startup and Goal
+
+## Select the release
+
+Use macOS with ChatGPT Desktop/Codex and a real local checkout. At first use in this user-facing session, identify the loaded release, then run `python3 scripts/release.py check` from the skill folder. The helper derives its repository from its own location and compares the actual Git commit and stable tags at the configured public upstream. Record the release tag, commit, and resolved entrypoint. The record is local to the task. For successive uses in the same main session, reuse the verified selection. Internal sessions run with paths and the release supplied by the coordinator. They do not contact GitHub.
+
+- `current`: continue.
+- `offline`: say what prevented checking and continue with the verified installed release. A first installation requires obtaining the package.
+- `needs-confirmation`: show the installed and proposed versions and pause for approval. On skip, keep the installed release. On approval, run `python3 scripts/release.py apply --tag TAG --commit SHA` using the exact approved pair. Verify the returned entrypoint and read it before any task mutation. A newer proposal requires its own approval. Use the ledger's [select-release operation](state.md#initialization-dispatch-and-completion) to bind the new release to an existing task at a supported boundary. Preserve the task's target edition, Goal, research data and the older installation. Save and report any compatibility failure.
+- `error`: give the actual error and save the task. A failed update leaves the previous installation available and the selected workflow paused.
+
+For a first-time mathematical project, verify Git, Python 3.11+, and the tools that the chosen action actually needs. Check TeX and either `pdftotext` or the Python `pypdf` package before verifying a new game script. Check a visual PDF-reading tool, `pdfinfo` and `pdftoppm` for OCR, and Node.js 22+ before packaging/starting a game. Locate the available worker delegation and Goal tools in the host. Bind actual worker session IDs and configured model/effort to the work. Do not silently emulate independent calls or substitute models when the host lacks the capability. The coordinator is the main conversation and cannot switch its running model by writing a setting. When only exact main-model evidence is missing, distinguish that uncertainty from a confirmed mismatch.
+
+## Maintain the real Goal
+
+When the user grants Goal creation (as in the README prompt), use the host's actual Goal tool. Inspect the current Goal first. Reuse the correct unfinished goal for a resumed task and store the real identifier together with the target version and selected release. Never repurpose an unrelated unfinished Goal, or substitute a Markdown checkbox for a real Goal. If an explicit request for Goal creation is required by this host and absent, ask for it where creation becomes necessary. In intake-only or standalone manual refactor mode, no new verification Goal is needed.
+
+- Guided objective: process the supplied manuscript version and deliver all applicable checked outputs. An individual game or paper may be delivered early while other outputs continue. Complete only after all required outputs are delivered, or after the confirmed zero-target branch has ended as specified. When a passed snapshot later needs replacement in this task, keep the same active Goal.
+- Standalone verification objective: finish on the designated script after closed proof obligations, valid math QA for its active cone, and the applicable final route check on the same revision. Check and summarize the exact revision before marking the Goal complete.
+
+At a real user decision or missing input, save the pending action and resume as soon as it is resolved. A missing source wait in one Reviewer leaves the other active reviews free to finish. Preserve staged work on user pause and follow the host's real pause mechanism. Do not mark a Goal complete for a checkpoint, saved blocker, generated-only artifact, or tool call without evidence. Verify its final status.

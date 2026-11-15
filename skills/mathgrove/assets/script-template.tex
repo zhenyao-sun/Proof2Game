@@ -1,0 +1,108 @@
+% Copy this as main.tex and script-example/ as components/.
+% MScomponent arguments: ID, type, path, paired ID, theorem kind, optional title.
+% MSnode arguments: statement ID, explicit Main Results prefix (empty for descendants).
+\documentclass[12pt,a4paper]{amsart}
+\usepackage{amsmath,amssymb,graphicx}
+\usepackage{hyperref}
+\usepackage{amsrefs}
+\setlength{\textwidth}{\dimexpr\paperwidth-2in\relax}
+\calclayout
+\newtheorem{Theorem}{Theorem}[section]
+\newtheorem{Lemma}[Theorem]{Lemma}
+\newtheorem{Proposition}[Theorem]{Proposition}
+\newtheorem{Corollary}[Theorem]{Corollary}
+\newtheorem{Claim}[Theorem]{Claim}
+\providecommand\MSgap[1]{\textbf{Proof obligation: }#1}
+\makeatletter
+\newcount\MSdepth
+\newif\ifMSmainroot
+\def\MSlevel{Section}
+\def\MSloc{0}
+\def\MSuppercasefirst#1#2\@nil{S#2}
+\def\MSrecordlevel#1#2{\expandafter\gdef\csname MSlevel@#1\endcsname{#2}}
+\newcommand\MSadoption[1]{%
+  \ifnum#1>0\relax
+    \par\noindent We adopt the settings of %
+    \ifMSmainroot
+      Section~1%
+      \ifnum#1>1\relax
+        \space and %
+        \ifnum#1=2\relax Subsection~1.1%
+        \else Subsections~1.1--1.\number\numexpr#1-1\relax\fi
+      \fi
+    \else
+      \ifnum#1=1\relax Subsection~1.1%
+      \else Subsections~1.1--1.#1\fi
+    \fi.\par
+  \fi}
+\newcommand\MSheading[1]{%
+  \expandafter\ifx\csname MStitle@#1\endcsname\@empty\else
+    \csname MStitle@#1\endcsname: \fi
+  Proof of \csname MSkind@#1\endcsname~\ref{ms:#1}}
+\newcommand\MSnode[2]{%
+  \global\advance\MSdepth by1
+  \ifcsname MSnum@\number\MSdepth\endcsname\else
+    \expandafter\newcount\csname MSnum@\number\MSdepth\endcsname
+  \fi
+  \global\advance\csname MSnum@\number\MSdepth\endcsname by1
+  \begingroup
+  \ifnum\MSdepth=1
+    \edef\MSloc{2.\number\csname MSnum@1\endcsname}%
+  \else
+    \edef\MSloc{\MSloc.\number\csname MSnum@\number\MSdepth\endcsname}%
+  \fi
+  \def\MSlevel{section}\count@=\MSdepth\relax
+  \loop\edef\MSlevel{sub\MSlevel}\advance\count@ by-1\relax\ifnum\count@>0\repeat
+  \edef\MSlevel{\expandafter\MSuppercasefirst\MSlevel\@nil}%
+  \phantomsection\edef\@currentlabel{\MSloc}%
+  \par\bigskip\noindent\textbf{\MSloc.\quad\MSheading{#1}}\par\medskip
+  \ifnum\MSdepth=1 \MSadoption{#2}\fi}
+\newcommand\MSendnode{%
+  \endgroup
+  \ifcsname MSnum@\number\numexpr\MSdepth+1\relax\endcsname
+    \global\csname MSnum@\number\numexpr\MSdepth+1\relax\endcsname=0
+  \fi
+  \global\advance\MSdepth by-1}
+\newcommand\MScomponent[6]{%
+  \def\MStype{#2}\def\MSstatement{statement}\def\MSproof{proof}%
+  \ifx\MStype\MSstatement
+    \expandafter\gdef\csname MSkind@#1\endcsname{#5}%
+    \expandafter\gdef\csname MStitle@#1\endcsname{#6}%
+    \def\MStitle{#6}%
+    \ifx\MStitle\@empty\begin{#5}\else\begin{#5}[#6]\fi
+    \label{ms:#1}\input{#3}\end{#5}%
+    \noindent The proof of #5~\ref{ms:#1} is given in
+    \ifcsname MSlevel@#4\endcsname\csname MSlevel@#4\endcsname\else Section\fi
+    ~\ref{proof:#4}.\par
+  \else\ifx\MStype\MSproof
+    \phantomsection\edef\@currentlabel{\MSloc}\label{proof:#1}%
+    \protected@write\@auxout{}{\string\MSrecordlevel{#1}{\MSlevel}}%
+    \begin{proof}[Proof of \csname MSkind@#4\endcsname~\ref{ms:#4}]\input{#3}\end{proof}%
+  \else
+    \ifnum\value{section}=1
+      \ifnum\value{subsection}=0\global\MSmainroottrue\fi
+    \fi
+    \input{#3}%
+  \fi\fi}
+\makeatother
+
+\begin{document}
+\section{Main Results}
+\MScomponent{setting}{convention}{components/setting.tex}{}{}{}
+\MScomponent{main}{statement}{components/main.tex}{main-proof}{Theorem}{Positivity}
+
+\section{Detailed Proofs}
+\MSnode{main}{1}
+\MScomponent{lower-bound}{statement}{components/lower-bound.tex}{lower-bound-proof}{Lemma}{A nonnegative square}
+\MScomponent{main-proof}{proof}{components/main-proof.tex}{main}{}{}
+\MSnode{lower-bound}{}
+\MScomponent{lower-bound-proof}{proof}{components/lower-bound-proof.tex}{lower-bound}{}{}
+\MSendnode
+\MSendnode
+
+\begin{bibdiv}
+\begin{biblist}
+% Add cited amsrefs entries here. Keep confirmed Zbl metadata in TeX comments.
+\end{biblist}
+\end{bibdiv}
+\end{document}
