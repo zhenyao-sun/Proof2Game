@@ -168,7 +168,8 @@ def worker_prompt(packet, path, packet_sha256):
     if not packet["source_blind"]:
         lines.append(
             "For pass, include sources as an array of objects with id, sha256, and locators mapping result locations "
-            "to physical PDF page lists. Include a resolved required source with its bound ID and SHA-256. "
+            'to arrays of integer physical PDF page numbers, e.g. {"Theorem 2": [8], "Lemma 3": [9, 10]}. '
+            "Include a resolved required source with its bound ID and SHA-256. "
             "Use an empty array when no external source was used at this gate."
         )
         lines.append(
@@ -184,8 +185,9 @@ def worker_prompt(packet, path, packet_sha256):
         "and withhold a verdict.",
         command,
         "Return one JSON object with token, snapshot_digest, component, gate, packet_sha256, verdict, and a "
-        "nonempty English evidence string. Use pass for no substantive defect or nonpass with top-level issue and "
-        "exact location for a defect. The coordinator binds the actual host session before recording the result.",
+        "nonempty English evidence string. Use pass for no substantive defect or nonpass for a defect. "
+        "For nonpass, include issue and location as separate nonempty top-level strings. "
+        "The coordinator binds the actual host session before recording the result.",
     ])
     return "\n".join(lines)
 

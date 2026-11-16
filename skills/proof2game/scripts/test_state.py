@@ -173,6 +173,26 @@ class Ledger(unittest.TestCase):
         self.assertEqual(continued["identity"], current["identity"])
         self.assertEqual(len(actions), 10)
 
+    def test_nonpass_names_invalid_fields_and_keeps_gate_pending(self):
+        self.init()
+        self.change("advance")
+        reviewer = self.bind(self.action(component="main"))
+        before = self.data["state"]["revision"]
+        malformed = [
+            ({"issue": {"description": "unclear", "location": "first sentence"}},
+             "location must be a nonempty string"),
+            ({"issue": {"description": "unclear"}, "location": "first sentence"},
+             "issue must be a nonempty string"),
+        ]
+        for fields, error in malformed:
+            with self.subTest(fields=fields), self.assertRaisesRegex(state.Rejected, error):
+                self.result(reviewer, "nonpass", **fields)
+            status = state.transact(self.task, {"op": "status"})
+            self.assertEqual(status["state"]["revision"], before)
+            self.assertIn(reviewer, status["actions"])
+        current = self.result(reviewer, "nonpass", issue="unclear", location="first sentence")
+        self.assertEqual(current["round"]["issues"][reviewer["token"]]["issue"], "unclear")
+
     def test_missing_pdf_stops_at_fixer_and_keeps_completed_peers_on_replacement(self):
         self.init(kind="public")
         self.change("advance")

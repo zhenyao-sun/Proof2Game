@@ -70,6 +70,7 @@ class ReviewDispatchTest(unittest.TestCase):
                 self.assertNotIn("waiting-source", message)
                 self.assertNotIn("source_version", message)
                 self.assertIn("nonempty English evidence string", message)
+                self.assertIn("separate nonempty top-level strings", message)
                 if gate == "expression":
                     self.assertEqual(packet["statement_navigation"]["proof_location"], "2.1")
 
@@ -120,6 +121,7 @@ class ReviewDispatchTest(unittest.TestCase):
                 self.assertIn("requires a source wait", message)
                 self.assertIn("omit it if unknown", message)
                 self.assertIn("Identify the missing external work and its use in evidence", message)
+                self.assertIn('{"Theorem 2": [8], "Lemma 3": [9, 10]}', message)
                 if gate == "sources":
                     self.assertIn("Manuscript-local references do not require an external PDF", message)
                 else:

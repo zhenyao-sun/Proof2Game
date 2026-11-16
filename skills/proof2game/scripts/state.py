@@ -41,8 +41,9 @@ def require(condition, message):
         raise Rejected(message)
 
 
-def evidence(value):
-    require(isinstance(value, str) and value.strip(), "nonempty evidence required")
+def evidence(value, *, field=None):
+    message = f"{field} must be a nonempty string" if field else "nonempty evidence required"
+    require(isinstance(value, str) and value.strip(), message)
     return value
 
 
@@ -449,8 +450,8 @@ def review_result(task, state, action, request):
                 "resolved required source metadata changed; recheck the source")
     review["gates"].append(result)
     if verdict == "nonpass":
-        result["location"] = evidence(request.get("location"))
-        result["issue"] = evidence(request.get("issue"))
+        result["location"] = evidence(request.get("location"), field="location")
+        result["issue"] = evidence(request.get("issue"), field="issue")
         current["issues"][action["token"]] = {"component": cid, **result}
         review["verdict"] = verdict
     elif review["gate_position"] + 1 == len(GATES[components(state["snapshot"])[cid]["type"]]):
