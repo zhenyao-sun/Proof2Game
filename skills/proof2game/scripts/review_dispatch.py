@@ -155,16 +155,20 @@ def worker_prompt(packet, path, packet_sha256):
             "to physical PDF page lists. Include a resolved required source with its bound ID and SHA-256. "
             "Use an empty array when no external source was used at this gate."
         )
+        lines.append(
+            "For a missing applicable external source, return waiting-source with source (stable project work key), "
+            "required (boolean), and exact location. Set source_version to the exact known edition or omit it if unknown. "
+            "Identify the missing external work and its use in evidence."
+        )
     command = shlex.join(["python3", "-c", READ_CHUNK, str(path), packet_sha256, "0"])
     lines.extend([
         "Read the next command, then repeat with the last argument set to each returned chunk's end until complete. "
-        "If verification fails or required input is missing from delivery, report that and withhold a verdict.",
+        "If packet verification fails or required packet input is missing from delivery, tell the coordinator separately "
+        "and withhold a verdict.",
         command,
-        "Return JSON with token, snapshot_digest, component, gate, packet_sha256, verdict, and concise English evidence. "
-        "Use pass for no substantive defect, nonpass with issue and exact location for a defect, or waiting-source "
-        "with source (stable project work key), required (boolean), and location for a source wait. "
-        "Set source_version to the exact known edition or omit it if unknown. Identify the publication in evidence. "
-        "The coordinator binds the actual host session before recording the result.",
+        "Return one JSON object with token, snapshot_digest, component, gate, packet_sha256, verdict, and a "
+        "nonempty English evidence string. Use pass for no substantive defect or nonpass with top-level issue and "
+        "exact location for a defect. The coordinator binds the actual host session before recording the result.",
     ])
     return "\n".join(lines)
 
