@@ -7,7 +7,9 @@ from unittest.mock import patch
 import zipfile
 
 import game_developer
+import intake
 import state
+from test_intake import make_pdf, source_data
 
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
@@ -186,6 +188,64 @@ class Ledger(unittest.TestCase):
         self.change("advance")
         self.assertEqual(self.action(component="main")["gate"], "expression")
         self.assertFalse(self.actions(component="setting"))
+
+    def test_required_source_wait_and_pass_bind_the_same_publication(self):
+        self.init(kind="public")
+        self.change("advance")
+        self.pass_component("setting")
+        for _ in range(3):
+            self.result(self.action(component="main"), "pass")
+        self.result(self.action(component="main"), "waiting-source", required=True,
+                    source="needed-study", source_version="v2", location="Required interface")
+        waiting = self.action(component="main")
+        pdf = self.project / "fixture.pdf"
+        make_pdf(pdf)
+
+        def register(work_key, version):
+            record = intake.register_reference(self.project, {
+                **source_data(public_date="2022-01-01", version=version),
+                "id": f"{work_key}-{version}", "work_key": work_key, "pdf": str(pdf),
+            })
+            page = {"kind": "reference", "id": record["id"]}
+            for number in (1, 2):
+                target = {**page, "page": number}
+                image = intake.render_page(self.project, target)
+                intake.record_page(self.project, {
+                    **target, "image_sha256": image["image_sha256"], "reviewer": "synthetic fixture",
+                    "method": "codex_pdf_image_ocr", "markdown": "Synthetic arithmetic page.",
+                    "uncertainties": [],
+                })
+            return intake.finish_ocr(self.project, page)
+
+        def resolve(reference):
+            self.change("source-resolve", token=waiting["token"], snapshot_digest=waiting["snapshot_digest"],
+                        status="available", reference_id=reference["id"], evidence="synthetic source receipt")
+
+        unrelated = register("unrelated", "v2")
+        with self.assertRaisesRegex(state.Rejected, "requested source work key"):
+            resolve(unrelated)
+        wrong_version = register("needed-study", "v1")
+        with self.assertRaisesRegex(state.Rejected, "requested source version"):
+            resolve(wrong_version)
+        correct = register("needed-study", "v2")
+        resolve(correct)
+        current = self.action(component="main")
+        self.assertEqual(current["source_resolution"]["reference_sha256"], correct["sha256"])
+        with self.assertRaisesRegex(state.Rejected, "cite the resolved required source"):
+            self.result(current, "pass", sources=[])
+        with self.assertRaisesRegex(state.Rejected, "cite the resolved required source"):
+            self.result(current, "pass", sources=[{
+                "id": unrelated["id"], "sha256": unrelated["sha256"], "locators": {"Theorem A": [1]},
+            }])
+        with self.assertRaisesRegex(ValueError, "original's SHA-256"):
+            self.result(current, "pass", sources=[{
+                "id": correct["id"], "sha256": "0" * 64, "locators": {"Theorem A": [1]},
+            }])
+        self.result(current, "pass", sources=[{
+            "id": correct["id"], "sha256": correct["sha256"], "locators": {"Theorem A": [1]},
+        }])
+        self.result(self.action(component="main"), "pass")
+        self.assertIn("main", self.data["state"]["safe"])
 
     def test_public_nonpass_accepts_same_version_only_and_fresh_route(self):
         self.init(kind="public")

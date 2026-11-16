@@ -53,7 +53,8 @@ replacement includes checkable `evidence`.
   and locators with nonempty physical page lists per [intake.md](intake.md). The runtime
   validates date, version, original digest, and intake completeness. Other gates
   receive no source material or receipt.
-- Waiting-source takes `source` (a stable source key), `location`, and boolean `required`.
+- Waiting-source takes `source` (the reference's stable project work key), `source_version`
+  when an exact edition is required, `location`, and boolean `required`. Identify the work in `evidence`.
   The other Reviewers may continue. Use `source-resolve` with `status` of `available`,
   `unavailable`, or optional-only `waived`, with the actual check or user response as
   `evidence`. Provide the ingested `reference_id` for available. A confirmed unobtainable

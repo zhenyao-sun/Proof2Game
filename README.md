@@ -101,8 +101,8 @@ If you already have a verified release checkout, use it and let Proof2Game check
 ```sh
 proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.1.1 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.1"
-python3 "$proof2game_releases/v0.1.1/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch v0.1.2 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.2"
+python3 "$proof2game_releases/v0.1.2/skills/proof2game/scripts/release.py" verify
 ```
 
 Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)

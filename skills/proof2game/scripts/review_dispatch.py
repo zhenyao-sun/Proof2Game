@@ -102,8 +102,9 @@ def build_packet(main, action, *, cutoff=None):
             packet["source_cutoff"] = cutoff
         if action.get("source_resolution"):
             resolution = action["source_resolution"]
-            fields = ("source", "required", "location", "status")
-            packet["source_resolution"] = {key: resolution[key] for key in fields}
+            fields = ("source", "source_version", "required", "location", "status",
+                      "reference_id", "reference_version", "reference_sha256")
+            packet["source_resolution"] = {key: resolution[key] for key in fields if key in resolution}
     return packet
 
 
@@ -142,8 +143,9 @@ def worker_prompt(packet, path, packet_sha256):
         )
     if not packet["source_blind"]:
         lines.append(
-            "For pass, include sources as an array of the checked project-reference IDs, PDF SHA-256 and optional "
-            "locators (keys id, sha256 and locators); include an empty array when no citation or source was used."
+            "For pass, include sources as an array of objects with id, sha256, and locators mapping result locations "
+            "to physical PDF page lists. Include a resolved required source with its bound ID and SHA-256. "
+            "Use an empty array only when no citation or source was used."
         )
     command = shlex.join(["python3", "-c", READ_CHUNK, str(path), packet_sha256, "0"])
     lines.extend([
@@ -152,7 +154,8 @@ def worker_prompt(packet, path, packet_sha256):
         command,
         "Return JSON with token, snapshot_digest, component, gate, packet_sha256, verdict, and concise English evidence. "
         "Use pass for no substantive defect, nonpass with issue and exact location for a defect, or waiting-source "
-        "with source (exact identity and version), required (boolean), and location for a source wait. "
+        "with source (stable project work key), source_version (exact version if known), required (boolean), "
+        "and location for a source wait. Identify the publication in evidence. "
         "The coordinator binds the actual host session before recording the result.",
     ])
     return "\n".join(lines)

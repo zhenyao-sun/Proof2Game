@@ -305,12 +305,16 @@ def wait_source(state, action, request):
         require(action["gate"] in ("sources", "reuse"), "source-blind gate cannot request external material")
     role_specific = request.get("required")
     require(isinstance(role_specific, bool), "mark a source as required or optional")
-    source = evidence(request.get("source"))
+    source = intake.identifier(request.get("source"))
+    version = request.get("source_version")
+    if version is not None:
+        version = evidence(version)
     location = evidence(request.get("location"))
-    if not role_specific and source in state["optional_unavailable"]:
-        action["source_resolution"] = {**state["optional_unavailable"][source], "location": location}
+    prior = state["optional_unavailable"].get(source)
+    if not role_specific and prior and prior.get("source_version") == version:
+        action["source_resolution"] = {**prior, "location": location}
         return
-    action["waiting"] = {"source": source, "required": role_specific, "location": location,
+    action["waiting"] = {"source": source, "source_version": version, "required": role_specific, "location": location,
                          "evidence": evidence(request.get("evidence"))}
     record(state, "source-wait", action=action["token"], **action["waiting"])
 
@@ -328,7 +332,11 @@ def resolve_source(task, state, request):
         cutoff = state["target"].get("cutoff")
         require(reference["complete"] and (not cutoff or reference["public_date"] <= cutoff),
                 "source needs completed OCR and an eligible version before resuming")
-        resolution["reference_id"] = reference["id"]
+        require(reference["work_key"] == wait["source"], "reference does not match the requested source work key")
+        if wait.get("source_version") is not None:
+            require(reference["version"] == wait["source_version"], "reference does not match the requested source version")
+        resolution.update(reference_id=reference["id"], reference_version=reference["version"],
+                          reference_sha256=reference["sha256"])
     action["waiting"] = None
     action["source_resolution"] = resolution
     if action["role"] == "reviewer":
@@ -341,7 +349,17 @@ def resolve_source(task, state, request):
 def verify_source_rows(task, state, rows):
     require(isinstance(rows, list), "provide sources: [] when this decision uses no outside sources")
     if rows:
-        intake.verify_citations(task.parent.parent, {"task_id": state["target"]["id"], "sources": rows})
+        normalized = []
+        for row in rows:
+            require(isinstance(row, dict), "each cited source must be an object")
+            item = dict(row)
+            if "locators" in item:
+                locators = item.pop("locators")
+                require(item.get("cited_locations_physical_pages", locators) == locators,
+                        "conflicting physical page locators")
+                item["cited_locations_physical_pages"] = locators
+            normalized.append(item)
+        intake.verify_citations(task.parent.parent, {"task_id": state["target"]["id"], "sources": normalized})
     return rows
 
 
@@ -365,6 +383,15 @@ def review_result(task, state, action, request):
         result["sources"] = verify_source_rows(task, state, request.get("sources"))
     else:
         require("sources" not in request, "source-blind gate cannot receive literature evidence")
+    if verdict == "pass" and resolution and resolution["required"] and resolution["status"] == "available":
+        reference_id = resolution.get("reference_id")
+        sha256 = resolution.get("reference_sha256")
+        require(sha256 and any(row.get("id") == reference_id and row.get("sha256") == sha256
+                               for row in result.get("sources", [])),
+                "pass must cite the resolved required source and its original SHA-256")
+        reference = intake.checked_record(task.parent.parent, "reference", reference_id)
+        require(reference["work_key"] == resolution["source"] and reference["version"] == resolution.get("reference_version"),
+                "resolved required source metadata changed; recheck the source")
     review["gates"].append(result)
     if verdict == "nonpass":
         result["location"] = evidence(request.get("location"))
