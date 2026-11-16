@@ -23,15 +23,19 @@ COMMON = {
         "an otherwise unstated interface."
     ),
     "sources": (
-        "Verify cited interfaces and their use against eligible original PDFs. Check exact versions, conditions, "
-        "scope, and instantiation. A necessary missing PDF requires a source wait with its exact identity and use. "
+        "Check for concrete external sources used by this component. Manuscript-local references do not require an "
+        "external PDF. If there is no external source usage, return pass with sources:[] without a lookup. "
+        "For each external source used, verify its exact version, conditions, scope and instantiation against the "
+        "eligible original PDF. A necessary missing PDF requires a source wait with its exact identity and use. "
         "A nonpublic dependency is a source defect."
     ),
     "reuse": (
         "Investigate concrete opportunities to replace nontrivial repeated derivation with a verified eligible "
         "reference. A nonpass requires a current unresolved issue in attribution, relation to known work, or needless "
         "derivation, with an exact location and evidence from the original PDF. Appropriate application and attribution "
-        "can resolve even substantial overlap. A concrete optional opportunity with a missing PDF requires a source wait."
+        "can resolve even substantial overlap. If there is no concrete reuse opportunity or external source used "
+        "at this gate, return pass with sources:[] without a lookup. A concrete optional opportunity with a missing "
+        "PDF requires a source wait."
     ),
 }
 
@@ -125,9 +129,10 @@ def worker_prompt(packet, path, packet_sha256):
         )
     else:
         lines.append(
-            "Outside the packet, use only source material separately granted by the coordinator for this gate. Ask the "
-            "coordinator to search this project's references first, then verify the eligible original on the web if needed. "
-            "Verify the original PDF directly. In a Statement gate, check only sources used by that Statement or its "
+            "Outside the packet, use only source material separately granted by the coordinator for this gate. For a "
+            "concrete external source needed at this gate, ask the coordinator to search the project's references "
+            "first and then the web if needed, and verify the eligible original PDF directly. In a Statement gate, "
+            "check only sources used by that Statement or its "
             "interfaces. A paired proof passage is only for locating how those sources apply. "
             "Proof-only citations belong to the separate Proof gate. If an application check needs a missing passage, "
             "ask for that precise passage. Keep earlier gate results independent."
@@ -147,7 +152,7 @@ def worker_prompt(packet, path, packet_sha256):
         lines.append(
             "For pass, include sources as an array of objects with id, sha256, and locators mapping result locations "
             "to physical PDF page lists. Include a resolved required source with its bound ID and SHA-256. "
-            "Use an empty array only when no citation or source was used."
+            "Use an empty array when no external source was used at this gate."
         )
     command = shlex.join(["python3", "-c", READ_CHUNK, str(path), packet_sha256, "0"])
     lines.extend([

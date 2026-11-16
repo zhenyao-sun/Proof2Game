@@ -22,6 +22,8 @@ When resuming, match the actual script and resources, ledger revision, current s
 
 ### Source waits
 
+In the sources gate, manuscript-local references use the supplied manuscript interfaces. Check original PDFs for concrete external dependencies. In the reuse gate, look up an original only for a concrete opportunity to replace a nontrivial repeated derivation or an identified attribution issue. A gate with no applicable external source passes with an empty external source list.
+
 Use the local-first search, version selection, cutoff, and verification evidence rules in [intake.md](intake.md). If an exact PDF is unavailable for a required interface or a specific optional reuse opportunity, record the waiting role, current step and specific mathematical use, then ask the user for the PDF. Other active Reviewers may progress. A serial worker waits at the current step. Retain current assignments and counts while waiting. Once the original is obtained and ingested, automatically continue the waiting step with eligible evidence.
 
 If the user confirms an optional source is unobtainable or waives it, record “not obtained” for that opportunity and continue the independent argument. Reuse this record in the same task while the source remains optional. If a mandatory PDF cannot be obtained and the user confirms this, the waiting Reviewer returns a source-gate `nonpass` identifying the exact step that cannot be verified. Finish collecting the round and have the Fixer try a self-contained proof. A later switch from optional to actual dependence uses the mandatory-source path. A source wait alone never counts as completed review, changes classification, or invokes an updater.

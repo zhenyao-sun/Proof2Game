@@ -92,6 +92,22 @@ class ReviewDispatchTest(unittest.TestCase):
         proof = review_dispatch.build_packet(self.main, self.action("main-proof", "sources"), cutoff=CUTOFF)
         self.assertIn("UNRELATED_CANARY", proof["current_text"])
 
+    def test_external_lookup_requires_a_gate_specific_reason(self):
+        for gate in ("sources", "reuse"):
+            with self.subTest(gate=gate):
+                action = self.action("main-proof", gate)
+                action.pop("source_resolution")
+                packet = review_dispatch.build_packet(self.main, action, cutoff=CUTOFF)
+                message = review_dispatch.worker_prompt(packet, self.scratch / "gate.json", "sha256")
+                self.assertIn("return pass with sources:[] without a lookup", message)
+                self.assertIn("concrete external source needed at this gate", message)
+                self.assertIn("verify the eligible original PDF directly", message)
+                self.assertIn("requires a source wait", message)
+                if gate == "sources":
+                    self.assertIn("Manuscript-local references do not require an external PDF", message)
+                else:
+                    self.assertIn("no concrete reuse opportunity", message)
+
     def test_convention_opening_omits_rest_and_its_references(self):
         self.append_component("main.tex", "VISIBLE_PRIOR_INTERFACE_CANARY")
         self.append_component("lower-bound-proof.tex", "UNRELATED_PRIOR_PROOF_CANARY")
