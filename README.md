@@ -94,15 +94,15 @@ Give the game ZIP to ChatGPT Desktop or Codex and ask it to launch the game on y
 
 ## Manual setup
 
-Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later to play. The PDF navigation check uses `pdftotext` or `pypdf`.
+Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players can run an exported game with Node.js 20 or later. The PDF navigation check uses `pdftotext` or `pypdf`.
 
 If you already have a verified release checkout, use it and let Proof2Game check for updates. For a fresh setup, run:
 
 ```sh
 proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.1.2 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.2"
-python3 "$proof2game_releases/v0.1.2/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch v0.1.3 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.3"
+python3 "$proof2game_releases/v0.1.3/skills/proof2game/scripts/release.py" verify
 ```
 
 Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)

@@ -207,6 +207,38 @@ class IntakeTest(unittest.TestCase):
                 {**bound, "cited_locations_physical_pages": {"Equation": [3]}},
             ]})
 
+    def test_existing_target_id_rejects_changed_source_url(self):
+        first = self.target()
+        request = {"id": first["id"], "input": str(self.project / "note.md"), "project_type": "public",
+                   "version": first["version"], "public_date": first["public_date"],
+                   "source_url": "https://example.org/a-different-source",
+                   "publication_evidence": "Synthetic publisher record"}
+        with self.assertRaisesRegex(ValueError, "different original, version, or source"):
+            intake.init_target(self.project, request)
+        self.assertEqual(intake.checked_record(self.project, "target", first["id"])["source_url"],
+                         first["source_url"])
+
+    @unittest.skipUnless(shutil.which("pdfinfo"), "Poppler is required")
+    def test_failed_reference_reuse_leaves_no_original_that_blocks_retry(self):
+        original = self.project / "first.pdf"
+        make_pdf(original)
+        second = self.project / "second.pdf"
+        second.write_bytes(original.read_bytes() + b"\\n% different PDF fixture\\n")
+        info = source_data()
+        target = intake.init_target(self.project, {
+            "input": str(original), "project_type": "public",
+            **{key: info[key] for key in ("version", "public_date", "source_url", "publication_evidence")},
+        })
+        reference = {**info, "id": "fixture", "pdf": str(original)}
+        with self.assertRaisesRegex(ValueError, "exact completed public target"):
+            intake.register_reference(self.project, {**reference, "reuse_target": target["id"]})
+        self.assertFalse((self.project / "references" / "fixture").exists())
+        retry = intake.register_reference(self.project, {**reference, "pdf": str(second)})
+        self.assertEqual(Path(retry["directory"], retry["pdf_path"]).read_bytes(), second.read_bytes())
+        with self.assertRaisesRegex(ValueError, "different original, version, or source"):
+            intake.register_reference(self.project, {**reference, "pdf": str(second),
+                                                     "source_url": "https://example.org/other-version"})
+
     @unittest.skipUnless(shutil.which("pdfinfo"), "Poppler is required")
     def test_target_pdf_cannot_be_used_before_ocr(self):
         original = self.project / "unpublished.pdf"

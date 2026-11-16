@@ -127,8 +127,10 @@ def worker_prompt(packet, path, packet_sha256):
         lines.append(
             "Outside the packet, use only source material separately granted by the coordinator for this gate. Ask the "
             "coordinator to search this project's references first, then verify the eligible original on the web if needed. "
-            "Verify the original PDF directly. A paired proof in a Statement packet is for locating specialization and "
-            "applicability only. Keep earlier gate results independent."
+            "Verify the original PDF directly. In a Statement gate, check only sources used by that Statement or its "
+            "interfaces. A paired proof passage is only for locating how those sources apply. "
+            "Proof-only citations belong to the separate Proof gate. If an application check needs a missing passage, "
+            "ask for that precise passage. Keep earlier gate results independent."
         )
         if packet["target_independent"]:
             lines.append(

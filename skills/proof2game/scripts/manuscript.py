@@ -647,7 +647,15 @@ def review_payload(main, cid, gate):
         out['paired_statement'] = item(component['paired'])
     if component['type'] == 'statement':
         if gate in ('sources', 'reuse'):
-            out['paired_proof_limited_application_check'] = item(component['paired'])
+            interface_keys = cited_keys(body)
+            for interface in out['ambient'] + out['direct_statement_interfaces']:
+                interface_keys.update(cited_keys(interface['text']))
+            if interface_keys:
+                proof = item(component['paired'])
+                passages = [paragraph for paragraph in nonempty_paragraphs(proof['text'])
+                            if cited_keys(paragraph) & interface_keys]
+                if passages:
+                    out['paired_proof_limited_application_check'] = {**proof, 'text': '\n\n'.join(passages)}
         if gate == 'expression':
             out['statement_navigation'] = {
                 'kind': component['kind'], 'title': component['title'],

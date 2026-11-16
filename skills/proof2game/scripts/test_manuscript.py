@@ -143,7 +143,7 @@ class ManuscriptTest(unittest.TestCase):
         self.assertNotIn('paired_proof_limited_application_check', statement)
         sources = manuscript.review_payload(self.main, 'main', 'sources')
         self.assertFalse(sources['source_blind'])
-        self.assertIn('paired_proof_limited_application_check', sources)
+        self.assertNotIn('paired_proof_limited_application_check', sources)
 
     def test_materializes_over_empty_caller_directory(self):
         destination = self.root / 'delivery'

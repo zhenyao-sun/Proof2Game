@@ -57,7 +57,9 @@ replacement includes checkable `evidence`.
   when an exact edition is required, `location`, and boolean `required`. Identify the work in `evidence`.
   The other Reviewers may continue. Use `source-resolve` with `status` of `available`,
   `unavailable`, or optional-only `waived`, with the actual check or user response as
-  `evidence`. Provide the ingested `reference_id` for available. A confirmed unobtainable
+  `evidence`. For `available`, provide the ingested reference ID. Its work key and any specified version must match the wait.
+  A pass after a required wait must cite the resolved reference ID and original SHA-256 with physical pages.
+  A confirmed unobtainable
   required source binds a nonpass at that gate. The optional settlement is reusable
   in later rounds when the same work still is optional.
 - Batcher returns `issue_ids`, a lossless ordered list of the entire batch. The runtime

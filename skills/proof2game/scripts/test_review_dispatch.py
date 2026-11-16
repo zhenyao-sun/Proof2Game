@@ -71,11 +71,26 @@ class ReviewDispatchTest(unittest.TestCase):
         packet = review_dispatch.build_packet(self.main, self.action("main", "sources"), cutoff=CUTOFF)
         serialized = json.dumps(packet)
         self.assertFalse(packet["source_blind"])
-        self.assertIn("PAIRED_PROOF_CANARY", packet["paired_proof_limited_application_check"]["text"])
+        self.assertNotIn("PAIRED_PROOF_CANARY", serialized)
+        self.assertNotIn("paired_proof_limited_application_check", packet)
         self.assertEqual(packet["source_cutoff"], CUTOFF)
         self.assertIn("EXTERNAL_CITATION_CANARY", serialized)
         self.assertNotIn("USER_REPLY_CANARY", serialized)
         self.assertNotIn("TARGET_FILE_CANARY", serialized)
+
+    def test_statement_source_packet_only_exposes_relevant_proof_passages(self):
+        self.append_component("main.tex", r"The Statement invokes \cite{visible}.")
+        self.append_component("main-proof.tex", r"APPLICATION_CANARY verifies \cite{visible} here.")
+        self.append_component("main-proof.tex", r"UNRELATED_CANARY uses \cite{proof-only}.")
+        for gate in ("sources", "reuse"):
+            with self.subTest(gate=gate):
+                packet = review_dispatch.build_packet(self.main, self.action("main", gate), cutoff=CUTOFF)
+                proof = packet["paired_proof_limited_application_check"]["text"]
+                self.assertIn("APPLICATION_CANARY", proof)
+                self.assertNotIn("UNRELATED_CANARY", proof)
+                self.assertNotIn("proof-only", proof)
+        proof = review_dispatch.build_packet(self.main, self.action("main-proof", "sources"), cutoff=CUTOFF)
+        self.assertIn("UNRELATED_CANARY", proof["current_text"])
 
     def test_convention_opening_omits_rest_and_its_references(self):
         self.append_component("main.tex", "VISIBLE_PRIOR_INTERFACE_CANARY")

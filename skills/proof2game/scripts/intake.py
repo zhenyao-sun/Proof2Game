@@ -248,9 +248,9 @@ def init_target(project, request):
         metadata.update({"proof_source_path": original.name, "complete": True})
     if record.exists():
         old = checked_record(project, "target", task_id)
-        for field in ("id", "project_type", "version", "cutoff", "sha256"):
-            if old[field] != metadata[field]:
-                raise ValueError("This task is already bound to a different original or version.")
+        for field in ("id", "project_type", "version", "cutoff", "sha256", "source_url"):
+            if old.get(field) != metadata.get(field):
+                raise ValueError("This task is already bound to a different original, version, or source.")
         return public_record(record, old)
     store_original(path, original, sha)
     write_json(record, metadata)
@@ -284,15 +284,30 @@ def register_reference(project, request):
         metadata["cited_locations_physical_pages"] = checked_locations(request, count)
     if record.exists():
         old = checked_record(project, "reference", ref_id)
-        for field in ("citation_key", "version", "edition", "public_date", "sha256"):
+        for field in ("citation_key", "version", "edition", "public_date", "sha256", "source_url"):
             if old[field] != metadata[field]:
-                raise ValueError("This reference ID already names a different original or version.")
+                raise ValueError("This reference ID already names a different original, version, or source.")
         return public_record(record, old)
-    store_original(path, original, sha)
-    if reuse := request.get("reuse_target"):
-        previous = copy_target_transcription(project, reuse, record, metadata)
-        metadata.update(previous)
-    write_json(record, metadata)
+    def place_reference(destination):
+        destination_record = destination / record.name
+        if reuse := request.get("reuse_target"):
+            previous = copy_target_transcription(project, reuse, destination_record, metadata)
+            metadata.update(previous)
+        store_original(path, destination / original.name, sha)
+        write_json(destination_record, metadata)
+
+    if folder.exists():
+        # Preserve an unregistered folder that may already contain user material.
+        if original.exists() and (not original.is_file() or digest(original) != sha):
+            raise ValueError("Original bytes conflict with a preserved original.")
+        place_reference(folder)
+    else:
+        folder.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".proof2game-reference-", dir=project) as scratch:
+            staged = Path(scratch) / "reference"
+            staged.mkdir()
+            place_reference(staged)
+            staged.rename(folder)
     return public_record(record, metadata)
 
 
