@@ -1,5 +1,6 @@
 """Deterministic reference version selection from local and verified discovery records."""
 
+from calendar import monthrange
 import datetime as dt
 import json
 import re
@@ -31,6 +32,21 @@ def date(raw, label):
     return dt.date.fromisoformat(raw).isoformat()
 
 
+def publication_bounds(raw):
+    if isinstance(raw, str) and re.fullmatch(r"\d{4}(?:-\d{2})?", raw):
+        if len(raw) == 4:
+            return date(raw + "-01-01", "reference year"), raw + "-12-31"
+        first = date(raw + "-01", "reference month")
+        last_day = monthrange(int(raw[:4]), int(raw[5:]))[1]
+        return first, f"{raw}-{last_day:02d}"
+    exact = date(raw, "reference publication date")
+    return exact, exact
+
+
+def published_by(public_date, cutoff):
+    return publication_bounds(public_date)[1] <= cutoff
+
+
 def url(raw, label):
     if not isinstance(raw, str):
         raise ValueError(f"Provide the public {label}.")
@@ -50,6 +66,8 @@ def candidate(row, *, work=None):
     authors = row.get("authors")
     if not isinstance(authors, list) or not authors or any(not isinstance(name, str) or not name.strip() for name in authors):
         raise ValueError("Record the source's author names as a JSON list.")
+    publication_date = row.get("public_date")
+    publication_bounds(publication_date)
     value = {
         "work_key": work_key,
         "citation_key": bib_key(row.get("citation_key", work_key)),
@@ -57,7 +75,7 @@ def candidate(row, *, work=None):
         "authors": authors,
         "edition": edition,
         "version": require_text(row, "version"),
-        "public_date": date(row.get("public_date"), "version publication date"),
+        "public_date": publication_date,
         "source_url": url(row.get("source_url"), "version URL"),
         "publication_evidence": require_text(row, "publication_evidence"),
     }
@@ -99,10 +117,19 @@ def select_source(request, local, cutoff, record, unavailable):
     local_ids = {version_identity(row) for row in local}
     online = [row for row in (record["candidates"] if record else [])
               if version_identity(row) not in local_ids]
-    versions = [row for row in [*online, *local] if cutoff is None or row["public_date"] <= cutoff]
+    versions = [*online, *local]
     if preferred is not None:
         versions = [row for row in versions if preferred in (row.get("id"), row["version"])]
+    uncertain = []
+    if cutoff is not None:
+        dated = [(row, publication_bounds(row["public_date"])) for row in versions]
+        uncertain = [row for row, (first, last) in dated if first <= cutoff < last]
+        versions = [row for row, (_, last) in dated if last <= cutoff]
     published = [row for row in versions if row["edition"] == "published"]
+    if uncertain and (not versions or (preferred is None and not published
+                                      and any(row["edition"] == "published" for row in uncertain))):
+        return {"state": "check_publication", "work_key": work, "cutoff": cutoff,
+                "uncertain_candidates": uncertain}
     if published and preferred is None:
         versions = published
     if not versions and checked:

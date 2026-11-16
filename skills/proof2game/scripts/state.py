@@ -337,7 +337,7 @@ def resolve_source(task, state, request):
     if status == "available":
         reference = intake.checked_record(task.parent.parent, "reference", evidence(request.get("reference_id")))
         cutoff = state["target"].get("cutoff")
-        require(reference["complete"] and (not cutoff or reference["public_date"] <= cutoff),
+        require(reference["complete"] and (not cutoff or intake.published_by(reference["public_date"], cutoff)),
                 "source needs completed OCR and an eligible version before resuming")
         require(reference["work_key"] == wait["source"], "reference does not match the requested source work key")
         if version is not None:

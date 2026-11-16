@@ -22,6 +22,7 @@ from sources import (
     catalog,
     date,
     identifier,
+    published_by,
     require_text,
     select_source,
     url,
@@ -488,8 +489,9 @@ def verify_citations(project, request):
         ref_id = require_text(row, "id")
         record = record_path(project, "reference", ref_id)
         value = checked_record(project, "reference", ref_id)
-        if cutoff and value["public_date"] > cutoff:
-            raise ValueError(f"{ref_id} was published after the target version cutoff ({cutoff}).")
+        if cutoff and not published_by(value["public_date"], cutoff):
+            raise ValueError(f"{ref_id} was published after the target version cutoff ({cutoff}) "
+                             "or its recorded date does not establish eligibility.")
         if not value["complete"]:
             raise ValueError(f"{ref_id} is missing a completed OCR transcription.")
         if row.get("sha256") != value["sha256"]:

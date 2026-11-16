@@ -168,12 +168,34 @@ class IntakeTest(unittest.TestCase):
         explicit = intake.choose_source(self.project, {**request, "preferred_version": "v1"})
         self.assertEqual((explicit["state"], explicit["source"]["edition"]), ("need_pdf", "preprint"))
 
+    def test_reference_period_must_establish_eligibility(self):
+        month = source_data("2024-02", "published", "journal")
+        preprint = source_data("2023", "preprint", "v1")
+        for cutoff, expected in (("2023-12-31", "need_pdf"), ("2024-02-01", "check_publication"),
+                                 ("2024-02-29", "need_pdf")):
+            with self.subTest(cutoff=cutoff):
+                request = {"work_key": "study", "cutoff": cutoff}
+                intake.record_publication(self.project, {
+                    **request, "checked_at": "2025-01-01", "status": "checked",
+                    "evidence": "Synthetic journal dating by month and year", "candidates": [preprint, month],
+                })
+                outcome = intake.choose_source(self.project, request)
+                self.assertEqual(outcome["state"], expected)
+                if expected == "need_pdf":
+                    self.assertEqual(outcome["source"]["public_date"], "2023" if cutoff < "2024" else "2024-02")
+                else:
+                    self.assertEqual(outcome["uncertain_candidates"][0]["public_date"], "2024-02")
+        with self.assertRaises(ValueError):
+            self.target(public_date="2024-02")
+        with self.assertRaises(ValueError):
+            intake.candidate(source_data("2024-13"))
+
     @unittest.skipUnless(shutil.which("pdfinfo") and shutil.which("pdftoppm"), "Poppler is required")
     def test_pdf_images_ocr_resume_reference_binding_and_cutoff(self):
         target = self.target()
         original = self.project / "study.pdf"
         make_pdf(original)
-        ref = intake.register_reference(self.project, {**source_data(), "pdf": str(original)})
+        ref = intake.register_reference(self.project, {**source_data("2024-12"), "pdf": str(original)})
         key = {"kind": "reference", "id": ref["id"]}
         self.assertEqual(ref["pending_pages"], [1, 2])
         rendered = [intake.render_page(self.project, {**key, "page": n}) for n in (1, 2)]
@@ -202,6 +224,9 @@ class IntakeTest(unittest.TestCase):
         too_early = self.target(public_date="2024-01-01")
         with self.assertRaisesRegex(ValueError, "published after"):
             intake.verify_citations(self.project, {"task_id": too_early["id"], "sources": [bound]})
+        same_month = self.target(public_date="2024-12-10")
+        with self.assertRaisesRegex(ValueError, "does not establish eligibility"):
+            intake.verify_citations(self.project, {"task_id": same_month["id"], "sources": [bound]})
         with self.assertRaisesRegex(ValueError, "physical pages"):
             intake.verify_citations(self.project, {"task_id": target["id"], "sources": [
                 {**bound, "cited_locations_physical_pages": {"Equation": [3]}},

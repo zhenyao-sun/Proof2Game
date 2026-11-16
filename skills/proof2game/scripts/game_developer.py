@@ -14,6 +14,7 @@ import tempfile
 import zipfile
 
 import manuscript
+from sources import published_by
 
 
 class Rejected(ValueError):
@@ -276,7 +277,7 @@ def source_references(files, source_bindings=None, references_dir=None, cutoff=N
             if cutoff:
                 public_date = record.get('public_date')
                 try:
-                    if date.fromisoformat(public_date).isoformat() != public_date or public_date > cutoff:
+                    if not published_by(public_date, cutoff):
                         if not source_bindings:
                             continue
                         raise ValueError(public_date)

@@ -204,7 +204,7 @@ class Ledger(unittest.TestCase):
         persisted = state.read_json(ledger_path)
         persisted["actions"][waiting["token"]]["waiting"]["source_version"] = "unknown"
         ledger_path.write_bytes(state.json_bytes(persisted))
-        reference = {"complete": True, "public_date": "2022-01-01", "work_key": "needed-study",
+        reference = {"complete": True, "public_date": "2022-01", "work_key": "needed-study",
                      "id": "needed-study-v2", "version": "v2", "sha256": "1" * 64}
         with patch.object(intake, "checked_record", return_value=reference):
             self.change("source-resolve", token=waiting["token"], snapshot_digest=waiting["snapshot_digest"],
