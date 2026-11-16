@@ -72,13 +72,26 @@ BY_COMPONENT = {
     ),
 }
 
-# Workers read a fixed filename and digest, advancing only the character offset.
-READ_CHUNK = """import hashlib, pathlib, sys
+# Verify the original JSON bytes and present decoded TeX to the reviewer.
+READ_CHUNK = r"""import hashlib, json, pathlib, sys
 data = pathlib.Path(sys.argv[1]).read_bytes()
 if hashlib.sha256(data).hexdigest() != sys.argv[2]:
     raise SystemExit('review packet SHA-256 mismatch')
+
+def fields(value, names=()):
+    if isinstance(value, dict) and value:
+        for key, child in value.items():
+            yield from fields(child, (*names, key))
+    elif isinstance(value, list) and value:
+        for index, child in enumerate(value, 1):
+            yield from fields(child, (*names, str(index)))
+    else:
+        label = ' / '.join(names)
+        body = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        yield f'[{label}]\n{body}'
+
 start = int(sys.argv[3])
-text = data.decode('utf-8')
+text = '\n\n'.join(fields(json.loads(data)))
 if not 0 <= start < len(text):
     raise SystemExit('invalid review packet offset')
 end = min(start + 4000, len(text))
@@ -162,7 +175,8 @@ def worker_prompt(packet, path, packet_sha256):
         )
     command = shlex.join(["python3", "-c", READ_CHUNK, str(path), packet_sha256, "0"])
     lines.extend([
-        "Read the next command, then repeat with the last argument set to each returned chunk's end until complete. "
+        "Run the next command to read the decoded packet fields. Repeat with the last argument set to each "
+        "returned chunk's end until complete. "
         "If packet verification fails or required packet input is missing from delivery, tell the coordinator separately "
         "and withhold a verdict.",
         command,

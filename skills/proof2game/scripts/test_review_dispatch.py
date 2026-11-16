@@ -180,7 +180,7 @@ class ReviewDispatchTest(unittest.TestCase):
             self.assertFalse(str(self.task) in path.read_text(encoding="utf-8"))
             command = [sys.executable, "-c", review_dispatch.READ_CHUNK, str(path), result["sha256"], "0"]
             read = subprocess.run(command, check=True, capture_output=True, text=True)
-            self.assertEqual(json.loads(read.stdout.split("\n", 1)[1])["token"], action["token"])
+            self.assertIn(f"[token]\n{action['token']}\n", read.stdout)
             action["identity"] = {"session": "continued-session"}
             previous_location = self.task.parent.parent / ".mathgrove" / self.task.name
             continued = review_dispatch.prepare(previous_location, action["token"])
@@ -191,6 +191,26 @@ class ReviewDispatchTest(unittest.TestCase):
             status["stale"] = True
             with self.assertRaisesRegex(ValueError, "ledger differ"):
                 review_dispatch.prepare(self.task, action["token"])
+
+
+    def test_review_reader_preserves_tex_line_break_and_genuine_macro(self):
+        current = r"\qquad" + "\n" + r"u_{\kappa,v}=c,\quad\nu\in\mathbb N."
+        long_proof = "α" * 4050
+        data = json.dumps({"current_text": current, "ambient": [{"text": long_proof}], "sources": []})
+        path = self.scratch / "gate.json"
+        path.write_text(data, encoding="utf-8")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        command = [sys.executable, "-c", review_dispatch.READ_CHUNK, str(path), digest]
+        expected = f"[current_text]\n{current}\n\n[ambient / 1 / text]\n{long_proof}\n\n[sources]\n[]"
+        for start in range(0, len(expected), 4000):
+            end = min(start + 4000, len(expected))
+            result = subprocess.run([*command, str(start)], check=True, capture_output=True, text=True)
+            header = f"packet characters [{start},{end}) of {len(expected)}\n"
+            self.assertEqual(result.stdout, header + expected[start:end])
+        path.write_text(data + " ", encoding="utf-8")
+        rejected = subprocess.run([*command, "0"], capture_output=True, text=True)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("review packet SHA-256 mismatch", rejected.stderr)
 
 
 if __name__ == "__main__":
