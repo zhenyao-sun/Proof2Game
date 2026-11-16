@@ -1,42 +1,112 @@
 # Proof2Game
 
-Proof2Game 把已有的数学稿件或笔记变成经过逐项审查、可以断点续接的游戏脚本，再导出可分享的本机学习游戏。你自己的未公开项目还会生成完整英文稿件。处理公开论文时，Proof2Game 会对照你指定的原文版本，确认原文有硬伤时另出一份英文审稿报告。
+**Turn a math manuscript into a game you can play.**
 
-## 把下面这段话发给你的 ChatGPT Desktop/Codex
+Give Proof2Game a paper, a draft, or your math notes. A team of Codex agents reviews the argument and builds a bilingual browser game where you can explore the proof one step at a time.
 
-> 请使用 macOS 上的 Codex 从 GitHub 下载 [Proof2Game](https://github.com/zhenyao-sun/Proof2Game)，按仓库的「启动说明」加载完整系统，然后引导我处理已有的数学稿件或笔记。草稿也可以。如果项目文件夹或要处理的稿件还不明确，请问我它们在哪。保留原稿，另建英文游戏脚本，并创建或接续一个 Codex Goal，从脚本验证一直推进到交付学习游戏。如果是我自己的未公开项目，也用同一份已验证脚本生成完整稿件。如果是公开文献项目且确认原文有硬伤，交付审稿报告。
+[Quick start](#quick-start) · [Meet the team](#meet-the-team) · [Play a shared game](#play-a-shared-game)
 
-可以同时发项目文件夹和 LaTeX、Markdown、PDF 或 arXiv 链接。处理公开文献时，你可以直接给出版本链接，例如带有 `v2` 的 arXiv 链接。
+## Quick start
 
-## 启动说明
+**Copy the entire block into ChatGPT Desktop or Codex on your Mac.**
 
-Proof2Game 制作端和游玩端都支持 macOS。制作需要可访问本机项目文件、终端、Codex Goal 和独立协作会话的 Codex 环境。运行工具需要 Git 和 Python 3.11+。PDF 摄取需要可读取逐页图像的会话，以及提供 `pdfinfo` 和 `pdftoppm` 的 Poppler。脚本和稿件编译需要 TeX Live 或 MacTeX。脚本的 PDF 导航检查可以使用 Poppler 的 `pdftotext` 或 Python 的 `pypdf`。游戏使用 Node.js 22+、浏览器及玩家自己的 Codex 登录。按当前任务检查所需能力。
+```text
+Set up and run Proof2Game from this repository.
+https://github.com/zhenyao-sun/Proof2Game
 
-1. 在 `~/Library/Application Support/Proof2Game/releases/` 复用已安装的有效 release Git checkout。初次下载可以运行以下命令，再从该 checkout 加载 skill。
+Follow Manual setup in the repository README and load skills/proof2game/SKILL.md.
+Ask for my project folder and math manuscript or notes if I haven't provided them.
+Preserve my original, create or resume a Codex Goal, and run the guided workflow through delivery.
+```
 
-   ```sh
-   proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
-   mkdir -p "$proof2game_releases"
-   git clone --depth 1 --branch v0.1.1 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.1"
-   ```
+You can attach a LaTeX file, Markdown notes, or a PDF, or paste an arXiv link. An unfinished draft is enough to get started.
 
-2. 从 checkout 根目录运行 `python3 skills/proof2game/scripts/release.py verify`。读取它返回的 `entrypoint`，把该文件及其相对路径资源用作本次任务的 skill。主会话按该入口检查更新并启动。现有任务恢复时，先核对该任务已经选定的 release、原稿版本以及状态，再接续同一个 Goal。
-3. 指定要处理的数学项目和稿件即可。Proof2Game 把处理过的参考文献放在项目自己的 `references/`，把每个目标稿件版本的游戏脚本和恢复状态保存在项目中。游戏压缩包与稿件各自通过检查后可以先后交付。
+## What you get
 
-已经安装 v0.1.0 的用户可以按原有入口检查更新。更新后运行返回的入口，并在原项目目录接着做。
+| Bring | Take away |
+| --- | --- |
+| **Your unpublished work** | A shareable game and a complete English paper in PDF and LaTeX, built from the same reviewed script. |
+| **A public paper** | A game that follows the edition you chose. If review confirms a substantive flaw in the original, you also receive a PDF referee report. |
 
-Proof2Game 也支持单独摄取文献、验证已有游戏脚本，或按用户要求重构脚本。
+Proof2Game keeps your original and builds a separate English game script. Independent Codex reviewers check the argument and the cited results. For public papers, a separate reviewer checks the route against the exact edition you supplied. For unpublished work, the team explores whether the proof can be made simpler.
 
-## 打开别人分享的游戏
+## What it's like to play
 
-把 ZIP 交给你自己电脑上的 ChatGPT Desktop/Codex，说「请按压缩包中的说明在本机启动这个 Proof2Game 游戏」。它会打开浏览器里的游戏地图。进度和对话保存在本机，可以手动导出或导入。AI 导师使用你的 Codex 登录与用量。
+- **Follow the proof map.** Statements, lemmas, and proofs become levels. Unlock the next part as you go.
+- **Get help when you want it.** Ask the tutor to work through a step with you, or switch to open chat. Play in English or Chinese.
+- **See the source.** Open the cited PDFs from inside the game and jump to the relevant pages.
+- **Pick up where you left off.** Save progress locally, undo a step, or export a save to continue the same game on another Mac.
 
-## English
+## Meet the team
 
-On macOS, send this to ChatGPT Desktop/Codex:
+One Codex session coordinates the work. Each specialist takes a different part of the journey from manuscript to game.
 
-> Download [Proof2Game](https://github.com/zhenyao-sun/Proof2Game) and follow the setup instructions above. Guide me through an existing math manuscript or note. Ask for the folder or manuscript only if it is unclear. Preserve my original, build and verify a separate English game script, and create or resume one Codex Goal through delivery. Build the learning game and, for my own unpublished work, a complete English paper from the same verified script. For a public paper, also deliver a referee report if you confirm a substantive flaw.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <p align="center"><img src="docs/agents/explorer.webp" width="144" alt="A fox tracing branches on a proof map"></p>
+      <strong>Explorer</strong><br>
+      <em>“What does this theorem depend on?”</em><br>
+      Maps the lemmas behind the main results and looks for simpler ways to prove them.
+    </td>
+    <td width="50%" valign="top">
+      <p align="center"><img src="docs/agents/reviewer.webp" width="144" alt="An owl examining a proof page with a magnifying glass"></p>
+      <strong>Reviewer</strong><br>
+      <em>“Does this step follow?”</em><br>
+      Independently checks definitions, assumptions, deductions, and what each citation supports.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <p align="center"><img src="docs/agents/fixer.webp" width="144" alt="A beaver fitting a missing piece into a puzzle"></p>
+      <strong>Fixer</strong><br>
+      <em>“Let's see where the argument breaks.”</em><br>
+      Checks reported problems, repairs gaps where possible, and sends the revisions back for a fresh review.
+    </td>
+    <td width="50%" valign="top">
+      <p align="center"><img src="docs/agents/game-developer.webp" width="144" alt="An otter assembling tiles for a game map"></p>
+      <strong>Game Developer</strong><br>
+      <em>“Try following that argument on a map.”</em><br>
+      Builds an unlockable, bilingual game from the reviewed script and bundles the cited PDFs.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <p align="center"><img src="docs/agents/writer.webp" width="144" alt="A heron with a fountain pen and manuscript pages"></p>
+      <strong>Writer</strong><br>
+      <em>“Let's get the argument onto the page.”</em><br>
+      Writes an English paper for unpublished work or documents confirmed flaws in a public paper.
+    </td>
+    <td width="50%" valign="top">
+      <p align="center"><img src="docs/agents/tutor.webp" width="144" alt="A tortoise teaching with a chalkboard"></p>
+      <strong>Tutor</strong><br>
+      <em>“Where would you like to slow down?”</em><br>
+      Walks through the proof with you and answers questions as you play.
+    </td>
+  </tr>
+</table>
 
-The input can be LaTeX, Markdown, PDF, or an arXiv link. To play a shared game, give the ZIP to Codex and ask it to start it on your Mac.
+[Agent responsibilities](skills/proof2game/references/workers.md) · [Default model settings](skills/proof2game/references/roles.json)
 
-Proof2Game is MIT-licensed. Bundled KaTeX code uses the [MIT License](skills/proof2game/assets/game-runtime/vendor/LICENSE-KaTeX.txt) and the fonts use the [SIL Open Font License](skills/proof2game/assets/game-runtime/vendor/fonts/OFL.txt).
+## Play a shared game
+
+Give the game ZIP to ChatGPT Desktop or Codex and ask it to launch the game on your Mac. It will open in your browser. The game and saves live on your computer. Tutor replies use your own Codex login and an internet connection.
+
+## Manual setup
+
+Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later to play. The PDF navigation check uses `pdftotext` or `pypdf`.
+
+If you already have a verified release checkout, use it and let Proof2Game check for updates. For a fresh setup, run:
+
+```sh
+proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
+mkdir -p "$proof2game_releases"
+git clone --depth 1 --branch v0.1.1 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.1"
+python3 "$proof2game_releases/v0.1.1/skills/proof2game/scripts/release.py" verify
+```
+
+Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)
+
+## License
+
+Proof2Game is released under the [MIT License](LICENSE). The bundled KaTeX code uses the [MIT License](skills/proof2game/assets/game-runtime/vendor/LICENSE-KaTeX.txt), and its fonts use the [SIL Open Font License](skills/proof2game/assets/game-runtime/vendor/fonts/OFL.txt).
