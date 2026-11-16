@@ -60,11 +60,12 @@ replacement includes checkable `evidence`.
   `unavailable`, or optional-only `waived`, with the actual check or user response as
   `evidence`. For `available`, provide the ingested reference ID. Its work key and any specified version must match the wait.
   A pass after a required wait must cite the resolved reference ID and original SHA-256 with physical pages.
-  A confirmed unobtainable
-  required source binds a nonpass at that gate. The optional settlement is reusable
-  in later rounds when the same work still is optional.
+  An `unavailable` response leaves a Reviewer or Fixer source wait in place. An explicit optional waiver
+  can resume the gate and is reusable while the same work remains optional.
 - Batcher returns `issue_ids`, a lossless ordered list of the entire batch. The runtime
-  queues one serial Fixer after the batch; use the retained issue text and related evidence.
+  queues one serial Fixer after the batch. A Fixer action with `waiting.kind: reviewer-sources`
+  cannot bind or accept progress. Use one of `waiting.tokens` to resolve the corresponding Reviewer
+  source. Arrival reopens the original review, and a changed set of finding IDs requires a new Batcher handoff.
   `fixer-progress` and Fixer results take optional `issues`, a map from issue ID to
   `{status,evidence}` for `fixed`, `resolved`, `irrelevant`, `clarified`, `disagreed`, or
   `blocked`, and the task-relative `staging` directory. The whole round must be

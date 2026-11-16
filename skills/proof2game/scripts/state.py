@@ -191,14 +191,49 @@ def review_action(state, component, review):
 
 def add_reviews(state):
     current = state["round"]
-    running = len(state["actions"])
-    dispatched = {action["component"] for action in state["actions"].values()}
+    reviewers = [action for action in state["actions"].values() if action["role"] == "reviewer"]
+    running = sum(not action["waiting"] for action in reviewers)
+    dispatched = {action["component"] for action in reviewers}
     for component, review in current["reviews"].items():
         if running == 10:
             break
         if component not in dispatched and review["verdict"] is None:
             review_action(state, component, review)
             running += 1
+
+
+def queue_fixer(state, waits):
+    current = state["round"]
+    state["phase"] = "fix"
+    role_action(state, "fixer", round=current["id"], issues=current["issues"], order=current["batch"],
+                cutoff=state["target"].get("cutoff"),
+                waiting={"kind": "reviewer-sources", "tokens": waits} if waits else None)
+
+
+def advance_review(state):
+    add_reviews(state)
+    actions = state["actions"]
+    if any(not action["waiting"] for action in actions.values()):
+        return
+    current = state["round"]
+    if not actions and not current["issues"]:
+        finish_round(state, set())
+    elif current["batch"] is not None and set(current["batch"]) == set(current["issues"]):
+        queue_fixer(state, list(actions))
+    else:
+        state["phase"] = "batch"
+        role_action(state, "batcher", round=current["id"], issues=current["issues"], pending_source_tokens=list(actions))
+
+
+def reopen_review(state):
+    if state["phase"] not in ("batch", "fix"):
+        return
+    for token, action in list(state["actions"].items()):
+        if action["role"] in ("batcher", "fixer"):
+            require(action["role"] != "fixer" or not action["identity"], "cannot reopen an active Fixer")
+            record(state, "review-resumed-before-fix", action=action)
+            del state["actions"][token]
+    state["phase"] = "review"
 
 
 def dispatch(state, task):
@@ -287,6 +322,7 @@ def replace(state, request):
     record(state, "lost-session", action=action, evidence=evidence(request.get("evidence")))
     del state["actions"][action["token"]]
     if action["role"] == "reviewer":
+        reopen_review(state)
         review = state["round"]["reviews"][action["component"]]
         review.update(gate_position=0, identity=None, gates=[], source_resolution=None)
         add_reviews(state)
@@ -297,7 +333,7 @@ def replace(state, request):
     if action["role"] == "fixer" and state["round"] is not None:
         current = state["round"]
         fields.update(dispositions=current["dispositions"], staging=current["staging"], verify_previous_repairs=True)
-    role_action(state, action["role"], **fields)
+    role_action(state, action["role"], waiting=action["waiting"], **fields)
 
 
 def source_wait_version(version):
@@ -323,15 +359,23 @@ def wait_source(state, action, request):
     action["waiting"] = {"source": source, "source_version": version, "required": role_specific, "location": location,
                          "evidence": evidence(request.get("evidence"))}
     record(state, "source-wait", action=action["token"], **action["waiting"])
+    if action["role"] == "reviewer":
+        advance_review(state)
 
 
 def resolve_source(task, state, request):
     action = get_action(state, request)
     wait = action["waiting"]
     require(wait is not None, "the action is not waiting for a source")
+    require(wait.get("kind") != "reviewer-sources", "resolve the waiting Reviewer source using its own token")
     status = request.get("status")
     require(status in ("available", "unavailable", "waived"), "unknown source resolution")
     require(status != "waived" or not wait["required"], "a required source cannot be waived")
+    if status == "unavailable" and action["role"] in ("reviewer", "fixer"):
+        record(state, "source-still-unavailable", action=action["token"], evidence=evidence(request.get("evidence")))
+        if state["phase"] == "review":
+            advance_review(state)
+        return
     version = source_wait_version(wait.get("source_version"))
     resolution = {**wait, "source_version": version, "status": status, "evidence": evidence(request.get("evidence"))}
     if status == "available":
@@ -344,6 +388,10 @@ def resolve_source(task, state, request):
             require(reference["version"] == version, "reference does not match the requested source version")
         resolution.update(reference_id=reference["id"], reference_version=reference["version"],
                           reference_sha256=reference["sha256"])
+    if action["role"] == "reviewer":
+        require(sum(row["role"] == "reviewer" and not row["waiting"] for row in state["actions"].values()) < 10,
+                "all Reviewer slots are active; resume this source when a slot opens")
+        reopen_review(state)
     action["waiting"] = None
     action["source_resolution"] = resolution
     if action["role"] == "reviewer":
@@ -410,13 +458,7 @@ def review_result(task, state, action, request):
     else:
         review["gate_position"] += 1
         review["source_resolution"] = None
-    if any(item["verdict"] is None for item in current["reviews"].values()):
-        add_reviews(state)
-    elif current["issues"]:
-        state["phase"] = "batch"
-        role_action(state, "batcher", round=current["id"], issues=current["issues"])
-    else:
-        finish_round(state, set())
+    advance_review(state)
 
 
 def finish_round(state, invalidated):
@@ -498,9 +540,7 @@ def result(task, state, request):
         require(isinstance(ordered_issues, list) and len(ordered_issues) == len(current["issues"])
                 and set(ordered_issues) == set(current["issues"]), "batch must preserve every issue")
         current["batch"] = ordered_issues
-        state["phase"] = "fix"
-        role_action(state, "fixer", round=current["id"], issues=current["issues"], order=ordered_issues,
-                    cutoff=state["target"].get("cutoff"))
+        queue_fixer(state, list(state["actions"]))
     elif role == "fixer":
         if "sources" in request:
             verify_source_rows(task, state, request["sources"])
@@ -1075,6 +1115,8 @@ def select_release(state, request):
     previous = state["tool_release"]
     state["tool_release"] = selected
     for action in list(state["actions"].values()):
+        if action["token"] not in state["actions"]:
+            continue
         if action["identity"] is None:
             action["tool_release"] = selected
         else:
@@ -1131,6 +1173,8 @@ def operation(task, state, request):
             verify_approval(task, state)
         elif state["phase"] == "withdrawn":
             withdrawal_delivery(task, state)
+        elif state["phase"] == "review":
+            advance_review(state)
         else:
             dispatch(state, task)
     elif op == "bind":
@@ -1147,6 +1191,7 @@ def operation(task, state, request):
     elif op == "fixer-progress":
         action = get_action(state, request, bound=True)
         require(state["phase"] == "fix" and action["role"] == "fixer", "no active Fixer")
+        require(not action["waiting"], "resolve the source wait first")
         record_fix(state, action, request)
     elif op == "apply-candidate":
         writes = apply_candidate(task, state, request)

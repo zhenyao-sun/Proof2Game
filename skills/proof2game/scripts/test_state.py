@@ -154,7 +154,7 @@ class Ledger(unittest.TestCase):
         self.assertEqual(result["superseded"][0]["products"]["paper"]["status"], "blocked")
         self.assertEqual(state.read_json(certificate)["route_review"], "invalidated")
 
-    def test_missing_pdf_binds_nonpass_and_keeps_completed_peers_on_replacement(self):
+    def test_missing_pdf_stops_at_fixer_and_keeps_completed_peers_on_replacement(self):
         self.init(kind="public")
         self.change("advance")
         self.pass_component("setting")
@@ -174,30 +174,74 @@ class Ledger(unittest.TestCase):
         waiting = self.action(component="main")
         self.change("source-resolve", token=waiting["token"], snapshot_digest=waiting["snapshot_digest"],
                     status="unavailable", evidence="fixture user confirmed inaccessible primary PDF")
-        with self.assertRaisesRegex(state.Rejected, "indispensable"):
+        with self.assertRaisesRegex(state.Rejected, "resolve the source wait first"):
             self.result(self.action(component="main"), "pass")
-        self.result(self.action(component="main"), "nonpass", issue="This inference could not be verified.",
-                    location="Proof application")
+        batch = self.action(role="batcher")
+        self.assertEqual(batch["issues"], {})
+        self.result(batch, "complete", issue_ids=list(batch["issues"]))
+        fixer = self.action(role="fixer")
+        self.assertEqual(self.data["state"]["phase"], "fix")
+        self.assertEqual(fixer["waiting"], {"kind": "reviewer-sources", "tokens": [waiting["token"]]})
+        with self.assertRaisesRegex(state.Rejected, "bound or waiting"):
+            self.bind(fixer)
+        self.change("advance")
+        self.assertEqual(self.action(role="fixer")["token"], fixer["token"])
+        self.assertEqual(self.action(component="main")["token"], waiting["token"])
+        self.assertEqual(self.data["state"]["counters"]["rounds"], 0)
+        self.assertFalse(self.actions(component="setting"))
+
+    def test_reviewer_source_arrival_reopens_parked_fixer_then_reuses_existing_batch(self):
+        self.init(kind="public")
+        self.change("advance")
+        self.result(self.action(component="setting"), "nonpass", issue="Synthetic scope defect", location="Setting")
+        for _ in range(3):
+            self.result(self.action(component="main"), "pass")
+        self.result(self.action(component="main"), "waiting-source", required=False, source="study", location="Optional reuse")
+        waiting = self.action(component="main")
+        batch = self.action(role="batcher")
+        issue_ids = list(batch["issues"])
+        self.result(batch, "complete", issue_ids=issue_ids)
+        fixer = self.action(role="fixer")
+        with self.assertRaisesRegex(state.Rejected, "own token"):
+            self.change("source-resolve", token=fixer["token"], snapshot_digest=fixer["snapshot_digest"],
+                        status="waived", evidence="synthetic waiver")
+        self.change("source-resolve", token=waiting["token"], snapshot_digest=waiting["snapshot_digest"],
+                    status="waived", evidence="synthetic user intentionally waived optional reuse")
+        self.assertEqual(self.data["state"]["phase"], "review")
+        self.assertFalse(self.actions(role="fixer"))
+        self.pass_component("main")
+        self.assertFalse(self.actions(role="batcher"))
+        self.assertIsNone(self.action(role="fixer")["waiting"])
+        self.assertEqual(self.action(role="fixer")["order"], issue_ids)
+
+    def test_waiting_fixer_progress_cannot_modify_round(self):
+        self.init()
+        self.change("advance")
+        self.result(self.action(component="setting"), "nonpass", issue="Synthetic scope defect", location="Setting")
+        self.pass_component("main")
         batch = self.action(role="batcher")
         self.result(batch, "complete", issue_ids=list(batch["issues"]))
-        issue = next(iter(batch["issues"]))
-        self.result(self.action(role="fixer"), "no-change",
-                    issues={issue: {"status": "disagreed", "evidence": "fixture: concern addressed locally"}})
-        self.assertEqual(self.data["state"]["safe"], ["setting"])
-        self.assertEqual(self.data["state"]["counters"]["rounds"], 1)
-        self.change("advance")
-        self.assertEqual(self.action(component="main")["gate"], "expression")
-        self.assertFalse(self.actions(component="setting"))
+        self.result(self.action(role="fixer"), "waiting-source", required=True, source="study", location="Repair")
+        fixer = self.action(role="fixer")
+        with self.assertRaisesRegex(state.Rejected, "resolve the source wait first"):
+            self.change("fixer-progress", token=fixer["token"], snapshot_digest=fixer["snapshot_digest"],
+                        session=fixer["identity"]["session"], issues={})
+        self.change("source-resolve", token=fixer["token"], snapshot_digest=fixer["snapshot_digest"],
+                    status="unavailable", evidence="synthetic unavailable PDF")
+        self.assertEqual(self.action(role="fixer")["waiting"], fixer["waiting"])
 
     def test_unknown_source_version_can_resolve_existing_and_new_waits(self):
         self.init(kind="public")
         self.change("advance")
+        self.pass_component("setting")
         for _ in range(3):
             self.result(self.action(component="main"), "pass")
         self.result(self.action(component="main"), "waiting-source", required=True,
                     source="needed-study", source_version="unknown", location="Required interface")
         waiting = self.action(component="main")
         self.assertIsNone(waiting["waiting"]["source_version"])
+        self.result(self.action(role="batcher"), "complete", issue_ids=[])
+        self.assertEqual(self.data["state"]["phase"], "fix")
 
         # Recreate a wait persisted by an earlier version of the runtime.
         ledger_path = self.task / "state.json"
@@ -213,6 +257,9 @@ class Ledger(unittest.TestCase):
         self.assertIsNone(current["waiting"])
         self.assertIsNone(current["source_resolution"]["source_version"])
         self.assertEqual(current["source_resolution"]["reference_version"], "v2")
+        self.assertEqual(self.data["state"]["phase"], "review")
+        self.result(current, "nonpass", issue="Synthetic source does not support application", location="Required interface")
+        self.assertEqual(len(self.action(role="batcher")["issues"]), 1)
 
     def test_required_source_wait_and_pass_bind_the_same_publication(self):
         self.init(kind="public")
