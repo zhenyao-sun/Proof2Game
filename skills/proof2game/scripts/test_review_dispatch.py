@@ -65,6 +65,8 @@ class ReviewDispatchTest(unittest.TestCase):
                                   "EXTERNAL_CITATION_CANARY", "UNPUBLISHED_WORKER_NOTE_CANARY", CUTOFF):
                     self.assertNotIn(forbidden, serialized)
                 self.assertIn("current_text", packet)
+                message = review_dispatch.worker_prompt(packet, self.scratch / "gate.json", "sha256")
+                self.assertIn("Omit the sources field entirely", message)
                 if gate == "expression":
                     self.assertEqual(packet["statement_navigation"]["proof_location"], "2.1")
 
@@ -103,6 +105,7 @@ class ReviewDispatchTest(unittest.TestCase):
                 self.assertIn("concrete external source needed at this gate", message)
                 self.assertIn("verify the eligible original PDF directly", message)
                 self.assertIn("requires a source wait", message)
+                self.assertIn("omit it if unknown", message)
                 if gate == "sources":
                     self.assertIn("Manuscript-local references do not require an external PDF", message)
                 else:

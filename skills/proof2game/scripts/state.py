@@ -300,19 +300,25 @@ def replace(state, request):
     role_action(state, action["role"], **fields)
 
 
+def source_wait_version(version):
+    if version is None:
+        return None
+    exact_version = evidence(version)
+    # Earlier reviewer prompts led workers to send this placeholder as a version.
+    return None if exact_version.strip().casefold() == "unknown" else exact_version
+
+
 def wait_source(state, action, request):
     if action["role"] == "reviewer":
         require(action["gate"] in ("sources", "reuse"), "source-blind gate cannot request external material")
     role_specific = request.get("required")
     require(isinstance(role_specific, bool), "mark a source as required or optional")
     source = intake.identifier(request.get("source"))
-    version = request.get("source_version")
-    if version is not None:
-        version = evidence(version)
+    version = source_wait_version(request.get("source_version"))
     location = evidence(request.get("location"))
     prior = state["optional_unavailable"].get(source)
-    if not role_specific and prior and prior.get("source_version") == version:
-        action["source_resolution"] = {**prior, "location": location}
+    if not role_specific and prior and source_wait_version(prior.get("source_version")) == version:
+        action["source_resolution"] = {**prior, "source_version": version, "location": location}
         return
     action["waiting"] = {"source": source, "source_version": version, "required": role_specific, "location": location,
                          "evidence": evidence(request.get("evidence"))}
@@ -326,15 +332,16 @@ def resolve_source(task, state, request):
     status = request.get("status")
     require(status in ("available", "unavailable", "waived"), "unknown source resolution")
     require(status != "waived" or not wait["required"], "a required source cannot be waived")
-    resolution = {**wait, "status": status, "evidence": evidence(request.get("evidence"))}
+    version = source_wait_version(wait.get("source_version"))
+    resolution = {**wait, "source_version": version, "status": status, "evidence": evidence(request.get("evidence"))}
     if status == "available":
         reference = intake.checked_record(task.parent.parent, "reference", evidence(request.get("reference_id")))
         cutoff = state["target"].get("cutoff")
         require(reference["complete"] and (not cutoff or reference["public_date"] <= cutoff),
                 "source needs completed OCR and an eligible version before resuming")
         require(reference["work_key"] == wait["source"], "reference does not match the requested source work key")
-        if wait.get("source_version") is not None:
-            require(reference["version"] == wait["source_version"], "reference does not match the requested source version")
+        if version is not None:
+            require(reference["version"] == version, "reference does not match the requested source version")
         resolution.update(reference_id=reference["id"], reference_version=reference["version"],
                           reference_sha256=reference["sha256"])
     action["waiting"] = None

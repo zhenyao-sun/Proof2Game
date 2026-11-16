@@ -125,7 +125,8 @@ def worker_prompt(packet, path, packet_sha256):
     if packet["source_blind"]:
         lines.append(
             "Use only the detached packet at this gate. Defer all reads of external sources, projects, other pages, "
-            "searches and PDFs. In the mathematics gate take fully stated external interfaces as provisional premises."
+            "searches and PDFs. In the mathematics gate take fully stated external interfaces as provisional premises. "
+            "Omit the sources field entirely at this gate."
         )
     else:
         lines.append(
@@ -161,8 +162,8 @@ def worker_prompt(packet, path, packet_sha256):
         command,
         "Return JSON with token, snapshot_digest, component, gate, packet_sha256, verdict, and concise English evidence. "
         "Use pass for no substantive defect, nonpass with issue and exact location for a defect, or waiting-source "
-        "with source (stable project work key), source_version (exact version if known), required (boolean), "
-        "and location for a source wait. Identify the publication in evidence. "
+        "with source (stable project work key), required (boolean), and location for a source wait. "
+        "Set source_version to the exact known edition or omit it if unknown. Identify the publication in evidence. "
         "The coordinator binds the actual host session before recording the result.",
     ])
     return "\n".join(lines)

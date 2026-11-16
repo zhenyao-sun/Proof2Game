@@ -54,7 +54,8 @@ replacement includes checkable `evidence`.
   validates date, version, original digest, and intake completeness. Other gates
   receive no source material or receipt.
 - Waiting-source takes `source` (the reference's stable project work key), `source_version`
-  when an exact edition is required, `location`, and boolean `required`. Identify the work in `evidence`.
+  when an exact edition is required, `location`, and boolean `required`. Omit `source_version` when unknown.
+  The runtime treats the earlier literal `unknown` as an omitted version. Identify the work in `evidence`.
   The other Reviewers may continue. Use `source-resolve` with `status` of `available`,
   `unavailable`, or optional-only `waived`, with the actual check or user response as
   `evidence`. For `available`, provide the ingested reference ID. Its work key and any specified version must match the wait.

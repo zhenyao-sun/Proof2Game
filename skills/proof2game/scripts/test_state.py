@@ -189,6 +189,31 @@ class Ledger(unittest.TestCase):
         self.assertEqual(self.action(component="main")["gate"], "expression")
         self.assertFalse(self.actions(component="setting"))
 
+    def test_unknown_source_version_can_resolve_existing_and_new_waits(self):
+        self.init(kind="public")
+        self.change("advance")
+        for _ in range(3):
+            self.result(self.action(component="main"), "pass")
+        self.result(self.action(component="main"), "waiting-source", required=True,
+                    source="needed-study", source_version="unknown", location="Required interface")
+        waiting = self.action(component="main")
+        self.assertIsNone(waiting["waiting"]["source_version"])
+
+        # Recreate a wait persisted by an earlier version of the runtime.
+        ledger_path = self.task / "state.json"
+        persisted = state.read_json(ledger_path)
+        persisted["actions"][waiting["token"]]["waiting"]["source_version"] = "unknown"
+        ledger_path.write_bytes(state.json_bytes(persisted))
+        reference = {"complete": True, "public_date": "2022-01-01", "work_key": "needed-study",
+                     "id": "needed-study-v2", "version": "v2", "sha256": "1" * 64}
+        with patch.object(intake, "checked_record", return_value=reference):
+            self.change("source-resolve", token=waiting["token"], snapshot_digest=waiting["snapshot_digest"],
+                        status="available", reference_id=reference["id"], evidence="synthetic source receipt")
+        current = self.action(component="main")
+        self.assertIsNone(current["waiting"])
+        self.assertIsNone(current["source_resolution"]["source_version"])
+        self.assertEqual(current["source_resolution"]["reference_version"], "v2")
+
     def test_required_source_wait_and_pass_bind_the_same_publication(self):
         self.init(kind="public")
         self.change("advance")
