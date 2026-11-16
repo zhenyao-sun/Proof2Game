@@ -97,6 +97,16 @@ class ReviewDispatchTest(unittest.TestCase):
         proof = review_dispatch.build_packet(self.main, self.action("main-proof", "sources"), cutoff=CUTOFF)
         self.assertIn("UNRELATED_CANARY", proof["current_text"])
 
+    def test_statement_expression_explains_blank_adjacent_prose(self):
+        packet = review_dispatch.build_packet(self.main, self.action("main", "expression"), cutoff=CUTOFF)
+        self.assertFalse(packet["adjacent_prose"].strip())
+        self.assertEqual(packet["preceding_component"]["id"], "setting")
+        message = review_dispatch.worker_prompt(packet, self.scratch / "gate.json", "sha256")
+        self.assertIn("A blank adjacent_prose field means no intervening prose is written", message)
+        self.assertIn("Use the supplied preceding_component or preceding_proof_transition_excerpt", message)
+        self.assertIn("Flag a missing transition only if the manuscript needs one", message)
+        self.assertIn("Request only a precise excerpt", message)
+
     def test_external_lookup_requires_a_gate_specific_reason(self):
         for gate in ("sources", "reuse"):
             with self.subTest(gate=gate):

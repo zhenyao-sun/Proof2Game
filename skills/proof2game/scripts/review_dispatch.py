@@ -51,8 +51,11 @@ BY_COMPONENT = {
         "nontrivial claim placed in a Convention. Proving a theorem is outside this gate."
     ),
     ("statement", "expression"): (
-        "Check readability with the actual immediately preceding prose and transition. Check the result kind, optional "
-        "title, and reader-visible locator. Ask for any exact adjacent material you need that is missing from this packet."
+        "Check readability with the actual preceding material and transition. "
+        "A blank adjacent_prose field means no intervening prose is written. Use the supplied preceding_component "
+        "or preceding_proof_transition_excerpt when present. Flag a missing transition only if the manuscript needs one. "
+        "Request only a precise excerpt if unsupplied preceding material is necessary for this judgment. "
+        "Check the result kind, optional title, and reader-visible locator."
     ),
     ("statement", "mathematics"): (
         "Check well-formedness, logical content, quantifiers, conditions, notation, and legal parameter and dependency "
