@@ -458,6 +458,7 @@ def review_result(task, state, action, request):
     else:
         review["gate_position"] += 1
         review["source_resolution"] = None
+        review_action(state, cid, review)
     advance_review(state)
 
 

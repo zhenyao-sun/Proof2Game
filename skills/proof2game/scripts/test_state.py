@@ -154,6 +154,25 @@ class Ledger(unittest.TestCase):
         self.assertEqual(result["superseded"][0]["products"]["paper"]["status"], "blocked")
         self.assertEqual(state.read_json(certificate)["route_review"], "invalidated")
 
+    def test_advancing_gate_keeps_continuing_reviewer_slot(self):
+        self.init()
+        self.change("advance")
+        current = self.bind(self.action(component="main"))
+        ledger = self.data["state"]
+        actions = ledger["actions"]
+        actions.pop(current["token"])
+        for index in range(8):
+            state.role_action(ledger, "reviewer", component=f"running-{index}")
+        reviews = ledger["round"]["reviews"]
+        ledger["round"]["reviews"] = {"queued-before-main": {"verdict": None}, **reviews}
+
+        state.review_result(self.task, ledger, current, {"verdict": "pass", "evidence": "synthetic expression pass"})
+
+        continued = next(action for action in actions.values() if action["component"] == "main")
+        self.assertEqual(continued["gate"], "self_contained")
+        self.assertEqual(continued["identity"], current["identity"])
+        self.assertEqual(len(actions), 10)
+
     def test_missing_pdf_stops_at_fixer_and_keeps_completed_peers_on_replacement(self):
         self.init(kind="public")
         self.change("advance")
