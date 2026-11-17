@@ -142,7 +142,7 @@ async function setup() {
       window.proof2gameBridge = { ...bridge, gameId, confirmPlayable };
       store(key, bridge);
       document.querySelector('main').hidden = true;
-      frame.src = './play/index.html';
+      frame.src = './play/index.html?release=' + encodeURIComponent(connector);
       frame.hidden = false;
     }
 
