@@ -82,4 +82,4 @@ mathematical and route verdicts come from the verification workflow.
   removes inactive inputs and subtrees, and prunes inline bibliography entries
   without retained citations. Apply the review/route eligibility checks before
   producing a delivery snapshot and then give the same snapshot to both exporters.
-  The game exporter attaches the PDFs cited by the retained script.
+  The game website links to the DOI or stable official record of each cited edition.

@@ -11,8 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import zipfile
-from urllib.parse import urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 import manuscript
 from sources import published_by
@@ -325,7 +324,7 @@ def source_references(files, source_bindings=None, references_dir=None, cutoff=N
             edition=record.get('edition') or '', version=record.get('version') or '',
             public_date=record.get('public_date'), file=file,
             sha256=digest, pages=pages, aliases=list(dict.fromkeys(aliases)), default_page=locations[0]['page'],
-            locations=locations, source_url=record.get('record_url') or record.get('source_url') or ''))
+            locations=locations, source_url=reference_url(record)))
         bundled[file] = data
     return references, bundled
 
@@ -541,56 +540,6 @@ def make_game(main, approval=None, source_bindings=None, references_dir=None,
     return game, files, reference_files
 
 
-START = '''# Proof2Game
-
-On macOS, hand the ZIP to ChatGPT Desktop or Codex and say:
-“Extract this Proof2Game game and start it in my browser.”
-
-The assistant extracts it into a writable folder and runs `node server.mjs`
-there. Node.js 20 or later and an authenticated Codex command-line program
-are required. The game looks for the desktop app's bundled Codex and then
-for `codex` on PATH. Set `PROOF2GAME_CODEX` to name a specific executable.
-Use your own Codex account and allowance. The tutor uses the model and reasoning
-specified in game.json. Local play still requires online model inference.
-
-The fixed paper and mathematics sources and cited PDFs are included. No other
-author folders or separate skill installation are needed. Proof2Game opens directly
-on its main map. It starts in English. Use the language menu on the map or in a
-level to switch the interface, manuscript and new AI replies between English and
-中文. Your last selection, existing conversations and progress are saved locally.
-
-Each new level starts in Step by step guide, with an opening and small passages
-adapted to your reactions. Guide can draw a diagram directly in its explanation.
-Levels follow the mathematics in source order,
-beginning with the first component. Convention levels are named Convention. Confirm only what you
-understand, using the passage button or explicit words. Understanding does not
-require agreeing with the explanation. An unconfirmed explanation is not a task
-you must return to. You can select Regular chat for open discussion; the game
-remembers your choice separately for each level and keeps both conversations.
-
-Use I understand this convention / statement / proof, or explicitly
-say you understand the whole level, to complete it and return to the map. No extra
-click or quiz is required after clear whole-level text confirmation. Revisit
-completed levels freely; relearning does not revoke completion. Undo steps back through your actions, including across levels. A withdrawn
-question returns to the input box for editing. Mathematical issues can be kept
-in your conversation and shared with the person who gave you the game.
-
-Progress and conversations, including Guide diagrams, are saved automatically
-in the extracted game folder. Downloaded saves include the original diagrams.
-Use Manual save to retain a separate progress point. Each saved point can be
-loaded, downloaded or deleted. Upload a state file to restore it; loading replaces
-current state rather than merging conversations. A backup is kept before replacement,
-and an invalid or different-snapshot file does not overwrite valid progress.
-Keep the game folder and its saves to continue next time. Exported state can also
-be given manually to a later paper-revision task; no background feedback report,
-automatic handoff or cloud storage is involved.
-
-To stop, press Control+C in the game server terminal. Restart the same command
-to continue. `node server.mjs --no-open` prints a browser address instead.
-Each revision of the game script needs a new game package.
-'''
-
-
 def public_reference_url(value):
     if not isinstance(value, str) or any(char.isspace() or ord(char) < 32 for char in value):
         return ''
@@ -603,12 +552,48 @@ def public_reference_url(value):
     return ''
 
 
+def reference_url(record):
+    source = public_reference_url(record.get('record_url') or record.get('source_url'))
+    doi = record.get('doi')
+    if not doi:
+        # Some completed intake records include the DOI in their verified version label.
+        match = re.search(r'\bDOI (10[.][0-9]{4,9}/[^\s]+)$', record.get('version') or '', re.IGNORECASE)
+        doi = match[1] if match else None
+    if not doi and source:
+        parsed = urlsplit(source)
+        if parsed.hostname in ('doi.org', 'dx.doi.org', 'link.springer.com',
+                               'onlinelibrary.wiley.com'):
+            match = re.search(r'/((?:10[.][0-9]{4,9})/[^\s]+)$', unquote(parsed.path))
+            doi = match[1] if match else None
+    if doi:
+        if not isinstance(doi, str) or not re.fullmatch(r'10[.][0-9]{4,9}/[^\s]+', doi):
+            raise Rejected('Invalid DOI for citation: ' + record['citation_key'])
+        return 'https://doi.org/' + quote(doi, safe='/():;')
+    return source
+
+
+def paper_metadata(record, metadata):
+    if record['project_type'] != 'public':
+        return None
+    digest = record.get('original_sha256')
+    if (not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest) or
+            not isinstance(metadata, dict) or metadata.get('sha256') != digest):
+        raise Rejected('Public game needs paper metadata bound to the approved original SHA-256.')
+    title, authors, version = (metadata.get(key) for key in ('title', 'authors', 'version'))
+    if (not isinstance(title, str) or not title.strip() or
+            not isinstance(version, str) or not version.strip() or
+            not isinstance(authors, list) or not authors or
+            not all(isinstance(author, str) and author.strip() for author in authors)):
+        raise Rejected('Public game needs the exact original title, authors and version.')
+    return dict(title=title.strip(), authors=[author.strip() for author in authors], version=version.strip())
+
+
 def export_pages(output, game, content, script, verify_delivery):
     """Stage a static site with game data and a launch page. Publication is separate."""
-    # Bundled PDFs belong to the private ZIP. Retain verified citations and
-    # links to sources without republishing the supplied copies.
     for ref in game['references']:
-        ref['source_url'] = public_reference_url(ref['source_url'])
+        if not ref['source_url']:
+            raise Rejected('A DOI or official HTTPS source link is required for: ' + ref['key'])
+        ref.pop('sha256', None)
     game['distribution'] = 'pages'
     game['reference_files'] = {}
     data = {'game.json': canonical(game), **content}
@@ -618,6 +603,8 @@ def export_pages(output, game, content, script, verify_delivery):
     manifest = dict(schema=1, connector=release, files={
         name: dict(sha256=sha(payload), size=len(payload)) for name, payload in sorted(data.items())
     })
+    if 'paper' in game:
+        manifest['paper'] = game['paper']
     if len(data) > 2048 or sum(map(len, data.values())) > 128 * 1024 * 1024:
         raise Rejected('This game exceeds the Pages launch data limit.')
     assets = script.parents[1] / 'assets/pages-launch'
@@ -642,18 +629,22 @@ def export_pages(output, game, content, script, verify_delivery):
 
 
 def export(main, output, approval=None, source_bindings=None, references_dir=None, translation=None,
-           model='gpt-6.1-sol', reasoning='medium', *, pages=False):
+           model='gpt-6.1-sol', reasoning='medium', *, paper=None):
     if sys.platform != 'darwin':
         raise Rejected('Proof2Game generation is supported on macOS.')
     output = Path(output).resolve()
-    if not pages and output.suffix.lower() != '.zip':
-        raise Rejected('Output must be a .zip archive.')
+    if output.suffix.lower() == '.zip':
+        raise Rejected('Output must be a new directory for the hosted game.')
     if output.exists():
         raise Rejected('Output already exists; select a new name to preserve the previous delivery.')
     if translation is None:
         raise Rejected('Export needs the complete Chinese translation. Use --prepare-translation first.')
-    game, files, reference_files = make_game(main, approval, source_bindings, references_dir,
+    _, _, _, _, record = eligibility(main, approval)
+    attribution = paper_metadata(record, paper)
+    game, files, _ = make_game(main, approval, source_bindings, references_dir,
                                             translation=translation, model=model, reasoning=reasoning)
+    if attribution is not None:
+        game['paper'] = attribution
     chinese_files = {'translation/zh/' + name: source.encode()
                      for name, source in translation['files'].items()}
     if {name: sha(data) for name, data in chinese_files.items()} != {
@@ -678,40 +669,9 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     if not all((runtime / name).is_file() for name in required):
         raise Rejected('The installed game runtime is incomplete.')
     output.parent.mkdir(parents=True, exist_ok=True)
-    if pages:
-        export_pages(output, game, {'snapshot/' + name: data for name, data in files.items()} | chinese_files,
-                     script, verify_delivery)
-        return dict(result, distribution='pages', published=False)
-    with tempfile.TemporaryDirectory(prefix='proof2game-export-') as td:
-        archive = Path(td) / 'game.zip'
-        with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
-            for p in sorted(runtime.rglob('*')):
-                if p.is_file() and not any(part.startswith('.') for part in p.relative_to(runtime).parts):
-                    z.write(p, p.relative_to(runtime).as_posix())
-            for name, data in files.items():
-                z.writestr('snapshot/' + name, data)
-            for name, data in chinese_files.items():
-                z.writestr(name, data)
-            for name, data in reference_files.items():
-                z.writestr(name, data)
-            z.writestr('game.json', json.dumps(game, ensure_ascii=False, indent=2) + '\n')
-            z.writestr('START.md', START)
-            z.write(release_license, 'LICENSE-Proof2Game.txt')
-            z.writestr('AGENTS.md', '# Proof2Game\n\nOn a user request to start this game on macOS, read START.md and run `node server.mjs` in this extracted folder. Use the player\'s own Codex account. Preserve the included snapshot and local saves. Do not edit the paper or silently substitute the tutor model. No separate skill is required.\n')
-        # Stage on the destination filesystem, then publish atomically without
-        # overwriting an earlier delivery, even if another process creates it.
-        fd, staged = tempfile.mkstemp(prefix='.proof2game-', suffix='.zip', dir=output.parent)
-        try:
-            with os.fdopen(fd, 'wb') as f:
-                f.write(archive.read_bytes())
-                f.flush()
-                os.fsync(f.fileno())
-            verify_delivery()
-            os.link(staged, output)
-        finally:
-            if os.path.exists(staged):
-                os.unlink(staged)
-    return result
+    export_pages(output, game, {'snapshot/' + name: data for name, data in files.items()} | chinese_files,
+                 script, verify_delivery)
+    return dict(result, distribution='pages', published=False)
 
 
 def main():
@@ -725,11 +685,11 @@ def main():
     p.add_argument('--tutor-reasoning', default='medium', choices=('low', 'medium', 'high', 'xhigh', 'max', 'ultra'))
     p.add_argument('--translation', help='Complete Chinese translation JSON from the mathematics translator.')
     action = p.add_mutually_exclusive_group()
-    action.add_argument('--pages', action='store_true',
-                        help='Export a separate static GitHub Pages directory instead of a private ZIP.')
-    action.add_argument('--check', action='store_true', help='Read-only eligibility check; no archive.')
+    p.add_argument('--pages', action='store_true', help=argparse.SUPPRESS)
+    p.add_argument('--paper-metadata', help='Exact original title, authors, version and original SHA-256 (public projects).')
+    action.add_argument('--check', action='store_true', help='Read-only eligibility check; no website.')
     action.add_argument('--prepare-translation', action='store_true',
-                        help='Print the eligible snapshot’s translation input JSON without generating an archive.')
+                        help='Print the eligible snapshot’s translation input JSON without generating a website.')
     args = p.parse_args()
     try:
         if args.prepare_translation:
@@ -748,7 +708,9 @@ def main():
                 p.error('--translation is required to export a game')
             translation = json.loads(Path(args.translation).read_text(encoding='utf-8'))
             result = export(args.main, args.output, args.approval, args.source_bindings,
-                            args.references, translation, args.tutor_model, args.tutor_reasoning, pages=args.pages)
+                            args.references, translation, args.tutor_model, args.tutor_reasoning,
+                            paper=json.loads(Path(args.paper_metadata).read_text(encoding='utf-8'))
+                            if args.paper_metadata else None)
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except (Rejected, manuscript.Invalid, OSError, ValueError) as exc:
         print(json.dumps(dict(ok=False, error=str(exc)), ensure_ascii=False))

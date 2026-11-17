@@ -65,11 +65,16 @@ fixture = GameExportTests()
 fixture.setUp()
 try:
     record, full = fixture.approve()
+    record['original_sha256'] = 'a' * 64
+    fixture.approval.write_text(json.dumps(record))
+    paper = fixture.root / 'paper.json'
+    paper.write_text(json.dumps(dict(title='Exact paper', authors=['Ada Example'], version='v1',
+                                     sha256=record['original_sha256'])))
     translation = fixture.root / 'translation.json'
     translation.write_text(json.dumps(fixture.translation(record, full)))
     result = json.loads(subprocess.check_output([
         sys.executable, game.__file__, '--main', str(fixture.main), '--translation', str(translation),
-        '--pages', '--output', sys.argv[1],
+        '--paper-metadata', str(paper), '--output', sys.argv[1],
     ]))
     assert result['distribution'] == 'pages' and result['published'] is False
 finally:
@@ -119,6 +124,7 @@ test('a real Pages export downloads, starts the local runtime and restores a sav
   const cache = path.join(root, 'cache');
   await assert.rejects(loadGame(url, 'v0.0.0', cache, fakeFetch), /requires the official connector/);
   const manifest = JSON.parse(await fs.readFile(path.join(website, 'proof2game.json'), 'utf8'));
+  assert.deepEqual(manifest.paper, {title: 'Exact paper', authors: ['Ada Example'], version: 'v1'});
   await assert.rejects(loadGame(url, release, cache, async (target, options) => {
     if (target.href !== url.href) return fakeFetch(target, options);
     return Response.json({...manifest, files: {...manifest.files, 'snapshot/../server.mjs': manifest.files['game.json']}});

@@ -79,6 +79,11 @@ def candidate(row, *, work=None):
         "source_url": url(row.get("source_url"), "version URL"),
         "publication_evidence": require_text(row, "publication_evidence"),
     }
+    if row.get("doi") is not None:
+        doi = require_text(row, "doi")
+        if not re.fullmatch(r"10[.][0-9]{4,9}/[^\s]+", doi):
+            raise ValueError("Provide the bare DOI of the exact selected edition.")
+        value["doi"] = doi
     if "id" in row:
         value["id"] = identifier(row["id"])
     return value

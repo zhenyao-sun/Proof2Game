@@ -34,7 +34,7 @@ Proof2Game keeps your original and builds a separate English game script. Indepe
 
 - **Follow the proof map.** Statements, lemmas, and proofs become levels. Unlock the next part as you go.
 - **Get help when you want it.** Ask the tutor to work through a step with you, or switch to open chat. Play in English or Chinese.
-- **See the source.** Open the cited PDFs from inside the game and jump to the relevant pages.
+- **See the source.** Follow citations to the DOI or official source and use the displayed locator.
 - **Pick up where you left off.** Save progress locally, undo a step, or export a save to continue the same game on another Mac.
 
 ## Meet the team
@@ -90,15 +90,13 @@ One Codex session coordinates the work. Each specialist takes a different part o
 
 ## Play a shared game
 
-Give the game ZIP to ChatGPT Desktop or Codex and ask it to launch the game on your Mac. It will open in your browser. The game and saves live on your computer. Tutor replies use your own Codex login and an internet connection.
-
 A shared GitHub Pages link opens a launch page. Copy its prompt into Codex
 on your Mac and leave the tab open. Allow the connection if your browser asks.
 The same tab opens the game when the connector is ready. You can also open the
 local game address from Codex directly. You need Node.js 20 or later and your
 own Codex login.
 
-Authors can [export and publish a game directory to GitHub Pages](skills/proof2game/references/game.md#export-a-shareable-link)
+Authors can [export and publish a game directory to GitHub Pages](skills/proof2game/references/game.md#publish-the-website)
 from the approved bilingual snapshot.
 
 ## Manual setup

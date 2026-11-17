@@ -65,8 +65,18 @@ async function setup() {
     if (manifest.protocol !== 'https:') throw new Error('HTTPS required.');
     const response = await fetch(manifest, {redirect: 'error'});
     if (!response.ok) throw new Error('Game manifest unavailable.');
-    const {schema, connector} = await response.json();
+    const {schema, connector, paper} = await response.json();
     if (schema !== 1 || !releasePattern.test(connector)) throw new Error('Unsupported game manifest.');
+
+    if (paper && typeof paper.title === 'string' &&
+        Array.isArray(paper.authors) && paper.authors.every(author => typeof author === 'string') &&
+        typeof paper.version === 'string') {
+      element('heading').textContent = paper.title;
+      const byline = element('paper-byline');
+      byline.textContent = [paper.authors.join(', '), paper.version].join(' · ');
+      byline.hidden = false;
+      document.title = paper.title + ' | Proof2Game';
+    }
 
     let deadline = 0;
     let running = false;

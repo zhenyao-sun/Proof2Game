@@ -19,9 +19,27 @@ Retain each accepted target's strength, scope, hypotheses and proof route. Reade
 
 ## Referee report
 
-Identify the exact original version and publication date. Address a general mathematical audience without choosing a target journal or applying a venue's editorial criteria. Compare each active target and the reasoning that supports it with the corresponding material in the original. Use the differences to decide which comments matter to a reader of the original and how much explanation to give. Summarize the contribution and give a scoped assessment. Include substantive clarifications, suggestions and corrections supported by the comparison, with precise original locations. Treat reorganization for the game and equivalent presentations as such. When no substantive flaw was confirmed, give the assessment and any warranted suggestions without inventing a finding or claiming to have certified the entire paper. Use the completed verification as evidence and carry out the comparison without repeating the mathematical review workflow. Start with [writer-referee.tex](../assets/writer-referee.tex).
+Identify the exact original version and publication date. Write a standard
+English referee report addressed to the authors and applicable without a
+target journal. The PDF discusses the original manuscript only. Do not refer
+to a game, script, companion draft, or internal review process. Omit any
+editorial disposition such as accept, reject, minor revision or major revision.
 
-For every approved finding, including findings from discarded dependencies, give the original location, verified counterexample or other checkable evidence, and affected original conclusion. When the user has confirmed a revised target, state the original conclusion, evidence and confirmed new conclusion. Keep complete replacement proofs in the game script and verification record. For a final target withdrawal, explain the original conclusion and evidence before stating the documented withdrawal.
+Internally compare each active target and its argument with the original.
+Use the completed reviews as evidence. When no mathematical error has been
+confirmed, still assess the significance and scope of the results. Include
+concrete suggestions that help readers understand or check the proof, and
+include warranted minor comments on wording, notation and exposition. Give
+precise original section, statement, equation or page locators for specific
+comments. Do not manufacture suggestions or claim certification of the
+whole paper. Use [writer-referee.tex](../assets/writer-referee.tex).
+
+For each approved finding, including one from a discarded dependency, give
+the original location, checkable evidence, and affected original conclusion.
+If a corrected target was independently verified, present the correction as a
+suggested change to the original statement. Keep full replacement proofs
+internal. For a final target withdrawal, explain the original conclusion and
+the evidence showing the claim must be withdrawn.
 
 The approved snapshot binds the preserved original by `original_sha256` and records `referee_comparison: true`. When findings exist, use the bound project `report.md` as supporting evidence and check its `report_sha256`. The `report_findings` list is empty when no hard finding was confirmed; otherwise each record has nonempty `id`, `location`, `original_conclusion`, `evidence` and `verification`, and optional `confirmed_revision` with `new_conclusion` and `user_confirmation`. The snapshot-free final-withdrawal authorization has `schema: 1`, `kind: "referee"`, `project_type: "public"`, `reason: "last-target-withdrawn"`, `snapshot_digest: null`, the fixed `cutoff`, the findings bindings, and `withdrawal` with `targets`, `counterexample`, `evidence` and `user_confirmation`.
 
