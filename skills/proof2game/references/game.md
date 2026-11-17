@@ -76,7 +76,7 @@ local saves. The player uses their own Codex account.
 Verify launch from the real published link and opening the printed local
 address. Check canonical level order and unlocks, formulas, internal links,
 external links and citation locators, both languages and modes, and a live
-tutor turn at the configured model and effort. Check progress after a
-restart, plus manual save export and reimport. Use synthetic mathematics for
+tutor turn at the configured model and effort. Check that Guide diagrams and drawings requested in Regular chat appear inline
+and survive saves. Check progress after a restart, plus manual save export and reimport. Use synthetic mathematics for
 live tutor checks unless the user has authorized this material. Record the
 browser and model actually tested.

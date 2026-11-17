@@ -81,8 +81,9 @@ async function previousGame(root, url, manifest) {
   const {launch_mode, ...hosted} = manifest;
   const {game_id, ...legacy} = hosted;
   let matchingCache = null;
-  for (const tag of ['v0.1.27', 'v0.1.26', 'v0.1.25', 'v0.1.24', 'v0.1.23', 'v0.1.22', 'v0.1.21']) {
-    const previous = {...(tag === 'v0.1.21' ? legacy : hosted), connector: tag};
+  const legacyFormats = {'v0.1.21': legacy, 'v0.1.28': manifest};
+  for (const tag of ['v0.1.28', 'v0.1.27', 'v0.1.26', 'v0.1.25', 'v0.1.24', 'v0.1.23', 'v0.1.22', 'v0.1.21']) {
+    const previous = {...(legacyFormats[tag] ?? hosted), connector: tag};
     if (previous.connector === manifest.connector) continue;
     const key = digest(url.href + '\n' + JSON.stringify(previous) + '\n');
     const source = path.join(root, key);

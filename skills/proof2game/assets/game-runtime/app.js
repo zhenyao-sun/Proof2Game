@@ -580,7 +580,7 @@
         const content=element('div','message-body math-content');renderRich(content,displayedContent,{macroLevelId:level.id});
         article.append(content);
       }
-      if(!regular&&message.role==='assistant'&&message.image){
+      if(message.role==='assistant'&&message.image){
         const illustration=element('img','guide-illustration');
         illustration.alt=message.image.alt;
         illustration.width=640;illustration.height=400;

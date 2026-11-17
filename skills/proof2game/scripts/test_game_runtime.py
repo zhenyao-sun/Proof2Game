@@ -66,18 +66,19 @@ if ctx['language']=='中文':
     answer['message']='这一步给出等式 \(x=x\)。' if ctx.get('mode')=='guide' else '这是对你的问题的回答。'
     if ctx.get('mode')=='guide':answer['step_goal']='理解这一小步。'
 schema=json.loads(pathlib.Path(args[args.index('--output-schema')+1]).read_text())
-if ctx.get('mode')=='guide':
-    assert 'diagram' in schema['required']
-    answer['diagram']=None
-    if msg in ['Show this with a diagram.', 'Invalid diagram.']:
-        answer['message']=''
-        answer['diagram']={'alt':'Two points joined by an arrow.', 'elements':[
-            {'kind':'line','x1':100,'y1':200,'x2':530,'y2':200,'arrow':True,'color':'ink'},
-            {'kind':'label','x':100,'y':160,'text':'x < y','color':'blue'},
+assert 'diagram' in schema['required']
+answer['diagram']=None
+if msg in ['Show this with a diagram.', 'Invalid diagram.', 'Draw a blueberry.']:
+    answer['message']=''
+    answer['diagram']={'alt':'Two points joined by an arrow.', 'elements':[
+        {'kind':'line','x1':100,'y1':200,'x2':530,'y2':200,'arrow':True,'color':'ink'},
+        {'kind':'label','x':100,'y':160,'text':'x < y','color':'blue'},
+    ]}
+    if msg=='Draw a blueberry.':
+        answer['diagram']={'alt':'A blueberry.', 'elements':[
+            {'kind':'circle','x':320,'y':200,'radius':75,'color':'blue'}
         ]}
-        if msg=='Invalid diagram.':answer['diagram']['elements'][0]['x1']='0" onclick="alert(1)'
-else:
-    assert 'diagram' not in schema['properties']
+    if msg=='Invalid diagram.':answer['diagram']['elements'][0]['x1']='0" onclick="alert(1)'
 pathlib.Path(args[args.index('--output-last-message')+1]).write_text(json.dumps(answer))
 print(json.dumps({'type':'turn.completed'}))
 '''
@@ -776,6 +777,24 @@ class GameRuntimeTests(unittest.TestCase):
         self.assertEqual(self.action('save_import', save=exported)[0], 200)
         self.assertEqual(self.guide_state()['messages'][2], step)
         self.assertFalse((self.root/'calls.jsonl').exists(), 'restoring the picture needs no new tutor call')
+
+    def test_regular_chat_renders_requested_drawing_and_saves_it(self):
+        self.assertEqual(self.action('mode', mode='chat')[0], 200)
+        self.assertEqual(self.action('message', mode='chat', message='Draw a blueberry.')[0], 200)
+        step = self.guide_state()['chat']['messages'][-1]
+        self.assertEqual(step['content'], '')
+        self.assertEqual(step['image']['alt'], 'A blueberry.')
+        self.assertIn('<circle ', step['image']['svg'])
+        self.assertNotIn('step_goal', step)
+        self.assertEqual(self.payload['progress']['completed'], [])
+        status, _, body = self.call('GET', '/api/save/export')
+        self.assertEqual(status, 200)
+        exported = json.loads(body)
+        self.stop()
+        self.start()
+        self.assertEqual(self.guide_state()['chat']['messages'][-1], step)
+        self.assertEqual(self.action('save_import', save=exported)[0], 200)
+        self.assertEqual(self.guide_state()['chat']['messages'][-1], step)
 
     def test_invalid_guide_diagram_and_unsafe_import_preserve_progress(self):
         self.action('start')

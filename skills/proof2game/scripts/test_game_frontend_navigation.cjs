@@ -187,6 +187,12 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  assert(illustrated[0].textContent.includes('Do you understand this step?'));
  await nodes.get('mode-chat').fire('click');await settle();assert.equal(nodes.get('mode-chat').attrs['aria-pressed'],'true');
  assert(!descendants(nodes.get('messages')).some(node=>node.tag==='img'));
+ progress.levels.entry.chat.messages.push({role:'assistant',content:'',image});
+ await nodes.get('connection-check').fire('click');await settle();
+ const chatPicture=descendants(nodes.get('messages')).find(node=>node.tag==='img');
+ assert.equal(chatPicture.alt,image.alt);
+ assert.equal(decodeURIComponent(chatPicture.src.split(',')[1]),image.svg);
+ assert(!nodes.get('messages').textContent.includes('Do you understand this step?'));
  await nodes.get('close-level').fire('click');await settle();locate('/?level=convention');await window.fire('popstate');await settle();assert.equal(nodes.get('mode-guide').attrs['aria-pressed'],'true','a prior level chat choice cannot change a fresh level default');
  await nodes.get('close-level').fire('click');await settle();locate('/?level=entry');await window.fire('popstate');await settle();assert.equal(nodes.get('mode-chat').attrs['aria-pressed'],'true','each saved mode is remembered');
  // Every click creates a separate checkpoint and exposes per-record operations.

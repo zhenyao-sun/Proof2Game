@@ -134,8 +134,7 @@ test('a real Pages export downloads, starts the local runtime and restores a sav
     body: JSON.stringify({action: 'language', language: '中文', request_id: 'pages-test-001', expected_revision: 0})
   });
   assert.equal(changed.progress.language, '中文');
-  const {game_id,launch_mode,...previous} = manifest;
-  previous.connector = 'v0.1.21';
+  const previous = {...manifest, connector: 'v0.1.28'};
   const key = createHash('sha256').update(url.href+'\n'+JSON.stringify(previous)+'\n').digest('hex');
   const upgradeCache = path.join(root, 'upgrade');
   const old = path.join(upgradeCache,key);
