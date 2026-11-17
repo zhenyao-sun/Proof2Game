@@ -7,101 +7,20 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const test = require('node:test');
-const vm = require('node:vm');
 
 const url = new URL('https://games.example.test/proof/demo/proof2game.json');
-const code = '0123456789abcdef'.repeat(2);
-const token = 'A'.repeat(43);
 const launcher = import('./launch-pages.mjs');
 const browser = import('../assets/pages-launch/launch.js');
 
-test('a pairing grants one use to the exact origin, manifest and code', async t => {
-  const {startPairing} = await launcher;
-  const {checkPair, launchPrompt, activePairing} = await browser;
-  const pair = await startPairing(url, code, {port: 0, lifetime: 3000});
-  t.after(() => pair.close());
-  const destination = 'http://127.0.0.1:' + pair.port + '/pair';
-  const preflight = await fetch(destination, {
-    method: 'OPTIONS',
-    headers: {origin: url.origin, 'access-control-request-method': 'POST'}
-  });
-  assert.equal(preflight.status, 204);
-  assert.equal(preflight.headers.get('access-control-allow-origin'), url.origin);
-  assert.equal(preflight.headers.get('access-control-allow-credentials'), null);
-  const request = (input, origin = url.origin) => fetch(destination, {
-    method: 'POST', headers: {origin, 'content-type': 'application/json'}, body: JSON.stringify(input)
-  });
-  const correct = {manifest: url.href, code};
-  assert.equal((await request(correct, 'https://other.example.test')).status, 403);
-  assert.equal((await request({...correct, code: 'f'.repeat(32)})).status, 403);
-  assert.equal((await request({...correct, manifest: url.origin + '/other/proof2game.json'})).status, 403);
-  assert.equal((await request(correct)).status, 202);
-  assert.throws(() => pair.ready('https://example.test/'));
-  pair.ready('http://127.0.0.1:42345', token);
-  let requested;
-  const address = await checkPair(url.href, code, (endpoint, options) => {
-    requested = endpoint;
-    assert.equal(options.targetAddressSpace, 'loopback');
-    assert.equal(options.credentials, 'omit');
-    return request(JSON.parse(options.body));
-  });
-  assert.match(requested, /^http:\/\/127\.0\.0\.1:\d+\/pair$/);
-  assert.deepEqual(address, {url: 'http://127.0.0.1:42345', token});
-  const confirm = () => fetch(destination.replace('/pair', '/confirm'), {
-    method: 'POST', headers: {origin: url.origin, 'content-type': 'application/json'}, body: JSON.stringify(correct)
-  });
-  assert.equal(pair.status(), 'issued');
-  assert.equal(await Promise.race([pair.paired, Promise.resolve('unconfirmed')]), 'unconfirmed');
-  assert.equal((await confirm()).status, 200);
-  assert.equal(await pair.paired, true);
-  const pending = {code, connector:'v0.1.25', expires:11000};
-  assert.deepEqual(activePairing(JSON.parse(JSON.stringify(pending)), 'v0.1.25', 1000), pending);
-  assert.equal(activePairing(pending, 'v0.1.25', 11000), null);
-  assert.equal(activePairing(pending, 'v0.1.24', 1000), null);
-  assert.equal(await checkPair(url.href, code, async () =>
-    Response.json({url: 'http://127.0.0.1.evil.test:42345/', token})), null);
-  assert.match(launchPrompt('v0.1.16', url.href, code), /github\.com\/zhenyao-sun\/Proof2Game/);
-  assert.match(launchPrompt('v0.1.22', url.href, code), /Do not inspect, open, or switch browsers/);
-  assert.throws(() => launchPrompt('main', url.href, code));
-});
-
-test('an unused pairing expires', async () => {
-  const {startPairing} = await launcher;
-  const pair = await startPairing(url, code, {port: 0, lifetime: 15});
-  assert.equal(await pair.paired, false);
-});
-
-test('a new tab reuses the confirmed connection for the same game', async () => {
-  const source = (await fs.readFile(path.join(__dirname, '../assets/pages-launch/launch.js'), 'utf8'))
-    .replace(/^export /gm, '').replace("if (typeof document !== 'undefined') void setup();", 'setup();');
-  const gameId = 'a'.repeat(64);
-  const address = 'http://127.0.0.1:42345';
-  const page = new URL('./', url);
-  const elements = new Map(['status','copy','prompt','game-frame'].map(id => [id, {
-    hidden: true, addEventListener() {}
-  }]));
-  let observed = 0;
-  const context = {
-    URL, AbortSignal, location: page, navigator: {language:'en',vendor:'',userAgent:''},
-    window: {addEventListener() {}},
-    document: {getElementById: id => elements.get(id), querySelector: () => ({})},
-    sessionStorage: {getItem: () => null, setItem() {}},
-    localStorage: {getItem: key => {
-      assert.equal(key, 'Proof2Game:' + url.pathname + ':' + gameId + ':connection');
-      return JSON.stringify({url: address, token});
-    }},
-    fetch: async (target, options) => {
-      if (String(target) === url.href) return Response.json({schema:1, connector:'v0.1.27', game_id:gameId});
-      assert.equal(target, address + '/api/game');
-      assert.equal(options.headers.Authorization, 'Bearer ' + token);
-      observed++;
-      return Response.json({game:{id:gameId}});
-    }
-  };
-  await vm.runInNewContext(source, context);
-  assert.equal(observed, 1);
-  assert.equal(elements.get('game-frame').hidden, false);
-  assert.equal(page.href, new URL('./', url).href);
+test('the public prompt starts the local game with one manifest argument', async () => {
+  const {launchPrompt} = await browser;
+  const prompt = launchPrompt('v0.1.28', url.href);
+  assert.match(prompt, /github[.]com\/zhenyao-sun\/Proof2Game/);
+  assert.match(prompt, /open it in my default browser/);
+  assert.doesNotMatch(prompt, /pairing code/i);
+  assert.throws(() => launchPrompt('main', url.href));
+  const {openGame} = await launcher;
+  await assert.rejects(openGame('https://example.test/'), /Invalid local game address/);
 });
 
 const buildFixture = `
@@ -131,7 +50,7 @@ finally:
 test('a real Pages export downloads, starts the local runtime and restores a save', {
   skip: process.platform !== 'darwin', timeout: 60000
 }, async t => {
-  const {gameURL, loadGame, startGame, bridgeFor} = await launcher;
+  const {gameURL, loadGame, startGame} = await launcher;
   assert.throws(() => gameURL('http://example.test/proof2game.json'), /HTTPS/);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'proof2game-pages-test-'));
   let game;
@@ -189,27 +108,12 @@ test('a real Pages export downloads, starts the local runtime and restores a sav
   });
   assert.equal(interrupted, 2);
   assert.equal(game.game.chinese.levels.main.title, '正性');
-  const address = await startGame(game, url.origin);
-  assert.equal(await startGame(game, url.origin), address);
-  const bridgeToken = await bridgeFor(address, url.origin);
-  const stateURL = address + '/api/game';
-  const headers = {origin: url.origin, authorization: 'Bearer ' + bridgeToken};
-  const allowed = await fetch(stateURL, {headers});
-  assert.equal(allowed.status, 200);
-  assert.equal(allowed.headers.get('access-control-allow-origin'), url.origin);
-  assert.equal((await allowed.json()).game.id, manifest.game_id);
-  assert.equal((await fetch(stateURL, {headers: {origin: url.origin}})).status, 401);
-  assert.equal((await fetch(stateURL, {headers: {...headers, origin: 'https://other.example.test'}})).status, 403);
-  const preflight = await fetch(address + '/api/action', {method: 'OPTIONS',
-    headers: {origin: url.origin, 'access-control-request-method': 'POST',
-      'access-control-request-headers': 'authorization,content-type'}});
-  assert.equal(preflight.status, 204);
-  assert.match(preflight.headers.get('access-control-allow-headers'), /Authorization/);
-  assert.equal(preflight.headers.get('access-control-allow-credentials'), null);
-  assert.equal((await fetch(address + '/api/bridge', {headers})).status, 403);
-  assert.match(await fs.readFile(path.join(website,'play/index.html'),'utf8'), /src="\.\/app\.js\?release=v[\d.]+"/);
+  const address = await startGame(game);
+  assert.equal(await startGame(game), address);
+  assert.equal(manifest.launch_mode, 'local');
+  assert.equal(manifest.game_id, game.game.id);
+  await assert.rejects(fs.stat(path.join(website,'play')), {code:'ENOENT'});
   assert.match(await fs.readFile(path.join(website,'index.html'),'utf8'), /src="\.\/launch\.js\?release=v[\d.]+"/);
-  assert.doesNotMatch(await fs.readFile(path.join(website,'launch.js'),'utf8'), /location\.replace/);
   async function session(origin) {
     const homepage = await fetch(origin);
     assert.match(await homepage.text(), /<title>Proof2Game<\/title>/);
@@ -225,13 +129,12 @@ test('a real Pages export downloads, starts the local runtime and restores a sav
   }
   const api = await session(address);
   assert.equal((await api('game')).progress.language, 'English');
-  const change = await fetch(address+'/api/action', {
-    method: 'POST', headers: {...headers, 'content-type':'application/json'},
+  const changed = await api('action', {
+    method: 'POST',
     body: JSON.stringify({action: 'language', language: '中文', request_id: 'pages-test-001', expected_revision: 0})
   });
-  assert.equal(change.status, 200);
-  assert.equal((await change.json()).progress.language, '中文');
-  const {game_id, ...previous} = manifest;
+  assert.equal(changed.progress.language, '中文');
+  const {game_id,launch_mode,...previous} = manifest;
   previous.connector = 'v0.1.21';
   const key = createHash('sha256').update(url.href+'\n'+JSON.stringify(previous)+'\n').digest('hex');
   const upgradeCache = path.join(root, 'upgrade');

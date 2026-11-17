@@ -3,12 +3,10 @@
 import crypto from 'node:crypto';
 import {spawn} from 'node:child_process';
 import fs from 'node:fs/promises';
-import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
-export const PAIR_PORT = 47682;
 const MAX_DATA = 128 * 1024 * 1024;
 const MAX_MANIFEST = 1024 * 1024;
 const LOCAL_HOST = '127.0.0.1';
@@ -16,7 +14,6 @@ const repo = new URL('../../../', import.meta.url);
 const runtime = fileURLToPath(new URL('../assets/game-runtime/', import.meta.url));
 const cache = path.join(os.homedir(), 'Library', 'Application Support', 'Proof2Game', 'pages-games');
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-const tokenPattern = /^[a-f0-9]{32}$/;
 const digestPattern = /^[a-f0-9]{64}$/;
 
 export function gameURL(input) {
@@ -81,18 +78,23 @@ async function localType(file, kind) {
 
 async function previousGame(root, url, manifest) {
   if (!manifest.game_id) return null;
-  const {game_id, ...legacy} = manifest;
-  for (const previous of [{...manifest, connector: 'v0.1.26'}, {...manifest, connector: 'v0.1.25'}, {...manifest, connector: 'v0.1.24'}, {...manifest, connector: 'v0.1.23'}, {...manifest, connector: 'v0.1.22'},
-                          {...legacy, connector: 'v0.1.21'}]) {
+  const {launch_mode, ...hosted} = manifest;
+  const {game_id, ...legacy} = hosted;
+  let matchingCache = null;
+  for (const tag of ['v0.1.27', 'v0.1.26', 'v0.1.25', 'v0.1.24', 'v0.1.23', 'v0.1.22', 'v0.1.21']) {
+    const previous = {...(tag === 'v0.1.21' ? legacy : hosted), connector: tag};
     if (previous.connector === manifest.connector) continue;
     const key = digest(url.href + '\n' + JSON.stringify(previous) + '\n');
     const source = path.join(root, key);
     if (!await localType(source, 'isDirectory')) continue;
     const file = path.join(source, 'game.json');
-    if (await localType(file, 'isFile') &&
-        digest(await fs.readFile(file)) === manifest.files['game.json'].sha256) return source;
+    if (!await localType(file, 'isFile') ||
+        digest(await fs.readFile(file)) !== manifest.files['game.json'].sha256) continue;
+    matchingCache ??= source;
+    if (await localType(path.join(source, 'player-save.json'), 'isFile') ||
+        await localType(path.join(source, 'manual-saves'), 'isDirectory')) return source;
   }
-  return null;
+  return matchingCache;
 }
 
 async function importPreviousSaves(source, stage) {
@@ -117,7 +119,7 @@ async function importPreviousSaves(source, stage) {
 export async function loadGame(url, release, root = cache, fetchFile = fetch) {
   const manifestBytes = await download(url, MAX_MANIFEST, fetchFile);
   const manifest = JSON.parse(manifestBytes);
-  if (manifest.schema !== 1 || manifest.connector !== release ||
+  if (manifest.schema !== 1 || manifest.connector !== release || manifest.launch_mode !== 'local' ||
       !manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files) ||
       !Object.hasOwn(manifest.files, 'game.json')) {
     throw new Error('This game requires the official connector version shown on its launch page.');
@@ -196,74 +198,6 @@ function validateHostedGame(game, files) {
   }
 }
 
-export async function startPairing(url, token, {port = PAIR_PORT, lifetime = 180000} = {}) {
-  if (!tokenPattern.test(token)) throw new Error('Use the one-time code from the game launch page.');
-  let connection, issued = false, confirmed = false, validRequest = false, timer;
-  let finish;
-  const paired = new Promise(resolve => { finish = resolve; });
-  const server = http.createServer({requestTimeout: 5000, headersTimeout: 5000}, async (request, response) => {
-    function reply(status, value) {
-      response.writeHead(status, {'Cache-Control': 'no-store', 'Content-Type': 'application/json'});
-      response.end(value === undefined ? undefined : JSON.stringify(value));
-    }
-    try {
-      if (request.headers.host !== LOCAL_HOST + ':' + server.address()?.port ||
-          request.headers.origin !== url.origin || !['/pair','/confirm'].includes(request.url)) {
-        reply(403); return;
-      }
-      response.setHeader('Access-Control-Allow-Origin', url.origin);
-      response.setHeader('Vary', 'Origin');
-      if (request.method === 'OPTIONS' && request.headers['access-control-request-method'] === 'POST') {
-        response.setHeader('Access-Control-Allow-Methods', 'POST');
-        response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        response.setHeader('Access-Control-Allow-Private-Network', 'true');
-        reply(204); return;
-      }
-      if (request.method !== 'POST' || request.headers['content-type'] !== 'application/json') {
-        reply(405); return;
-      }
-      let body = '';
-      for await (const chunk of request) {
-        body += chunk;
-        if (Buffer.byteLength(body) > 2048) { reply(413); return; }
-      }
-      const input = JSON.parse(body);
-      if (input?.code !== token || input?.manifest !== url.href) { reply(403); return; }
-      validRequest = true;
-      if (request.url === '/confirm') {
-        if (!issued || confirmed) { reply(409); return; }
-        confirmed = true;
-        response.on('finish', () => close(true));
-        reply(200);
-        return;
-      }
-      if (issued) { reply(410); return; }
-      if (!connection) { reply(202); return; }
-      issued = true;
-      reply(200, connection);
-    } catch {
-      reply(400);
-    }
-  });
-  function close(success = false) {
-    clearTimeout(timer);
-    server.close();
-    finish(success);
-  }
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, LOCAL_HOST, resolve);
-  });
-  timer = setTimeout(close, lifetime);
-  return {paired, close, port: server.address().port,
-    status: () => issued ? 'issued' : validRequest ? 'waiting' : 'no-request',
-    ready(value, bridgeToken) {
-    const address = localURL(value);
-    if (!/^[A-Za-z0-9_-]{43}$/.test(bridgeToken)) throw new Error('Invalid local bridge token.');
-    connection = {url: address, token: bridgeToken};
-  }};
-}
-
 async function runningGame(directory, gameId) {
   try {
     const url = localURL(await fs.readFile(path.join(directory, 'local-address'), 'utf8'));
@@ -279,7 +213,7 @@ async function runningGame(directory, gameId) {
   return null;
 }
 
-export async function startGame({directory, game}, bridgeOrigin = '') {
+export async function startGame({directory, game}) {
   const existing = await runningGame(directory, game.id);
   if (existing) return existing;
   const log = await fs.open(path.join(directory, 'runtime.log'), 'a', 0o600);
@@ -287,7 +221,7 @@ export async function startGame({directory, game}, bridgeOrigin = '') {
   try {
     // Execute the release's own server, with the downloaded data as its data directory.
     child = spawn(process.execPath, [path.join(runtime, 'server.mjs'), '--no-open'], {
-      cwd: directory, env: {...process.env, PROOF2GAME_PAGES_DATA: directory, PROOF2GAME_PAGES_ORIGIN: bridgeOrigin},
+      cwd: directory, env: {...process.env, PROOF2GAME_PAGES_DATA: directory},
       detached: true, stdio: ['ignore', log.fd, log.fd, 'ipc']
     });
   } finally {
@@ -320,60 +254,26 @@ export async function startGame({directory, game}, bridgeOrigin = '') {
   return url;
 }
 
-export async function bridgeFor(address, expectedOrigin) {
-  const options = {redirect: 'error', signal: AbortSignal.timeout(3000)};
-  const response = await fetch(address, options);
-  await response.body?.cancel();
-  const cookie = response.headers.get('set-cookie')?.split(';')[0];
-  if (!cookie) throw new Error('The local game did not issue a session.');
-  const {token, origin} = await new Promise((resolve, reject) => {
-    const request = http.get(address + '/api/bridge', {headers: {cookie}, timeout: 3000}, response => {
-      let body = '';
-      response.setEncoding('utf8');
-      response.on('data', chunk => { body += chunk; });
-      response.on('error', reject);
-      response.on('end', () => {
-        if (response.statusCode !== 200) { reject(new Error('The local game bridge could not be started.')); return; }
-        try { resolve(JSON.parse(body)); } catch (error) { reject(error); }
-      });
-    });
-    request.on('error', reject);
-    request.on('timeout', () => request.destroy(new Error('The local game bridge timed out.')));
+export async function openGame(address) {
+  const local = localURL(address);
+  await new Promise((resolve, reject) => {
+    const child = spawn('/usr/bin/open', [local], {stdio:'ignore'});
+    child.once('error', reject);
+    child.once('exit', code => code === 0 ? resolve() : reject(new Error('Could not open the default browser.')));
   });
-  if (origin !== expectedOrigin || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
-    throw new Error('The local game bridge does not match the hosted page.');
-  }
-  return token;
 }
 
 async function main() {
-  const [manifest, code, extra] = process.argv.slice(2);
-  if (!manifest || extra || !tokenPattern.test(code)) {
-    throw new Error('Use the launch prompt from the published game: node launch-pages.mjs HTTPS_MANIFEST_URL PAIR_CODE');
-  }
+  const [manifest, extra] = process.argv.slice(2);
+  if (!manifest || extra) throw new Error('Usage: node launch-pages.mjs HTTPS_MANIFEST_URL');
   if (process.platform !== 'darwin' || Number(process.versions.node.split('.')[0]) < 20) {
     throw new Error('The Proof2Game connector requires macOS and Node.js 20 or later.');
   }
   const url = gameURL(manifest);
   const release = (await fs.readFile(new URL('VERSION', repo), 'ascii')).trim();
-  const pairing = await startPairing(url, code, {lifetime: 10 * 60 * 1000});
-  let notice;
-  try {
-    const address = await startGame(await loadGame(url, release), url.origin);
-    pairing.ready(address, await bridgeFor(address, url.origin));
-    console.log('Local service ready. Waiting for the original page to confirm it is playable.');
-    notice = setTimeout(() => {
-      const status = pairing.status();
-      if (status === 'no-request') console.log('No matching request from the original page. Check local access in the browser already showing the game.');
-      else if (status === 'issued') console.log('The original page paired but has not confirmed the game loaded.');
-      else console.log('The original page reached the connector. Waiting for it to finish loading.');
-    }, 15000);
-    if (await pairing.paired) console.log('The original game page is playable.');
-    else throw new Error('The original page did not confirm it was playable before pairing expired.');
-  } finally {
-    clearTimeout(notice);
-    pairing.close();
-  }
+  const address = await startGame(await loadGame(url, release));
+  console.log('Local Proof2Game is ready: ' + address);
+  await openGame(address);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

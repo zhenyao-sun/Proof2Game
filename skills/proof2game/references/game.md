@@ -64,29 +64,19 @@ verified locators retained in the game.
 
 ## Check delivery
 
-Open the published link in a browser on macOS. The public-literature launch
-page shows the original paper's title, authors and version. Before pairing
-it shows the launch prompt with no playable map or levels. Copy the prompt
-into the player's local Codex. It invokes the tagged official connector,
-which downloads and validates the game data and starts the local bridge.
-Pairing renders the game inside the published page. The address bar stays
-on the exact GitHub Pages URL when pairing, playing and refreshing. The
-connector does not open a browser tab or print a local game address. If
-pairing is declined or fails, stay on the same launch page and retry with a
-fresh prompt after the current code expires. A refresh in the same tab
-continues polling with the same pending code until it expires. Once playable,
-new tabs in the same browser can reuse the authorized connection to the same
-local game and saves. A separate browser profile grants its own local access
-and pairs with the same running game. The connector
-reports success after the page loads the game and confirms it is playable.
-It does not need to identify, open, or inspect the browser. The player uses
-their own Codex account.
+Open the published link in a browser on macOS. The public-literature page
+shows the original paper's title, authors and version. Copy its prompt into
+Codex. The tagged official launcher downloads and validates the game data,
+then starts the local runtime and opens its local address in the default
+browser. Only the manifest URL is required. The launcher prints the local
+address so the player can reopen it or open it in another browser. All
+browsers on the same Mac using that address share the running game and its
+local saves. The player uses their own Codex account.
 
-Verify the exact address bar URL before pairing, after pairing, while visiting
-a level and after a refresh. Check canonical level order and unlocks, formulas and internal links,
-including locked targets, exact external links and citation locators, both
-languages and modes, and an actual tutor turn through the player's bridge at
-the configured model and effort. Check progress and dialogue after a
+Verify launch from the real published link and opening the printed local
+address. Check canonical level order and unlocks, formulas, internal links,
+external links and citation locators, both languages and modes, and a live
+tutor turn at the configured model and effort. Check progress after a
 restart, plus manual save export and reimport. Use synthetic mathematics for
-the live tutor check unless the user has authorized this material. Record the
+live tutor checks unless the user has authorized this material. Record the
 browser and model actually tested.

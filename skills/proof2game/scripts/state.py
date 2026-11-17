@@ -993,20 +993,16 @@ def withdrawal_delivery(task, state):
 
 
 def verify_game_artifact(artifact, approval_path, approval):
-    from game_developer import hosted_frontend, site_digest, site_inventory
+    from game_developer import site_digest, site_inventory
 
     require(artifact.is_dir(), "game must be the checked website directory")
     inventory = site_inventory(artifact)
     assets = {".nojekyll", "index.html", "launch.css", "launch.js", "proof2game.json"}
-    frontend = hosted_frontend(Path(__file__).resolve().parents[1] / "assets/game-runtime")
-    assets.update(frontend)
     require(assets | {"game.json"} <= inventory.keys(), "game website is missing launch files")
     manifest = read_json(artifact / "proof2game.json")
     package = read_json(artifact / "game.json")
-    require(all(inventory[name]["sha256"] == hashlib.sha256(data).hexdigest()
-                for name, data in frontend.items()), "game website has changed frontend files")
     require(manifest.get("schema") == 1 and package.get("distribution") == "pages"
-            and manifest.get("game_id") == package.get("id"),
+            and manifest.get("game_id") == package.get("id") and manifest.get("launch_mode") == "local",
             "game website schema or distribution is invalid")
     require(package.get("approval_snapshot_digest") == approval["snapshot_digest"]
             and package.get("project_type") == approval["project_type"] and package.get("cutoff") == approval["cutoff"],

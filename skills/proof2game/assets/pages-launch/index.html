@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' http://127.0.0.1:*; frame-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Open Proof2Game</title>
   <link rel="stylesheet" href="./launch.css">
   <script type="module" src="./launch.js"></script>
@@ -14,12 +14,15 @@
     <p class="brand">Proof2Game</p>
     <h1 id="heading">Open the game</h1>
     <p id="paper-byline" hidden></p>
-    <p id="instructions">Copy the prompt below and send it to a local agent such as Codex on your Mac. Keep this tab open.</p>
+    <p id="overview">Play through the proof with an AI tutor. The game runs on your Mac and keeps your progress there. The tutor uses your own Codex login.</p>
+    <p id="instructions">Paste the launch prompt into ChatGPT Desktop or Codex on your Mac. It asks Codex to verify the official Proof2Game release, download the game files, and open the game in your default browser.</p>
     <button id="copy" type="button" disabled>Copy launch prompt</button>
-    <textarea id="prompt" rows="7" aria-label="Launch prompt" readonly hidden></textarea>
+    <details id="prompt-details" hidden>
+      <summary id="preview">View the launch prompt</summary>
+      <textarea id="prompt" rows="8" aria-label="Launch prompt" readonly></textarea>
+      <a id="launcher-source" rel="noopener noreferrer" target="_blank">View the launcher on GitHub</a>
+    </details>
     <p id="status" role="status"></p>
-    <p class="muted" id="fallback">If the browser asks, allow the connection to your computer.</p>
   </main>
-  <iframe id="game-frame" title="Proof2Game" hidden></iframe>
 </body>
 </html>
