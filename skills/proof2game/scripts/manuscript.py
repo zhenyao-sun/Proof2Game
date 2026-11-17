@@ -657,6 +657,7 @@ def review_payload(main, cid, gate):
                 if passages:
                     out['paired_proof_limited_application_check'] = {**proof, 'text': '\n\n'.join(passages)}
         if gate == 'expression':
+            out['surrounding_heading'] = out.pop('heading')
             out['statement_navigation'] = {
                 'kind': component['kind'], 'title': component['title'],
                 'proof_location': byid[component['paired']]['location'],

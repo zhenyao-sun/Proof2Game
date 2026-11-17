@@ -55,7 +55,9 @@ BY_COMPONENT = {
         "A blank adjacent_prose field means no intervening prose is written. Use the supplied preceding_component "
         "or preceding_proof_transition_excerpt when present. Flag a missing transition only if the manuscript needs one. "
         "Request only a precise excerpt if unsupplied preceding material is necessary for this judgment. "
-        "Check the result kind, optional title, and reader-visible locator."
+        "surrounding_heading names the enclosing section or proof node as internal context. "
+        "statement_navigation describes this Statement. Use its kind, optional title, and proof location "
+        "to judge the reader-visible navigation."
     ),
     ("statement", "mathematics"): (
         "Check well-formedness, logical content, quantifiers, conditions, notation, and legal parameter and dependency "

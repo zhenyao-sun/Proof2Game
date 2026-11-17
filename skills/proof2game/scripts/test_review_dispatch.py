@@ -108,6 +108,16 @@ class ReviewDispatchTest(unittest.TestCase):
         self.assertIn("Flag a missing transition only if the manuscript needs one", message)
         self.assertIn("Request only a precise excerpt", message)
 
+    def test_nested_statement_navigation_separates_the_enclosing_proof(self):
+        packet = review_dispatch.build_packet(self.main, self.action("lower-bound", "expression"), cutoff=CUTOFF)
+        self.assertNotIn("heading", packet)
+        self.assertEqual(packet["surrounding_heading"], "Positivity: Proof of Theorem main")
+        self.assertEqual(packet["statement_navigation"],
+                         {"kind": "Lemma", "title": "A nonnegative square", "proof_location": "2.1.1"})
+        message = review_dispatch.worker_prompt(packet, self.scratch / "gate.json", "sha256")
+        self.assertIn("surrounding_heading names the enclosing section or proof node", message)
+        self.assertIn("statement_navigation describes this Statement", message)
+
     def test_external_lookup_requires_a_gate_specific_reason(self):
         for gate in ("sources", "reuse"):
             with self.subTest(gate=gate):
