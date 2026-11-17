@@ -45,7 +45,7 @@ async function resumeBridge(bridge, expectedGame) {
   try {
     const response = await fetch(bridge.url + '/api/game', {
       headers: {Authorization: 'Bearer ' + bridge.token}, credentials: 'omit',
-      targetAddressSpace: 'loopback', redirect: 'error', signal: AbortSignal.timeout(3000)
+      targetAddressSpace: 'loopback', redirect: 'error', signal: AbortSignal.timeout(90000)
     });
     return response.ok && (await response.json()).game?.id === expectedGame;
   } catch {
@@ -102,6 +102,7 @@ async function setup() {
     const key = 'Proof2Game:' + manifest.pathname;
     const frame = element('game-frame');
     function enterGame(bridge) {
+      if (!frame.hidden) return;
       window.proof2gameBridge = { ...bridge, gameId };
       try { sessionStorage.setItem(key, JSON.stringify(bridge)); } catch { /* Private mode. */ }
       document.querySelector('main').hidden = true;
@@ -110,7 +111,6 @@ async function setup() {
     }
     let saved;
     try { saved = validatedBridge(JSON.parse(sessionStorage.getItem(key))); } catch { /* Private mode. */ }
-    if (saved && await resumeBridge(saved, gameId)) { enterGame(saved); return; }
 
     let deadline = 0;
     let running = false;
@@ -118,13 +118,13 @@ async function setup() {
     prompt.value = launchPrompt(connector, manifest.href, code);
     async function waitForGame() {
       running = true;
-      while (Date.now() < deadline) {
+      while (frame.hidden && Date.now() < deadline) {
         const bridge = await checkPair(manifest.href, code);
         if (bridge) { enterGame(bridge); return; }
         await new Promise(resolve => setTimeout(resolve, 2500));
       }
       running = false;
-      status.textContent = words.timeout;
+      if (frame.hidden) status.textContent = words.timeout;
     }
     button.addEventListener('click', async () => {
       // Request browser/clipboard permission directly from the visitor's click.
@@ -142,6 +142,7 @@ async function setup() {
       }
     });
     button.disabled = false;
+    if (saved && await resumeBridge(saved, gameId)) enterGame(saved);
   } catch {
     status.textContent = words.unavailable;
   }

@@ -82,7 +82,8 @@ async function localType(file, kind) {
 async function previousGame(root, url, manifest) {
   if (!manifest.game_id) return null;
   const {game_id, ...legacy} = manifest;
-  for (const previous of [{...manifest, connector: 'v0.1.22'}, {...legacy, connector: 'v0.1.21'}]) {
+  for (const previous of [{...manifest, connector: 'v0.1.23'}, {...manifest, connector: 'v0.1.22'},
+                          {...legacy, connector: 'v0.1.21'}]) {
     if (previous.connector === manifest.connector) continue;
     const key = digest(url.href + '\n' + JSON.stringify(previous) + '\n');
     const source = path.join(root, key);
