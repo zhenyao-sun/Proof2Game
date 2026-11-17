@@ -119,18 +119,23 @@ async function setup() {
     if (!/^[a-f0-9]{64}$/.test(gameId)) throw new Error('Invalid game identity.');
     const key = 'Proof2Game:' + manifest.pathname;
     const pendingKey = key + ':pending';
-    function read(key) {
-      try { return JSON.parse(sessionStorage.getItem(key)); } catch { return null; }
+    const sharedKey = key + ':' + gameId + ':connection';
+    function read(key, shared = false) {
+      try { return JSON.parse((shared ? localStorage : sessionStorage).getItem(key)); } catch { return null; }
     }
-    function store(key, value) {
+    function store(key, value, shared = false) {
       try {
-        if (value === null) sessionStorage.removeItem(key);
-        else sessionStorage.setItem(key, JSON.stringify(value));
+        const storage = shared ? localStorage : sessionStorage;
+        if (value === null) storage.removeItem(key);
+        else storage.setItem(key, JSON.stringify(value));
       } catch { /* Storage is unavailable in this browser mode. */ }
     }
     const frame = element('game-frame');
     let pending = activePairing(read(pendingKey), connector);
     async function confirmPlayable() {
+      const {url, token} = window.proof2gameBridge;
+      const current = validatedBridge(read(sharedKey, true));
+      if (current?.url !== url || current?.token !== token) store(sharedKey, {url, token}, true);
       if (!pending) return;
       try {
         const response = await pairingRequest('/confirm', manifest.href, pending.code, fetch);
@@ -180,9 +185,17 @@ async function setup() {
       }
     });
     button.disabled = false;
-    const saved = validatedBridge(read(key));
-    if (saved && await resumeBridge(saved, gameId)) enterGame(saved);
-    else if (activePairing(pending, connector)) {
+    async function restoreSaved(value) {
+      if (!frame.hidden) return true;
+      const saved = validatedBridge(value);
+      if (!saved || !await resumeBridge(saved, gameId)) return false;
+      enterGame(saved);
+      return true;
+    }
+    window.addEventListener('storage', event => {
+      if (event.key === sharedKey) void restoreSaved(read(sharedKey, true));
+    });
+    if (!await restoreSaved(read(sharedKey, true) || read(key)) && activePairing(pending, connector)) {
       status.textContent = words.waiting;
       void waitForGame();
     }

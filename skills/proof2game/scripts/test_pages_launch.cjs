@@ -7,6 +7,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const test = require('node:test');
+const vm = require('node:vm');
 
 const url = new URL('https://games.example.test/proof/demo/proof2game.json');
 const code = '0123456789abcdef'.repeat(2);
@@ -68,6 +69,39 @@ test('an unused pairing expires', async () => {
   const {startPairing} = await launcher;
   const pair = await startPairing(url, code, {port: 0, lifetime: 15});
   assert.equal(await pair.paired, false);
+});
+
+test('a new tab reuses the confirmed connection for the same game', async () => {
+  const source = (await fs.readFile(path.join(__dirname, '../assets/pages-launch/launch.js'), 'utf8'))
+    .replace(/^export /gm, '').replace("if (typeof document !== 'undefined') void setup();", 'setup();');
+  const gameId = 'a'.repeat(64);
+  const address = 'http://127.0.0.1:42345';
+  const page = new URL('./', url);
+  const elements = new Map(['status','copy','prompt','game-frame'].map(id => [id, {
+    hidden: true, addEventListener() {}
+  }]));
+  let observed = 0;
+  const context = {
+    URL, AbortSignal, location: page, navigator: {language:'en',vendor:'',userAgent:''},
+    window: {addEventListener() {}},
+    document: {getElementById: id => elements.get(id), querySelector: () => ({})},
+    sessionStorage: {getItem: () => null, setItem() {}},
+    localStorage: {getItem: key => {
+      assert.equal(key, 'Proof2Game:' + url.pathname + ':' + gameId + ':connection');
+      return JSON.stringify({url: address, token});
+    }},
+    fetch: async (target, options) => {
+      if (String(target) === url.href) return Response.json({schema:1, connector:'v0.1.27', game_id:gameId});
+      assert.equal(target, address + '/api/game');
+      assert.equal(options.headers.Authorization, 'Bearer ' + token);
+      observed++;
+      return Response.json({game:{id:gameId}});
+    }
+  };
+  await vm.runInNewContext(source, context);
+  assert.equal(observed, 1);
+  assert.equal(elements.get('game-frame').hidden, false);
+  assert.equal(page.href, new URL('./', url).href);
 });
 
 const buildFixture = `

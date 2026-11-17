@@ -74,7 +74,10 @@ on the exact GitHub Pages URL when pairing, playing and refreshing. The
 connector does not open a browser tab or print a local game address. If
 pairing is declined or fails, stay on the same launch page and retry with a
 fresh prompt after the current code expires. A refresh in the same tab
-continues polling with the same pending code until it expires. The connector
+continues polling with the same pending code until it expires. Once playable,
+new tabs in the same browser can reuse the authorized connection to the same
+local game and saves. A separate browser profile grants its own local access
+and pairs with the same running game. The connector
 reports success after the page loads the game and confirms it is playable.
 It does not need to identify, open, or inspect the browser. The player uses
 their own Codex account.
