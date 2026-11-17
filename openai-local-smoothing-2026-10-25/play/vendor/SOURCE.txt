@@ -1,6 +1,0 @@
-KaTeX 0.19.1
-Source: https://www.npmjs.com/package/katex/v/0.19.1
-Upstream: https://github.com/KaTeX/KaTeX
-The KaTeX JavaScript and styles are distributed under MIT; see LICENSE-KaTeX.txt.
-The KaTeX fonts are distributed under the SIL Open Font License 1.1; see fonts/OFL.txt.
-Files copied from the published npm distribution; no runtime package installation required.
