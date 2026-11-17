@@ -31,3 +31,6 @@ button:disabled { opacity: .55; cursor: wait; }
 textarea { margin-block: 1rem 0; width: 100%; padding: .7rem; resize: vertical; font: .85rem/1.5 ui-monospace, monospace; }
 .muted { color: #4e665d; font-size: .92rem; }
 #status:not(:empty) { padding: .6rem .85rem; border-left: 3px solid #40705a; background: #edf3ec; }
+
+body:has(#game-frame:not([hidden])) { padding: 0; }
+#game-frame:not([hidden]) { display: block; width: 100%; height: 100dvh; border: 0; }
