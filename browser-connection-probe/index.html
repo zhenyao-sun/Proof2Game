@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Proof2Game browser connection test</title>
+<h1>Proof2Game browser connection test</h1>
+<button id="run">Test connection</button>
+<pre id="result"></pre>
+<script type="module">
+document.querySelector('#run').onclick=async()=>{
+  const result=document.querySelector('#result');
+  result.textContent='Testing…\n';
+  for(const [label,host,space] of [
+    ['IPv4 loopback','127.0.0.1','loopback'],
+    ['IPv4 local','127.0.0.1','local'],
+    ['IPv4 default','127.0.0.1',null],
+    ['localhost loopback','localhost','loopback'],
+    ['localhost local','localhost','local'],
+    ['localhost default','localhost',null]
+  ]){
+    try{
+      const options={mode:'cors',method:'POST',headers:{'Content-Type':'application/json'},
+        body:'{}',signal:AbortSignal.timeout(8000),cache:'no-store'};
+      if(space) options.targetAddressSpace=space;
+      const response=await fetch('http://'+host+':47683/probe',options);
+      result.textContent+=label+': HTTP '+response.status+'\n';
+    }catch(error){result.textContent+=label+': '+error.name+' — '+error.message+'\n';}
+  }
+};
+</script>
