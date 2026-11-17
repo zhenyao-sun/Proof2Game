@@ -45,8 +45,21 @@ function localURL(input) {
 }
 
 async function download(url, limit, fetchFile) {
-  const response = await fetchFile(url, {redirect: 'error', signal: AbortSignal.timeout(30000)});
-  if (!response.ok || !response.body) throw new Error('Could not download ' + url.pathname);
+  let response;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      response = await fetchFile(url, {redirect: 'error', signal: AbortSignal.timeout(30000)});
+      if (response.ok && response.body) break;
+      const status = response.status;
+      await response.body?.cancel();
+      if (attempt === 2 || ![408, 429, 500, 502, 503, 504].includes(status)) {
+        throw new Error('Could not download ' + url.pathname + ' (HTTP ' + status + ')');
+      }
+    } catch (error) {
+      if (attempt === 2 || !['TypeError', 'TimeoutError', 'AbortError'].includes(error.name)) throw error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+  }
   const chunks = [];
   let size = 0;
   for await (const chunk of response.body) {
@@ -57,25 +70,32 @@ async function download(url, limit, fetchFile) {
   return Buffer.concat(chunks, size);
 }
 
-// Preserve saves when upgrading the same v0.1.21 hosted game to the bridge.
-async function importPreviousSaves(root, stage, url, manifest) {
-  const {game_id, ...previous} = manifest;
-  if (!game_id || previous.connector !== 'v0.1.22') return;
-  previous.connector = 'v0.1.21';
-  const key = digest(url.href + '\n' + JSON.stringify(previous) + '\n');
-  const source = path.join(root, key);
-  async function localType(file, kind) {
-    try {
-      return await fs.realpath(file) === file && (await fs.lstat(file))[kind]();
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-      return false;
-    }
+async function localType(file, kind) {
+  try {
+    return await fs.realpath(file) === file && (await fs.lstat(file))[kind]();
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return false;
   }
-  if (!await localType(source, 'isDirectory')) return;
-  const previousGame = path.join(source, 'game.json');
-  if (!await localType(previousGame, 'isFile') ||
-      digest(await fs.readFile(previousGame)) !== manifest.files['game.json'].sha256) return;
+}
+
+async function previousGame(root, url, manifest) {
+  if (!manifest.game_id) return null;
+  const {game_id, ...legacy} = manifest;
+  for (const previous of [{...manifest, connector: 'v0.1.22'}, {...legacy, connector: 'v0.1.21'}]) {
+    if (previous.connector === manifest.connector) continue;
+    const key = digest(url.href + '\n' + JSON.stringify(previous) + '\n');
+    const source = path.join(root, key);
+    if (!await localType(source, 'isDirectory')) continue;
+    const file = path.join(source, 'game.json');
+    if (await localType(file, 'isFile') &&
+        digest(await fs.readFile(file)) === manifest.files['game.json'].sha256) return source;
+  }
+  return null;
+}
+
+async function importPreviousSaves(source, stage) {
+  if (!source) return;
   for (const name of ['player-save.json','player-save.json.backup']) {
     if (await localType(path.join(source, name), 'isFile')) {
       await fs.copyFile(path.join(source, name), path.join(stage, name));
@@ -130,9 +150,14 @@ export async function loadGame(url, release, root = cache, fetchFile = fetch) {
     if (error.code !== 'ENOENT') throw error;
     const stage = await fs.mkdtemp(path.join(path.dirname(destination), '.download-'));
     try {
-      for (const [name, entry] of files) {
-        const relative = name.split('/').map(encodeURIComponent).join('/');
-        const bytes = await download(new URL(relative, url), entry.size, fetchFile);
+      const previous = await previousGame(path.dirname(destination), url, manifest);
+      async function stageFile([name, entry]) {
+        const local = previous && path.join(previous, name);
+        let bytes = local && await localType(local, 'isFile') ? await fs.readFile(local) : null;
+        if (!bytes || bytes.length !== entry.size || digest(bytes) !== entry.sha256) {
+          const relative = name.split('/').map(encodeURIComponent).join('/');
+          bytes = await download(new URL(relative, url), entry.size, fetchFile);
+        }
         if (bytes.length !== entry.size || digest(bytes) !== entry.sha256) {
           throw new Error('Published file did not match its manifest: ' + name);
         }
@@ -140,9 +165,14 @@ export async function loadGame(url, release, root = cache, fetchFile = fetch) {
         await fs.mkdir(path.dirname(file), {recursive: true});
         await fs.writeFile(file, bytes, {flag: 'wx'});
       }
+      for (let index = 0; index < files.length; index += 6) {
+        const batch = await Promise.allSettled(files.slice(index, index + 6).map(stageFile));
+        const failure = batch.find(item => item.status === 'rejected');
+        if (failure) throw failure.reason;
+      }
       const game = JSON.parse(await fs.readFile(path.join(stage, 'game.json'), 'utf8'));
       validateHostedGame(game, manifest.files);
-      await importPreviousSaves(path.dirname(destination), stage, url, manifest);
+      await importPreviousSaves(previous, stage);
       try { await fs.rename(stage, destination); }
       catch (error) { if (!['EEXIST', 'ENOTEMPTY'].includes(error.code)) throw error; }
     } finally {

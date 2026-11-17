@@ -136,7 +136,14 @@ test('a real Pages export downloads, starts the local runtime and restores a sav
     if (target.href === new URL('game.json', url).href) return new Response('{}');
     return fakeFetch(target, options);
   }), /did not match its manifest/);
-  game = await loadGame(url, release, cache, fakeFetch);
+  let interrupted = 0;
+  game = await loadGame(url, release, cache, async (target, options) => {
+    if (target.pathname.endsWith('/game.json') && interrupted++ === 0) {
+      return new Response('Temporary failure', {status: 503});
+    }
+    return fakeFetch(target, options);
+  });
+  assert.equal(interrupted, 2);
   assert.equal(game.game.chinese.levels.main.title, '正性');
   const address = await startGame(game, url.origin);
   assert.equal(await startGame(game, url.origin), address);
