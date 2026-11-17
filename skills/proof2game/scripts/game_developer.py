@@ -603,6 +603,25 @@ def site_digest(inventory):
     return sha(canonical(inventory))
 
 
+def hosted_frontend(runtime):
+    index = (runtime / 'index.html').read_text(encoding='utf-8')
+    index = index.replace('src="/', 'src="./').replace('href="/', 'href="./')
+    index = index.replace('href="./" aria-label="Proof2Game home"', 'href="./index.html" aria-label="Proof2Game home"')
+    index = index.replace('href="./api/save/export"', 'href="/api/save/export"')
+    policy = ("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+              "img-src 'self' data:; font-src 'self'; connect-src http://127.0.0.1:*; "
+              "base-uri 'none'; form-action 'none'")
+    index = index.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n'
+                          f'  <meta http-equiv="Content-Security-Policy" content="{policy}">')
+    files = {'play/index.html': index.encode()}
+    for name in ('style.css', 'app.js'):
+        files['play/' + name] = (runtime / name).read_bytes()
+    for path in sorted((runtime / 'vendor').rglob('*')):
+        if path.is_file() and not any(part.startswith('.') for part in path.relative_to(runtime).parts):
+            files['play/' + path.relative_to(runtime).as_posix()] = path.read_bytes()
+    return files
+
+
 def export_pages(output, game, content, script, verify_delivery):
     """Stage a static site with game data and a launch page. Publication is separate."""
     for ref in game['references']:
@@ -615,7 +634,7 @@ def export_pages(output, game, content, script, verify_delivery):
     release = (script.parents[3] / 'VERSION').read_text(encoding='ascii').strip()
     if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', release):
         raise Rejected('Pages export requires a numbered Proof2Game release.')
-    manifest = dict(schema=1, connector=release, files={
+    manifest = dict(schema=1, connector=release, game_id=game['id'], files={
         name: dict(sha256=sha(payload), size=len(payload)) for name, payload in sorted(data.items())
     })
     if 'paper' in game:
@@ -633,6 +652,10 @@ def export_pages(output, game, content, script, verify_delivery):
                 for part in name.split('/')
             ):
                 raise Rejected('Unsupported filename for Pages export: ' + name)
+            target = stage / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+        for name, payload in hosted_frontend(assets.parent / 'game-runtime').items():
             target = stage / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(payload)

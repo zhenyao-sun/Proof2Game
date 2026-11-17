@@ -651,6 +651,12 @@ async function act(request){
   if(undoFrame)next.undo_history.push(undoFrame);
   return finishAction(next,request,signature);
 }
+const bridgeOrigin=process.env.PROOF2GAME_PAGES_ORIGIN||'';
+if(bridgeOrigin){
+  const site=new URL(bridgeOrigin);
+  if(!pagesDistribution||site.protocol!=='https:'||site.origin!==bridgeOrigin)fail('Invalid hosted game origin.');
+}
+const bridgeToken=bridgeOrigin?crypto.randomBytes(32).toString('base64url'):null;
 const token=crypto.randomBytes(32).toString('base64url');
 let origin,cookieName;
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.woff2':'font/woff2','.woff':'font/woff','.ttf':'font/ttf','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.ico':'image/x-icon'};
@@ -658,14 +664,31 @@ const server=http.createServer(async(req,res)=>{
   function send(status,value){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));}
   try{
     if(req.headers.host!==new URL(origin).host)fail('Invalid local host.',403);
-    if(req.headers.origin && req.headers.origin!==origin)fail('Cross-site requests are not permitted.',403);
+    const hostedRequest=Boolean(bridgeOrigin&&req.headers.origin===bridgeOrigin&&
+      /^\/api\/(?:game|saves|action|save\/export|saves\/[a-f0-9-]{36}\/download)$/.test(req.url));
+    if(req.headers.origin && req.headers.origin!==origin&&!hostedRequest)fail('Cross-site requests are not permitted.',403);
+    if(hostedRequest){
+      res.setHeader('Access-Control-Allow-Origin',bridgeOrigin);
+      res.setHeader('Vary','Origin');
+      if(req.method==='OPTIONS'){
+        res.setHeader('Access-Control-Allow-Methods','GET, POST');
+        res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type');
+        res.setHeader('Access-Control-Allow-Private-Network','true');
+        res.writeHead(204);res.end();return;
+      }
+    }
     let requestedPath;try{requestedPath=decodeURIComponent(req.url.split('?')[0]);}catch{fail('Invalid URL.');}
     if(requestedPath.split('/').some(part=>part==='..'||part==='.')||requestedPath.includes('\\'))fail('Invalid package path.',404);
     const url=new URL(req.url,origin);
     const cookies=req.headers.cookie?.split(';').map(item=>item.trim())||[];
     const authenticated=cookies.includes(cookieName+'='+token);
     if(url.pathname.startsWith('/api/')){
-      if(!authenticated)fail('Open the game homepage first.',401);
+      if(hostedRequest ? req.headers.authorization!=='Bearer '+bridgeToken : !authenticated)
+        fail('Open and connect the game homepage first.',401);
+      if(req.method==='GET'&&url.pathname==='/api/bridge'&&bridgeToken&&!req.headers.origin&&
+         req.headers['sec-fetch-site']===undefined&&req.headers['sec-fetch-mode']===undefined){
+        send(200,{token:bridgeToken,origin:bridgeOrigin});return;
+      }
       if(req.method==='GET'&&url.pathname==='/api/game'){send(200,payload());return;}
       if(req.method==='GET'&&url.pathname==='/api/saves'){send(200,{saves:listSaves()});return;}
       const download=url.pathname.match(/^\/api\/saves\/([^/]+)\/download$/);
@@ -677,7 +700,7 @@ const server=http.createServer(async(req,res)=>{
         res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="proof2game-'+(download?download[1]:'current')+'.json"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(body);return;
       }
       if(req.method==='POST'&&url.pathname==='/api/action'){
-        if(req.headers.origin!==origin || !String(req.headers['content-type']||'').startsWith('application/json'))fail('Use the game page to send actions.',403);
+        if((!hostedRequest&&req.headers.origin!==origin) || !String(req.headers['content-type']||'').startsWith('application/json'))fail('Use the game page to send actions.',403);
         let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>20*1024*1024)fail('Request is too large.',413);}
         let request;try{request=JSON.parse(body);}catch{fail('Invalid JSON.');}
         send(200,await act(request));return;

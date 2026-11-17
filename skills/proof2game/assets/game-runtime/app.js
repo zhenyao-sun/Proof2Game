@@ -2,6 +2,13 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
+  const hosted = window.parent && window.parent!==window ? window.parent.proof2gameBridge : null;
+  const homePath = hosted ? window.location.pathname : '/';
+  function apiFetch(path, options) {
+    if (!hosted) return fetch(path, options);
+    return fetch(hosted.url+path,{...options,credentials:'omit',redirect:'error',
+      targetAddressSpace:'loopback',headers:{...options.headers,Authorization:'Bearer '+hosted.token}});
+  }
   let state = null;
   let currentLevel = null;
   let busy = false;
@@ -181,7 +188,7 @@
       return locked;
     }
     const link=element('a','reference-link internal-reference',label);
-    link.href='/?level='+encodeURIComponent(ref.level_id)+'&ref='+encodeURIComponent(key);
+    link.href=homePath+'?level='+encodeURIComponent(ref.level_id)+'&ref='+encodeURIComponent(key);
     link.target='_self';
     link.title=(ref.name?kindName(ref.name):t('reference'))+' '+ref.number;
     return link;
@@ -556,7 +563,7 @@
       if (typeof imagePath!=='string' || !verifiedImages.has(imagePath) || !imagePath.startsWith('snapshot/') || imagePath.split('/').some(part=>part==='..'||part==='.') || !/\.(png|jpe?g|webp)$/i.test(imagePath)) continue;
       const figure=element('figure','manuscript-figure');
       const image=element('img');
-      image.src='/'+imagePath.split('/').map(encodeURIComponent).join('/');
+      image.src=(hosted?'../':'/')+imagePath.split('/').map(encodeURIComponent).join('/');
       image.alt=imagePath.split('/').pop();image.loading='lazy';image.decoding='async';
       figure.append(image,element('figcaption','',image.alt));$('level-images').append(figure);
     }
@@ -621,11 +628,11 @@
   async function request(path,body) {
     const options={headers:{'Accept':'application/json'},credentials:'same-origin'};
     if (body) {options.method='POST'; options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}
-    const response=await fetch(path,options);
+    const response=await apiFetch(path,options);
     let result;
     try {result=await response.json();} catch (_) {throw new Error(t('error'));}
     if (!response.ok) {const error=new Error(actionError(result));error.status=response.status;throw error;}
-    if (!result.game || !result.progress) throw new Error(t('error'));
+    if (!result.game || !result.progress || (hosted&&result.game.id!==hosted.gameId)) throw new Error(t('error'));
     return result;
   }
   function accept(next) {
@@ -745,6 +752,23 @@
       await flushNavigation();return false;
     }
   }
+  function connectSaveDownload(link) {
+    if (!hosted) return;
+    const route=link.getAttribute('href');
+    link.href='#';
+    link.addEventListener('click',async event=>{
+      event.preventDefault();
+      try {
+        const response=await apiFetch(route,{headers:{Accept:'application/json'}});
+        if(!response.ok)throw new Error(t('saveListError'));
+        const url=URL.createObjectURL(await response.blob());
+        const file=element('a');file.href=url;file.download=link.download;
+        document.body.append(file);file.click();file.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),60000);
+      }catch(error){notice('save-error',error.message);}
+    });
+  }
+  if (hosted) connectSaveDownload($('export-current'));
   function renderSaves(){
     const rows=$('save-list');if(!rows||!state)return;
     rows.replaceChildren();
@@ -759,7 +783,7 @@
       const load=element('button','plain-button',t('load'));load.type='button';load.disabled=busy||saveBusy;load.setAttribute('aria-label',t('load')+' '+label);load.addEventListener('click',()=>saveAction('save_load',{save_id:record.id}));
       const download=element('a','plain-button',t('download'));download.href='/api/saves/'+encodeURIComponent(record.id)+'/download';download.download='proof2game-save.json';download.setAttribute('aria-label',t('download')+' '+label);
       const remove=element('button','plain-button save-delete',t('remove'));remove.type='button';remove.disabled=busy||saveBusy;remove.setAttribute('aria-label',t('remove')+' '+label);remove.addEventListener('click',()=>saveAction('save_delete',{save_id:record.id}));
-      controls.append(load,download,remove);row.append(info,controls);rows.append(row);
+      connectSaveDownload(download);controls.append(load,download,remove);row.append(info,controls);rows.append(row);
     }
     if(!(state.saves||[]).length)rows.append(element('li','empty-message',t('emptySaves')));
     for(const id of ['undo-map','undo-level'])$(id).addEventListener('click',()=>withdrawMessage());
@@ -772,7 +796,7 @@
     notice('save-error','');notice('save-status','');renderSaves();
     if(!$('save-dialog').open)$('save-dialog').showModal();
     try{
-      const response=await fetch('/api/saves',{headers:{Accept:'application/json'},credentials:'same-origin'});
+      const response=await apiFetch('/api/saves',{headers:{Accept:'application/json'},credentials:'same-origin'});
       const result=await response.json();if(!response.ok)throw new Error(actionError(result,'saveListError'));
       state.saves=result.saves||[];renderSaves();
     }catch(error){notice('save-error',error.message);}
@@ -788,7 +812,7 @@
       if(epoch!==actionEpoch)return false;
       if(restoring){
         closeLevel({keepPending:true});currentLevel=null;conversationDrafts.clear();forestViewInitialized=false;
-        window.history.replaceState(null,'','/');
+        window.history.replaceState(null,'',homePath);
       }
       saveBusy=false;accept(result);
       if(restoring){$('save-dialog').close();notice('global-error','');}
@@ -824,7 +848,7 @@
     if (!available.has(id)) {notice('global-error',t('unavailable'));return;}
     if(currentLevel)conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
     currentLevel=id;
-    const url='/?level='+encodeURIComponent(id)+(options.reference?'&ref='+encodeURIComponent(options.reference):'');
+    const url=homePath+'?level='+encodeURIComponent(id)+(options.reference?'&ref='+encodeURIComponent(options.reference):'');
     if(options.historyMode!=='none'&&window.location.pathname+window.location.search!==url)
       window.history[options.historyMode==='replace'?'replaceState':'pushState'](null,'',url);
     $('chat-input').value=conversationDrafts.get(id+':'+chatMode())??conversationState(id).draft??'';
@@ -917,7 +941,7 @@
     clearTimeout(prefetchTimer);
     if(currentLevel)conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
     $('level-dialog').close();
-    if(options.historyMode!=='none'&&window.location.pathname+window.location.search!=='/')window.history.pushState(null,'','/');
+    if(options.historyMode!=='none'&&window.location.pathname+window.location.search!==homePath)window.history.pushState(null,'',homePath);
   }
   $('close-level').addEventListener('click',closeLevel);$('close-level-small').addEventListener('click',closeLevel);
   $('level-dialog').addEventListener('cancel',event=>{event.preventDefault();closeLevel();});

@@ -68,12 +68,15 @@ Open the published link in a browser on macOS. The public-literature launch
 page shows the original paper's title, authors and version. Before pairing
 it shows the launch prompt with no playable map or levels. Copy the prompt
 into the player's local Codex. It invokes the tagged official connector,
-which downloads and validates the game data and starts the runtime on
-loopback. On pairing, the current tab enters the game. If the browser cannot
-pair, use the loopback address the connector prints. The direct launcher
-also accepts only the manifest URL. The player uses their own Codex account.
+which downloads and validates the game data and starts the local bridge.
+Pairing renders the game inside the published page. The address bar stays
+on the exact GitHub Pages URL when pairing, playing and refreshing. The
+connector does not open a browser tab or print a local game address. If
+pairing is declined or fails, stay on the same launch page and retry with a
+fresh prompt. The player uses their own Codex account.
 
-Check canonical level order and unlocks, formulas and internal links,
+Verify the exact address bar URL before pairing, after pairing, while visiting
+a level and after a refresh. Check canonical level order and unlocks, formulas and internal links,
 including locked targets, exact external links and citation locators, both
 languages and modes, and an actual tutor turn through the player's bridge at
 the configured model and effort. Check progress and dialogue after a

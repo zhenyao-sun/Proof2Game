@@ -14,7 +14,7 @@ class Node{
 let formulaCount=0;
 const game={levels:[{id:'notation',type:'convention',equations:[{index:1,references:['eq:one']}]},{id:'claim',type:'statement',equations:[]},{id:'proof',type:'proof',equations:[]}],references:[{key:'Author',aliases:['Author'],file:'references/Author.pdf',title:'A reference',pages:10,default_page:1}],internal_references:{'eq:one':{level_id:'notation',number:'1.1',name:'Equation'},'thm:claim':{level_id:'claim',number:'1.1',name:'Theorem'},'proof:claim':{level_id:'proof',number:'2.1',name:'Section'}}};
 const available=new Set(['notation','claim']);
-const context={state:{game},document:{createTextNode:text=>new Node('#text',text)},element:(tag,cls,text)=>Object.assign(new Node(tag,text),{className:cls}),language:()=> 'English',kindName:kind=>kind,t:key=>({lockedShort:'Locked'}[key]||key),levelStatus:()=>({available}),window:{katex:{render:(text,node,options)=>{katex.renderToString(text,options);formulaCount++;node.math=text;}}}};
+const context={homePath:'/',state:{game},document:{createTextNode:text=>new Node('#text',text)},element:(tag,cls,text)=>Object.assign(new Node(tag,text),{className:cls}),language:()=> 'English',kindName:kind=>kind,t:key=>({lockedShort:'Locked'}[key]||key),levelStatus:()=>({available}),window:{katex:{render:(text,node,options)=>{katex.renderToString(text,options);formulaCount++;node.math=text;}}}};
 vm.createContext(context);
 vm.runInContext(source.slice(source.indexOf('  function referenceTarget'),source.indexOf('  function notice'))+';this.render=renderRich;',context);
 const all=(node,predicate)=>[...(predicate(node)?[node]:[]),...node.children.flatMap(child=>all(child,predicate))];

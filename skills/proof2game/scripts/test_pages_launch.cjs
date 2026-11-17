@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const {createHash} = require('node:crypto');
 const {execFileSync} = require('node:child_process');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -9,6 +10,7 @@ const test = require('node:test');
 
 const url = new URL('https://games.example.test/proof/demo/proof2game.json');
 const code = '0123456789abcdef'.repeat(2);
+const token = 'A'.repeat(43);
 const launcher = import('./launch-pages.mjs');
 const browser = import('../assets/pages-launch/launch.js');
 
@@ -34,7 +36,7 @@ test('a pairing grants one use to the exact origin, manifest and code', async t 
   assert.equal((await request({...correct, manifest: url.origin + '/other/proof2game.json'})).status, 403);
   assert.equal((await request(correct)).status, 202);
   assert.throws(() => pair.ready('https://example.test/'));
-  pair.ready('http://127.0.0.1:42345');
+  pair.ready('http://127.0.0.1:42345', token);
   let requested;
   const address = await checkPair(url.href, code, (endpoint, options) => {
     requested = endpoint;
@@ -43,11 +45,12 @@ test('a pairing grants one use to the exact origin, manifest and code', async t 
     return request(JSON.parse(options.body));
   });
   assert.match(requested, /^http:\/\/127\.0\.0\.1:\d+\/pair$/);
-  assert.equal(address, 'http://127.0.0.1:42345/');
+  assert.deepEqual(address, {url: 'http://127.0.0.1:42345', token});
   assert.equal(await pair.paired, true);
   assert.equal(await checkPair(url.href, code, async () =>
-    Response.json({url: 'http://127.0.0.1.evil.test:42345/'})), null);
+    Response.json({url: 'http://127.0.0.1.evil.test:42345/', token})), null);
   assert.match(launchPrompt('v0.1.16', url.href, code), /github\.com\/zhenyao-sun\/Proof2Game/);
+  assert.match(launchPrompt('v0.1.22', url.href, code), /Do not open another tab/);
   assert.throws(() => launchPrompt('main', url.href, code));
 });
 
@@ -84,7 +87,7 @@ finally:
 test('a real Pages export downloads, starts the local runtime and restores a save', {
   skip: process.platform !== 'darwin', timeout: 60000
 }, async t => {
-  const {gameURL, loadGame, startGame} = await launcher;
+  const {gameURL, loadGame, startGame, bridgeFor} = await launcher;
   assert.throws(() => gameURL('http://example.test/proof2game.json'), /HTTPS/);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'proof2game-pages-test-'));
   let game;
@@ -135,8 +138,26 @@ test('a real Pages export downloads, starts the local runtime and restores a sav
   }), /did not match its manifest/);
   game = await loadGame(url, release, cache, fakeFetch);
   assert.equal(game.game.chinese.levels.main.title, '正性');
-  const address = await startGame(game);
-  assert.equal(await startGame(game), address);
+  const address = await startGame(game, url.origin);
+  assert.equal(await startGame(game, url.origin), address);
+  const bridgeToken = await bridgeFor(address, url.origin);
+  const stateURL = address + '/api/game';
+  const headers = {origin: url.origin, authorization: 'Bearer ' + bridgeToken};
+  const allowed = await fetch(stateURL, {headers});
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get('access-control-allow-origin'), url.origin);
+  assert.equal((await allowed.json()).game.id, manifest.game_id);
+  assert.equal((await fetch(stateURL, {headers: {origin: url.origin}})).status, 401);
+  assert.equal((await fetch(stateURL, {headers: {...headers, origin: 'https://other.example.test'}})).status, 403);
+  const preflight = await fetch(address + '/api/action', {method: 'OPTIONS',
+    headers: {origin: url.origin, 'access-control-request-method': 'POST',
+      'access-control-request-headers': 'authorization,content-type'}});
+  assert.equal(preflight.status, 204);
+  assert.match(preflight.headers.get('access-control-allow-headers'), /Authorization/);
+  assert.equal(preflight.headers.get('access-control-allow-credentials'), null);
+  assert.equal((await fetch(address + '/api/bridge', {headers})).status, 403);
+  assert.match(await fs.readFile(path.join(website,'play/index.html'),'utf8'), /src="\.\/app\.js"/);
+  assert.doesNotMatch(await fs.readFile(path.join(website,'launch.js'),'utf8'), /location\.replace/);
   async function session(origin) {
     const homepage = await fetch(origin);
     assert.match(await homepage.text(), /<title>Proof2Game<\/title>/);
@@ -152,11 +173,23 @@ test('a real Pages export downloads, starts the local runtime and restores a sav
   }
   const api = await session(address);
   assert.equal((await api('game')).progress.language, 'English');
-  const changed = await api('action', {
-    method: 'POST',
+  const change = await fetch(address+'/api/action', {
+    method: 'POST', headers: {...headers, 'content-type':'application/json'},
     body: JSON.stringify({action: 'language', language: '中文', request_id: 'pages-test-001', expected_revision: 0})
   });
-  assert.equal(changed.progress.language, '中文');
+  assert.equal(change.status, 200);
+  assert.equal((await change.json()).progress.language, '中文');
+  const {game_id, ...previous} = manifest;
+  previous.connector = 'v0.1.21';
+  const key = createHash('sha256').update(url.href+'\n'+JSON.stringify(previous)+'\n').digest('hex');
+  const upgradeCache = path.join(root, 'upgrade');
+  const old = path.join(upgradeCache,key);
+  await fs.mkdir(old,{recursive:true});
+  for (const name of ['game.json','player-save.json']) {
+    await fs.copyFile(path.join(game.directory,name),path.join(old,name));
+  }
+  const upgraded = await loadGame(url,release,upgradeCache,fakeFetch);
+  assert.equal(JSON.parse(await fs.readFile(path.join(upgraded.directory,'player-save.json'),'utf8')).language,'中文');
   await stop();
   game = await loadGame(url, release, cache, async (target, options) => {
     assert.equal(target.href, url.href);

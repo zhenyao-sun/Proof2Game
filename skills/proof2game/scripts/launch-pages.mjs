@@ -57,6 +57,42 @@ async function download(url, limit, fetchFile) {
   return Buffer.concat(chunks, size);
 }
 
+// Preserve saves when upgrading the same v0.1.21 hosted game to the bridge.
+async function importPreviousSaves(root, stage, url, manifest) {
+  const {game_id, ...previous} = manifest;
+  if (!game_id || previous.connector !== 'v0.1.22') return;
+  previous.connector = 'v0.1.21';
+  const key = digest(url.href + '\n' + JSON.stringify(previous) + '\n');
+  const source = path.join(root, key);
+  async function localType(file, kind) {
+    try {
+      return await fs.realpath(file) === file && (await fs.lstat(file))[kind]();
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      return false;
+    }
+  }
+  if (!await localType(source, 'isDirectory')) return;
+  const previousGame = path.join(source, 'game.json');
+  if (!await localType(previousGame, 'isFile') ||
+      digest(await fs.readFile(previousGame)) !== manifest.files['game.json'].sha256) return;
+  for (const name of ['player-save.json','player-save.json.backup']) {
+    if (await localType(path.join(source, name), 'isFile')) {
+      await fs.copyFile(path.join(source, name), path.join(stage, name));
+    }
+  }
+  const manual = path.join(source, 'manual-saves');
+  if (!await localType(manual, 'isDirectory')) return;
+  const saves = path.join(stage, 'manual-saves');
+  await fs.mkdir(saves, {mode: 0o700});
+  for (const name of await fs.readdir(manual)) {
+    const file = path.join(manual, name);
+    if (/^[a-f0-9-]{36}\.json$/.test(name) && await localType(file, 'isFile')) {
+      await fs.copyFile(file, path.join(saves, name));
+    }
+  }
+}
+
 export async function loadGame(url, release, root = cache, fetchFile = fetch) {
   const manifestBytes = await download(url, MAX_MANIFEST, fetchFile);
   const manifest = JSON.parse(manifestBytes);
@@ -106,6 +142,7 @@ export async function loadGame(url, release, root = cache, fetchFile = fetch) {
       }
       const game = JSON.parse(await fs.readFile(path.join(stage, 'game.json'), 'utf8'));
       validateHostedGame(game, manifest.files);
+      await importPreviousSaves(path.dirname(destination), stage, url, manifest);
       try { await fs.rename(stage, destination); }
       catch (error) { if (!['EEXIST', 'ENOTEMPTY'].includes(error.code)) throw error; }
     } finally {
@@ -130,7 +167,7 @@ function validateHostedGame(game, files) {
 
 export async function startPairing(url, token, {port = PAIR_PORT, lifetime = 180000} = {}) {
   if (!tokenPattern.test(token)) throw new Error('Use the one-time code from the game launch page.');
-  let gameAddress, used = false, timer;
+  let connection, used = false, timer;
   let finish;
   const paired = new Promise(resolve => { finish = resolve; });
   const server = http.createServer({requestTimeout: 5000, headersTimeout: 5000}, async (request, response) => {
@@ -162,10 +199,10 @@ export async function startPairing(url, token, {port = PAIR_PORT, lifetime = 180
       const input = JSON.parse(body);
       if (input?.code !== token || input?.manifest !== url.href) { reply(403); return; }
       if (used) { reply(410); return; }
-      if (!gameAddress) { reply(202); return; }
+      if (!connection) { reply(202); return; }
       used = true;
       response.on('finish', () => close(true));
-      reply(200, {url: gameAddress});
+      reply(200, connection);
     } catch {
       reply(400);
     }
@@ -180,7 +217,11 @@ export async function startPairing(url, token, {port = PAIR_PORT, lifetime = 180
     server.listen(port, LOCAL_HOST, resolve);
   });
   timer = setTimeout(close, lifetime);
-  return {paired, close, port: server.address().port, ready(value) { gameAddress = localURL(value); }};
+  return {paired, close, port: server.address().port, ready(value, bridgeToken) {
+    const address = localURL(value);
+    if (!/^[A-Za-z0-9_-]{43}$/.test(bridgeToken)) throw new Error('Invalid local bridge token.');
+    connection = {url: address, token: bridgeToken};
+  }};
 }
 
 async function runningGame(directory, gameId) {
@@ -198,7 +239,7 @@ async function runningGame(directory, gameId) {
   return null;
 }
 
-export async function startGame({directory, game}) {
+export async function startGame({directory, game}, bridgeOrigin = '') {
   const existing = await runningGame(directory, game.id);
   if (existing) return existing;
   const log = await fs.open(path.join(directory, 'runtime.log'), 'a', 0o600);
@@ -206,7 +247,7 @@ export async function startGame({directory, game}) {
   try {
     // Execute the release's own server, with the downloaded data as its data directory.
     child = spawn(process.execPath, [path.join(runtime, 'server.mjs'), '--no-open'], {
-      cwd: directory, env: {...process.env, PROOF2GAME_PAGES_DATA: directory},
+      cwd: directory, env: {...process.env, PROOF2GAME_PAGES_DATA: directory, PROOF2GAME_PAGES_ORIGIN: bridgeOrigin},
       detached: true, stdio: ['ignore', log.fd, log.fd, 'ipc']
     });
   } finally {
@@ -239,31 +280,51 @@ export async function startGame({directory, game}) {
   return url;
 }
 
+export async function bridgeFor(address, expectedOrigin) {
+  const options = {redirect: 'error', signal: AbortSignal.timeout(3000)};
+  const response = await fetch(address, options);
+  await response.body?.cancel();
+  const cookie = response.headers.get('set-cookie')?.split(';')[0];
+  if (!cookie) throw new Error('The local game did not issue a session.');
+  const {token, origin} = await new Promise((resolve, reject) => {
+    const request = http.get(address + '/api/bridge', {headers: {cookie}, timeout: 3000}, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('error', reject);
+      response.on('end', () => {
+        if (response.statusCode !== 200) { reject(new Error('The local game bridge could not be started.')); return; }
+        try { resolve(JSON.parse(body)); } catch (error) { reject(error); }
+      });
+    });
+    request.on('error', reject);
+    request.on('timeout', () => request.destroy(new Error('The local game bridge timed out.')));
+  });
+  if (origin !== expectedOrigin || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
+    throw new Error('The local game bridge does not match the hosted page.');
+  }
+  return token;
+}
+
 async function main() {
   const [manifest, code, extra] = process.argv.slice(2);
-  if (!manifest || extra || (code && !tokenPattern.test(code))) {
-    throw new Error('Usage: node launch-pages.mjs HTTPS_MANIFEST_URL [PAIR_CODE]');
+  if (!manifest || extra || !tokenPattern.test(code)) {
+    throw new Error('Use the launch prompt from the published game: node launch-pages.mjs HTTPS_MANIFEST_URL PAIR_CODE');
   }
   if (process.platform !== 'darwin' || Number(process.versions.node.split('.')[0]) < 20) {
     throw new Error('The Proof2Game connector requires macOS and Node.js 20 or later.');
   }
   const url = gameURL(manifest);
   const release = (await fs.readFile(new URL('VERSION', repo), 'ascii')).trim();
-  let pairing;
-  if (code) {
-    try { pairing = await startPairing(url, code); }
-    catch (error) {
-      if (error.code !== 'EADDRINUSE') throw error;
-      console.error('Another pairing is in progress. Use the local address printed below.');
-    }
-  }
+  const pairing = await startPairing(url, code, {lifetime: 10 * 60 * 1000});
   try {
-    const address = await startGame(await loadGame(url, release));
-    console.log('Open Proof2Game on this Mac: ' + address);
-    pairing?.ready(address);
-    if (pairing && await pairing.paired) console.log('The launch tab is connected.');
+    const address = await startGame(await loadGame(url, release), url.origin);
+    pairing.ready(address, await bridgeFor(address, url.origin));
+    console.log('Proof2Game is ready. Return to the original browser tab.');
+    if (await pairing.paired) console.log('The original game page is connected.');
+    else throw new Error('Pairing expired. Copy a fresh prompt from the original game page.');
   } finally {
-    pairing?.close();
+    pairing.close();
   }
 }
 
