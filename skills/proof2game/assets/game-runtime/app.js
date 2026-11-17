@@ -237,6 +237,38 @@
     reference.title=ref.title+(hosted?'':' · PDF')+(page?' · '+(language()==='中文'?'第 '+page+' 页':'p. '+page):'');
     return reference;
   }
+  const referenceLocatorKinds={theorem:'theorem',theorems:'theorem',lemma:'lemma',lemmas:'lemma',
+    proposition:'proposition',propositions:'proposition',corollary:'corollary',corollaries:'corollary',
+    definition:'definition',claim:'claim',example:'example',section:'section',chapter:'chapter',appendix:'appendix',
+    '定理':'theorem','引理':'lemma','命题':'proposition','推论':'corollary','定义':'definition',
+    '断言':'claim','例':'example','节':'section','章':'chapter','附录':'appendix','§':'section'};
+  const referenceLocatorNumber="(?:(?:[a-z]\\.?)?\\d+(?:\\.\\d+)*[a-z]?['′’]?(?:\\s*\\([a-z0-9]+\\))*|[ivxlcdm]+)";
+  const referenceLocatorPattern=new RegExp(
+    '(?<![a-z])('+Object.keys(referenceLocatorKinds).join('|')+')\\s*('+referenceLocatorNumber+')(?![a-z0-9]|\\.\\d)','gi'
+  );
+  function namedReferenceLocators(text){
+    return [...text.matchAll(referenceLocatorPattern)].map(match=>{
+      const kind=referenceLocatorKinds[match[1].toLowerCase()];
+      const number=match[2].toLowerCase().replace(/[′’]/g,"'").replace(/\s/g,'');
+      return {id:kind+' '+number,index:match.index};
+    });
+  }
+  function citedReferencePage(ref,text){
+    const locations=ref.locations||[];
+    const explicit=namedReferenceLocators(text)[0];
+    if(explicit&&/^[\s,，:：]*$/.test(text.slice(0,explicit.index))){
+      const pages=new Set(locations.filter(loc=>
+        namedReferenceLocators(loc.label||'').some(named=>named.id===explicit.id)
+      ).map(loc=>loc.page));
+      // A named but unverified or ambiguous result should open the source without claiming a page.
+      if(locations.length) return pages.size===1?[...pages][0]:null;
+    }
+    const location=locations.find(loc=>{
+      if(typeof loc.match!=='string'||!loc.match) return false;
+      try{return new RegExp(loc.match,'i').test(text);}catch{return false;}
+    });
+    return location?.page;
+  }
   function appendReferenceText(parent,text){
     const refs=(state?.game?.references||[]).filter(r=>typeof r.file==='string'&&/^references\/[A-Za-z0-9._-]+\.pdf$/.test(r.file)&&!r.file.includes('..'));
     if(!refs.length){parent.append(document.createTextNode(text));return;}
@@ -246,13 +278,19 @@
     const pattern=new RegExp('\\b(?:'+aliases.map(x=>escape(x.alias)).join('|')+')\\b','g');
     function plain(value){
       let cursor=0;
-      for(const m of value.matchAll(pattern)){
+      const matches=[...value.matchAll(pattern)];
+      for(const [index,m] of matches.entries()){
         parent.append(document.createTextNode(value.slice(cursor,m.index)));
         const ref=aliases.find(x=>x.alias===m[0]).ref;
-        const tail=value.slice(m.index+m[0].length,m.index+m[0].length+180).split(']')[0];
-        const location=(ref.locations||[]).find(loc=>{try{return new RegExp(loc.match,'i').test(tail);}catch(_){return false;}});
-        const page=location?.page||ref.default_page||1;
-        parent.append(referenceLink(ref,m[0],page));cursor=m.index+m[0].length;
+        const end=m.index+m[0].length;
+        const tail=value.slice(end,Math.min(end+180,matches[index+1]?.index??value.length));
+        const close=tail.indexOf(']');
+        const bracketed=value[m.index-1]==='['&&close>=0;
+        const inside=close<0?tail:tail.slice(0,close);
+        const locator=bracketed&&!inside.trim()?(tail.slice(close+1).match(/^\s*[,，:：]\s*(.*)/)?.[1]||''):inside;
+        const selected=citedReferencePage(ref,locator);
+        const page=selected===undefined?(ref.default_page||1):selected;
+        parent.append(referenceLink(ref,m[0],page));cursor=end;
       }
       parent.append(document.createTextNode(value.slice(cursor)));
     }

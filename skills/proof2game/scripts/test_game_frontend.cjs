@@ -44,6 +44,26 @@ game.references.push({key:'Example',aliases:['Ada Example','Example'],file:'refe
 for(const [text,expected] of [['a simple example',[]],['Example proved this.',['/references/Example.pdf#page=1']],['Ada Example proved this.',['/references/Example.pdf#page=1']],['[example](/references/Example.pdf#page=2)',['/references/Example.pdf#page=2']]]){
  const links=all(render(text),x=>x.tag==='a');assert.deepEqual(links.map(x=>x.href),expected);checks++;
 }
+// A cited PDF can have one default page and several independently verified result pages.
+game.references.push({key:'paper',aliases:['paper'],file:'references/paper.pdf',title:'A cited paper',pages:20,default_page:12,
+ locations:[{label:'Projective change of variables (Theorem 4.10 and proof)',match:'Projective change of variables',page:12},
+            {label:'Theorem 1.2',match:'Theorem 1\\.2',page:2},
+            {label:'Theorem 17.14',page:15},{label:'Theorem 1.2(a)(i)',page:7}]});
+game.references.push({key:'other-work',aliases:['other-work'],file:'references/other-work.pdf',title:'Another paper',pages:10,default_page:3,
+ locations:[{label:'Proof of Theorem 1.2, printed page 4',match:'Proof of Theorem 1\\.2, printed page 4',page:6}]});
+for(const [text,expected] of [
+ ['See \\cite{paper}, Theorem 1.2.',['/references/paper.pdf#page=2']],
+ ['See \\cite{paper}*{Theorem 1.2}.',['/references/paper.pdf#page=2']],
+ ['参见 \\cite{paper}，定理~1.2。',['/references/paper.pdf#page=2']],
+ ['See \\cite{paper}, Theorem 4.10, and \\cite{other-work}, Theorem 1.2.',['/references/paper.pdf#page=12','/references/other-work.pdf#page=6']],
+ ['See \\cite{paper} and \\cite{other-work}, Theorem 1.2.',['/references/paper.pdf#page=12','/references/other-work.pdf#page=6']],
+ ['See \\cite{paper}, Theorems 17.14 and 17.26.',['/references/paper.pdf#page=15']],
+ ['See \\cite{paper}, Theorem 1.2(a)(i).',['/references/paper.pdf#page=7']],
+ ['See \\cite{paper}, Theorem 1.2(a)(ii).',['/references/paper.pdf']],
+ ['See \\cite{paper}, Theorem 1.20.',['/references/paper.pdf']],
+]){
+ const links=all(render(text),x=>x.tag==='a');assert.deepEqual(links.map(x=>x.href),expected,text);checks++;
+}
 for(const text of ['\\begin{alignat}{2}x&=1 &\\quad y&=2\\end{alignat}','\\begin{flalign}x&=1 & y&=2\\end{flalign}','\\begin{alignat*}{1}x&=1\\end{alignat*}']){
  const node=render(text);assert.equal(all(node,x=>Boolean(x.math)).length,1);assert(!node.textContent.includes('begin{'));checks++;
 }
