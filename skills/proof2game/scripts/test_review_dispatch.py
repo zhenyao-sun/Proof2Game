@@ -172,6 +172,24 @@ class ReviewDispatchTest(unittest.TestCase):
         self.assertIn("VISIBLE_PRIOR_INTERFACE_CANARY", packet["direct_statement_interfaces"][0]["text"])
         self.assertNotIn("UNRELATED_PRIOR_PROOF_CANARY", json.dumps(packet))
 
+    def test_convention_correctness_distinguishes_external_results_from_transfer_arguments(self):
+        self.append_component("setting.tex", r"""
+\begin{Proposition}\label{ext:fixture}
+Let $E$ be the closed unit disk in $\mathbb R^2$. Every continuous map $F:E\to E$ has a fixed point.
+See \cite{fixture}, Proposition 1.
+\end{Proposition}
+""")
+        action = self.action("setting", "mathematics")
+        packet = review_dispatch.build_packet(self.main, action, cutoff=CUTOFF)
+        prompt = review_dispatch.worker_prompt(packet, self.scratch / "gate.json", "sha256")
+        self.assertIn("directly cited external result, even if its proof is nontrivial", prompt)
+        self.assertIn("provisional premise here", prompt)
+        self.assertIn("scope and applicability at the sources gate", prompt)
+        self.assertIn("manuscript claim or nontrivial transfer argument that needs its own Statement and Proof", prompt)
+        self.assertIn("Defer all reads of external sources", prompt)
+        self.assertTrue(packet["source_blind"])
+        self.assertNotIn("source_resolution", packet)
+
     def test_reject_changed_snapshot_inapplicable_gate_and_waiting_action(self):
         action = self.action("main", "expression")
         self.append_component("main.tex", "NEW_STATEMENT_VERSION")

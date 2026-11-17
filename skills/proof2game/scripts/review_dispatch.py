@@ -47,8 +47,11 @@ BY_COMPONENT = {
     ),
     ("convention", "expression"): "Check expression and readability of this complete Convention.",
     ("convention", "mathematics"): (
-        "Check definitions, scope, notation, hypotheses and compatibility with inherited settings. Flag an independently "
-        "nontrivial claim placed in a Convention. Proving a theorem is outside this gate."
+        "Check definitions, scope, notation, hypotheses and compatibility with inherited settings. A Convention may "
+        "state a labelled, fully specified theorem-like interface for a directly cited external result, even if its "
+        "proof is nontrivial. Treat the stated external result as a provisional premise here and verify its exact "
+        "source, scope and applicability at the sources gate. Flag a manuscript claim or nontrivial transfer "
+        "argument that needs its own Statement and Proof. A citation alone cannot justify such an extra deduction."
     ),
     ("statement", "expression"): (
         "Check readability with the actual preceding material and transition. "
