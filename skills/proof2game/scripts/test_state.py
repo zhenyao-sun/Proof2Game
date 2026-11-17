@@ -358,6 +358,53 @@ class Ledger(unittest.TestCase):
         self.result(self.action(component="main"), "pass")
         self.assertIn("main", self.data["state"]["safe"])
 
+    def test_user_can_select_an_eligible_alternative_edition_in_the_same_wait(self):
+        self.init(kind="public")
+        self.change("advance")
+        self.pass_component("setting")
+        for _ in range(3):
+            self.result(self.action(component="main"), "pass")
+        self.result(self.action(component="main"), "waiting-source", required=True,
+                    source="needed-study", source_version="journal", location="Required interface")
+        waiting = self.action(component="main")
+        self.result(self.action(role="batcher"), "complete", issue_ids=[])
+        self.assertEqual(self.data["state"]["phase"], "fix")
+        chosen = {"complete": True, "public_date": "2022-01-01", "work_key": "needed-study",
+                  "id": "needed-study-author", "version": "author-v1", "sha256": "1" * 64}
+        approval = {"version": "author-v1", "user_confirmation": "Synthetic user chose author-v1."}
+
+        def resolve(reference, **extra):
+            with patch.object(intake, "checked_record", return_value=reference):
+                return self.change("source-resolve", token=waiting["token"], snapshot_digest=waiting["snapshot_digest"],
+                                   status="available", reference_id=reference["id"],
+                                   evidence="Synthetic citation verification.", **extra)
+
+        for reference, selection, error in (
+            (chosen, {}, "requested source version"),
+            (chosen, {"version_override": {"version": "author-v1"}}, "version_override.user_confirmation"),
+            (chosen, {"version_override": {**approval, "version": "author-v2"}}, "selected source version"),
+            ({**chosen, "work_key": "other"}, {"version_override": approval}, "requested source work key"),
+            ({**chosen, "public_date": "2024-01-01"}, {"version_override": approval}, "eligible version"),
+            ({**chosen, "complete": False}, {"version_override": approval}, "completed OCR"),
+        ):
+            with self.subTest(error=error), self.assertRaisesRegex(state.Rejected, error):
+                resolve(reference, **selection)
+            self.assertEqual(self.action(component="main"), waiting)
+
+        resolve(chosen, version_override=approval)
+        current = self.action(component="main")
+        self.assertEqual(current["token"], waiting["token"])
+        self.assertEqual(current["identity"], waiting["identity"])
+        self.assertIsNone(current["waiting"])
+        self.assertEqual(self.data["state"]["phase"], "review")
+        resolution = current["source_resolution"]
+        self.assertEqual(resolution["requested_source_version"], "journal")
+        self.assertEqual(resolution["source_version"], "author-v1")
+        self.assertEqual(resolution["version_override"], approval)
+        self.assertEqual(resolution["reference_sha256"], chosen["sha256"])
+        with self.assertRaisesRegex(state.Rejected, "cite the resolved required source"):
+            self.result(current, "pass", sources=[])
+
     def test_public_nonpass_accepts_same_version_only_and_fresh_route(self):
         self.init(kind="public")
         self.assertEqual(self.evaluate(), "route")

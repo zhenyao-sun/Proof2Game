@@ -372,6 +372,10 @@ def resolve_source(task, state, request):
     status = request.get("status")
     require(status in ("available", "unavailable", "waived"), "unknown source resolution")
     require(status != "waived" or not wait["required"], "a required source cannot be waived")
+    override = request.get("version_override")
+    if "version_override" in request:
+        require(status == "available" and isinstance(override, dict),
+                "an edition override requires an available source and explicit user confirmation")
     if status == "unavailable" and action["role"] in ("reviewer", "fixer"):
         record(state, "source-still-unavailable", action=action["token"], evidence=evidence(request.get("evidence")))
         if state["phase"] == "review":
@@ -385,7 +389,13 @@ def resolve_source(task, state, request):
         require(reference["complete"] and (not cutoff or intake.published_by(reference["public_date"], cutoff)),
                 "source needs completed OCR and an eligible version before resuming")
         require(reference["work_key"] == wait["source"], "reference does not match the requested source work key")
-        if version is not None:
+        if override is not None:
+            selected = evidence(override.get("version"), field="version_override.version")
+            confirmation = evidence(override.get("user_confirmation"), field="version_override.user_confirmation")
+            require(reference["version"] == selected, "reference does not match the user-selected source version")
+            resolution.update(requested_source_version=version, source_version=selected,
+                              version_override={"version": selected, "user_confirmation": confirmation})
+        elif version is not None:
             require(reference["version"] == version, "reference does not match the requested source version")
         resolution.update(reference_id=reference["id"], reference_version=reference["version"],
                           reference_sha256=reference["sha256"])
