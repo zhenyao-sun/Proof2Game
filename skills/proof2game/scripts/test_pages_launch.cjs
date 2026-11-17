@@ -16,7 +16,7 @@ const browser = import('../assets/pages-launch/launch.js');
 
 test('a pairing grants one use to the exact origin, manifest and code', async t => {
   const {startPairing} = await launcher;
-  const {checkPair, launchPrompt} = await browser;
+  const {checkPair, launchPrompt, activePairing} = await browser;
   const pair = await startPairing(url, code, {port: 0, lifetime: 3000});
   t.after(() => pair.close());
   const destination = 'http://127.0.0.1:' + pair.port + '/pair';
@@ -46,11 +46,21 @@ test('a pairing grants one use to the exact origin, manifest and code', async t 
   });
   assert.match(requested, /^http:\/\/127\.0\.0\.1:\d+\/pair$/);
   assert.deepEqual(address, {url: 'http://127.0.0.1:42345', token});
+  const confirm = () => fetch(destination.replace('/pair', '/confirm'), {
+    method: 'POST', headers: {origin: url.origin, 'content-type': 'application/json'}, body: JSON.stringify(correct)
+  });
+  assert.equal(pair.status(), 'issued');
+  assert.equal(await Promise.race([pair.paired, Promise.resolve('unconfirmed')]), 'unconfirmed');
+  assert.equal((await confirm()).status, 200);
   assert.equal(await pair.paired, true);
+  const pending = {code, connector:'v0.1.25', expires:11000};
+  assert.deepEqual(activePairing(JSON.parse(JSON.stringify(pending)), 'v0.1.25', 1000), pending);
+  assert.equal(activePairing(pending, 'v0.1.25', 11000), null);
+  assert.equal(activePairing(pending, 'v0.1.24', 1000), null);
   assert.equal(await checkPair(url.href, code, async () =>
     Response.json({url: 'http://127.0.0.1.evil.test:42345/', token})), null);
   assert.match(launchPrompt('v0.1.16', url.href, code), /github\.com\/zhenyao-sun\/Proof2Game/);
-  assert.match(launchPrompt('v0.1.22', url.href, code), /Do not open another tab/);
+  assert.match(launchPrompt('v0.1.22', url.href, code), /Do not inspect, open, or switch browsers/);
   assert.throws(() => launchPrompt('main', url.href, code));
 });
 

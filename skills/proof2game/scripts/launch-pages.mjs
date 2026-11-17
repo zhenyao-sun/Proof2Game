@@ -82,7 +82,7 @@ async function localType(file, kind) {
 async function previousGame(root, url, manifest) {
   if (!manifest.game_id) return null;
   const {game_id, ...legacy} = manifest;
-  for (const previous of [{...manifest, connector: 'v0.1.23'}, {...manifest, connector: 'v0.1.22'},
+  for (const previous of [{...manifest, connector: 'v0.1.24'}, {...manifest, connector: 'v0.1.23'}, {...manifest, connector: 'v0.1.22'},
                           {...legacy, connector: 'v0.1.21'}]) {
     if (previous.connector === manifest.connector) continue;
     const key = digest(url.href + '\n' + JSON.stringify(previous) + '\n');
@@ -198,7 +198,7 @@ function validateHostedGame(game, files) {
 
 export async function startPairing(url, token, {port = PAIR_PORT, lifetime = 180000} = {}) {
   if (!tokenPattern.test(token)) throw new Error('Use the one-time code from the game launch page.');
-  let connection, used = false, timer;
+  let connection, issued = false, confirmed = false, validRequest = false, timer;
   let finish;
   const paired = new Promise(resolve => { finish = resolve; });
   const server = http.createServer({requestTimeout: 5000, headersTimeout: 5000}, async (request, response) => {
@@ -208,7 +208,7 @@ export async function startPairing(url, token, {port = PAIR_PORT, lifetime = 180
     }
     try {
       if (request.headers.host !== LOCAL_HOST + ':' + server.address()?.port ||
-          request.headers.origin !== url.origin || request.url !== '/pair') {
+          request.headers.origin !== url.origin || !['/pair','/confirm'].includes(request.url)) {
         reply(403); return;
       }
       response.setHeader('Access-Control-Allow-Origin', url.origin);
@@ -229,10 +229,17 @@ export async function startPairing(url, token, {port = PAIR_PORT, lifetime = 180
       }
       const input = JSON.parse(body);
       if (input?.code !== token || input?.manifest !== url.href) { reply(403); return; }
-      if (used) { reply(410); return; }
+      validRequest = true;
+      if (request.url === '/confirm') {
+        if (!issued || confirmed) { reply(409); return; }
+        confirmed = true;
+        response.on('finish', () => close(true));
+        reply(200);
+        return;
+      }
+      if (issued) { reply(410); return; }
       if (!connection) { reply(202); return; }
-      used = true;
-      response.on('finish', () => close(true));
+      issued = true;
       reply(200, connection);
     } catch {
       reply(400);
@@ -248,7 +255,9 @@ export async function startPairing(url, token, {port = PAIR_PORT, lifetime = 180
     server.listen(port, LOCAL_HOST, resolve);
   });
   timer = setTimeout(close, lifetime);
-  return {paired, close, port: server.address().port, ready(value, bridgeToken) {
+  return {paired, close, port: server.address().port,
+    status: () => issued ? 'issued' : validRequest ? 'waiting' : 'no-request',
+    ready(value, bridgeToken) {
     const address = localURL(value);
     if (!/^[A-Za-z0-9_-]{43}$/.test(bridgeToken)) throw new Error('Invalid local bridge token.');
     connection = {url: address, token: bridgeToken};
@@ -348,13 +357,21 @@ async function main() {
   const url = gameURL(manifest);
   const release = (await fs.readFile(new URL('VERSION', repo), 'ascii')).trim();
   const pairing = await startPairing(url, code, {lifetime: 10 * 60 * 1000});
+  let notice;
   try {
     const address = await startGame(await loadGame(url, release), url.origin);
     pairing.ready(address, await bridgeFor(address, url.origin));
-    console.log('Proof2Game is ready. Return to the original browser tab.');
-    if (await pairing.paired) console.log('The original game page is connected.');
-    else throw new Error('Pairing expired. Copy a fresh prompt from the original game page.');
+    console.log('Local service ready. Waiting for the original page to confirm it is playable.');
+    notice = setTimeout(() => {
+      const status = pairing.status();
+      if (status === 'no-request') console.log('No matching request from the original page. Check local access in the browser already showing the game.');
+      else if (status === 'issued') console.log('The original page paired but has not confirmed the game loaded.');
+      else console.log('The original page reached the connector. Waiting for it to finish loading.');
+    }, 15000);
+    if (await pairing.paired) console.log('The original game page is playable.');
+    else throw new Error('The original page did not confirm it was playable before pairing expired.');
   } finally {
+    clearTimeout(notice);
     pairing.close();
   }
 }

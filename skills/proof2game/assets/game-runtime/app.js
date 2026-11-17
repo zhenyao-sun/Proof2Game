@@ -980,6 +980,6 @@
   window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(state)renderForest();},120);});
   window.addEventListener('pageshow',event=>{if(event.persisted)request('/api/game').then(accept).catch(()=>{});});
   request('/api/game').then(async result=>{
-    accept(result);await navigateFromLocation();
+    accept(result);hosted?.confirmPlayable();await navigateFromLocation();
   }).catch(error=>{notice('global-error',error.message);const loading=$('loading-copy');if(loading)loading.textContent=t('reload');});
 })();

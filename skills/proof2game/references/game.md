@@ -73,7 +73,11 @@ Pairing renders the game inside the published page. The address bar stays
 on the exact GitHub Pages URL when pairing, playing and refreshing. The
 connector does not open a browser tab or print a local game address. If
 pairing is declined or fails, stay on the same launch page and retry with a
-fresh prompt. The player uses their own Codex account.
+fresh prompt after the current code expires. A refresh in the same tab
+continues polling with the same pending code until it expires. The connector
+reports success after the page loads the game and confirms it is playable.
+It does not need to identify, open, or inspect the browser. The player uses
+their own Codex account.
 
 Verify the exact address bar URL before pairing, after pairing, while visiting
 a level and after a refresh. Check canonical level order and unlocks, formulas and internal links,

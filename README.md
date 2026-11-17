@@ -93,7 +93,10 @@ One Codex session coordinates the work. Each specialist takes a different part o
 A shared GitHub Pages link opens a launch page. Copy its prompt into Codex
 on your Mac and leave the tab open. Allow the connection if your browser asks.
 The game appears inside that page and the address remains the GitHub Pages
-URL. You need Node.js 20 or later and your own Codex login.
+URL. You need Node.js 20 or later and your own Codex login. A pending code survives a refresh of the original tab.
+The connector reports success only after the page confirms it is playable.
+Direct local access has been verified in Firefox on macOS. Safari 26.6.2
+blocked this connection in the same HTTPS test.
 
 Authors can [export and publish a game directory to GitHub Pages](skills/proof2game/references/game.md#publish-the-website)
 from the approved bilingual snapshot.
