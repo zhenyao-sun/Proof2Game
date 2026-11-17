@@ -250,16 +250,20 @@
     return [...text.matchAll(referenceLocatorPattern)].map(match=>{
       const kind=referenceLocatorKinds[match[1].toLowerCase()];
       const number=match[2].toLowerCase().replace(/[′’]/g,"'").replace(/\s/g,'');
-      return {id:kind+' '+number,index:match.index};
+      return {id:kind+' '+number,index:match.index,end:match.index+match[0].length};
     });
   }
   function citedReferencePage(ref,text){
     const locations=ref.locations||[];
     const explicit=namedReferenceLocators(text)[0];
     if(explicit&&/^[\s,，:：]*$/.test(text.slice(0,explicit.index))){
-      const pages=new Set(locations.filter(loc=>
-        namedReferenceLocators(loc.label||'').some(named=>named.id===explicit.id)
-      ).map(loc=>loc.page));
+      const matches=locations.flatMap(loc=>{
+        const label=(loc.label||'').trim();
+        const named=namedReferenceLocators(label).find(item=>item.id===explicit.id);
+        return named?[{page:loc.page,exact:named.index===0&&named.end===label.length}]:[];
+      });
+      const exact=matches.filter(match=>match.exact);
+      const pages=new Set((exact.length?exact:matches).map(match=>match.page));
       // A named but unverified or ambiguous result should open the source without claiming a page.
       if(locations.length) return pages.size===1?[...pages][0]:null;
     }

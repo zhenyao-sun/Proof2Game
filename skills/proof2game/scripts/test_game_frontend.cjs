@@ -48,6 +48,7 @@ for(const [text,expected] of [['a simple example',[]],['Example proved this.',['
 game.references.push({key:'paper',aliases:['paper'],file:'references/paper.pdf',title:'A cited paper',pages:20,default_page:12,
  locations:[{label:'Projective change of variables (Theorem 4.10 and proof)',match:'Projective change of variables',page:12},
             {label:'Theorem 1.2',match:'Theorem 1\\.2',page:2},
+            {label:'Theorems 17.14 and 17.26, shared hypotheses',page:9},
             {label:'Theorem 17.14',page:15},{label:'Theorem 1.2(a)(i)',page:7}]});
 game.references.push({key:'other-work',aliases:['other-work'],file:'references/other-work.pdf',title:'Another paper',pages:10,default_page:3,
  locations:[{label:'Proof of Theorem 1.2, printed page 4',match:'Proof of Theorem 1\\.2, printed page 4',page:6}]});
@@ -64,6 +65,10 @@ for(const [text,expected] of [
 ]){
  const links=all(render(text),x=>x.tag==='a');assert.deepEqual(links.map(x=>x.href),expected,text);checks++;
 }
+const citedPaper=game.references.find(ref=>ref.key==='paper');
+citedPaper.locations.push({label:'Theorem  17.14',page:16});
+assert.deepEqual(all(render('See \\cite{paper}, Theorem 17.14.'),x=>x.tag==='a').map(x=>x.href),['/references/paper.pdf']);checks++;
+citedPaper.locations.pop();
 for(const text of ['\\begin{alignat}{2}x&=1 &\\quad y&=2\\end{alignat}','\\begin{flalign}x&=1 & y&=2\\end{flalign}','\\begin{alignat*}{1}x&=1\\end{alignat*}']){
  const node=render(text);assert.equal(all(node,x=>Boolean(x.math)).length,1);assert(!node.textContent.includes('begin{'));checks++;
 }
