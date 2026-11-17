@@ -26,7 +26,7 @@ You can attach a LaTeX file, Markdown notes, or a PDF, or paste an arXiv link. A
 | Bring | Take away |
 | --- | --- |
 | **Your unpublished work** | A shareable game and a complete English paper in PDF and LaTeX, built from the same reviewed script. |
-| **A public paper** | A game that follows the edition you chose. If review confirms a substantive flaw in the original, you also receive a PDF referee report. |
+| **A public paper** | A game that follows the edition you chose, plus a generic PDF referee report based on the original paper and the final reviewed game script. |
 
 Proof2Game keeps your original and builds a separate English game script. Independent Codex reviewers check the argument and the cited results. For public papers, a separate reviewer checks the route against the exact edition you supplied. For unpublished work, the team explores whether the proof can be made simpler.
 
@@ -75,7 +75,7 @@ One Codex session coordinates the work. Each specialist takes a different part o
       <p align="center"><img src="docs/agents/writer.webp" width="144" alt="A heron with a fountain pen and manuscript pages"></p>
       <strong>Writer</strong><br>
       <em>“Let's get the argument onto the page.”</em><br>
-      Writes an English paper for unpublished work or documents confirmed flaws in a public paper.
+      Writes an English paper for unpublished work or a referee report comparing a public paper with the final reviewed game script.
     </td>
     <td width="50%" valign="top">
       <p align="center"><img src="docs/agents/tutor.webp" width="144" alt="A tortoise teaching with a chalkboard"></p>
@@ -101,8 +101,8 @@ If you already have a verified release checkout, use it and let Proof2Game check
 ```sh
 proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.1.12 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.12"
-python3 "$proof2game_releases/v0.1.12/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch v0.1.13 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.13"
+python3 "$proof2game_releases/v0.1.13/skills/proof2game/scripts/release.py" verify
 ```
 
 Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)

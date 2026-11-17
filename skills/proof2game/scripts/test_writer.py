@@ -110,14 +110,14 @@ class WriterTests(unittest.TestCase):
         with self.assertRaisesRegex(writer.Rejected, "does not match"):
             writer.applicable_inputs("paper", self.main)
 
-    def test_public_needs_approved_finding_for_report_and_cannot_write_paper(self):
+    def test_legacy_public_findings_remain_bound_and_public_cannot_write_paper(self):
         target, report = self.public_input()
         self.assertEqual(writer.applicable_inputs("referee", self.main, target)["report_findings"][0]["id"], "F1")
         with self.assertRaisesRegex(writer.Rejected, "unpublished project"):
             writer.applicable_inputs("paper", self.main)
         self.approval["report_findings"] = []
         self.write(self.approval_path, self.approval)
-        with self.assertRaisesRegex(writer.Rejected, "no approved"):
+        with self.assertRaisesRegex(writer.Rejected, "approved manuscript comparison"):
             writer.applicable_inputs("referee", self.main, target)
         self.approval["report_findings"] = [{
             "id": "test", "location": "line 1", "original_conclusion": "all reals positive",
@@ -127,6 +127,48 @@ class WriterTests(unittest.TestCase):
         report.write_text("Unverified change.", encoding="utf-8")
         with self.assertRaisesRegex(writer.Rejected, "differs"):
             writer.applicable_inputs("referee", self.main, target)
+
+    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "MacTeX tools unavailable")
+    def test_public_comparison_without_findings_compiles_and_binds_both_inputs(self):
+        target, report = self.public_input()
+        original = self.task / "original.tex"
+        original.write_text("The two additive identities are x+0=x and 0+x=x.", encoding="utf-8")
+        original_record = writer.read_record(target)
+        original_record["sha256"] = writer.digest(original.read_bytes())
+        self.write(target, original_record)
+        self.approval.update(referee_comparison=True, report_findings=[], report_sha256=None,
+                             original_sha256=original_record["sha256"])
+        self.write(self.approval_path, self.approval)
+        report.rename(report.with_name("unrelated-notes.md"))
+        read_inputs = lambda: writer.applicable_inputs("referee", self.main, target)
+        self.assertEqual(read_inputs()["report_findings"], [])
+        tex = self.draft_document("referee", r"""
+\paragraph{Scope.} Original version v2 (2024-01-02).
+\paragraph{Assessment.} The two additive identities are unchanged. The game's proof of the
+left identity makes the use of commutativity explicit.
+""")
+        candidate = writer.compile_delivery("referee", tex, self.bundle, "pdflatex", read_inputs)
+        comparison = {"plus-zero": {"original": "line 1, first identity", "script": "target.tex and proof.tex",
+                                    "report": "p. 1, Assessment"}}
+        checks = self.self_check(candidate, scope="Both results were compared with the original.",
+                                 comparison=comparison, findings={})
+        self.write(self.checks_path, checks)
+        with self.assertRaisesRegex(writer.Rejected, "Compare every approved target"):
+            writer.finish_delivery("referee", self.bundle, self.checks_path, read_inputs)
+        comparison["zero-plus"] = {"original": "line 1, second identity", "script": "other.tex and other-proof.tex",
+                                   "report": "p. 1, Assessment"}
+        self.write(self.checks_path, checks)
+        finished = writer.finish_delivery("referee", self.bundle, self.checks_path, read_inputs)
+        self.assertEqual(finished, writer.verify_delivery("referee", self.bundle, read_inputs))
+        script = self.snapshot / "other-proof.tex"
+        unchanged = script.read_bytes()
+        script.write_text("Changed proof.", encoding="utf-8")
+        with self.assertRaisesRegex(writer.Rejected, "does not match"):
+            writer.verify_delivery("referee", self.bundle, read_inputs)
+        script.write_bytes(unchanged)
+        original.write_text("A different original.", encoding="utf-8")
+        with self.assertRaisesRegex(writer.Rejected, "bytes differ"):
+            writer.verify_delivery("referee", self.bundle, read_inputs)
 
     def test_latex_rejects_work_identity_declarations(self):
         with self.assertRaisesRegex(writer.Rejected, "Omit work title"):

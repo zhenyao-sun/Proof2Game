@@ -113,12 +113,17 @@ def applicable_inputs(kind, main=None, target=None, withdrawal=None):
     require(approval.get("cutoff") == original["public_date"]
             and approval.get("original_sha256") == original["sha256"],
             "The report authorization and original version do not agree.")
-    report = target_path.with_name("report.md")
-    require(report.is_file() and digest(report.read_bytes()) == approval.get("report_sha256"),
-            "The project report.md differs from the approved findings record.")
-
     findings = approval.get("report_findings")
-    require(isinstance(findings, list) and findings, "There are no approved original-text findings to report.")
+    comparison = withdrawal is None and approval.get("referee_comparison") is True
+    require(isinstance(findings, list) and (findings or comparison),
+            "An approved manuscript comparison or original-text findings are required.")
+    report_sha256 = approval.get("report_sha256")
+    if findings:
+        report = target_path.with_name("report.md")
+        require(report.is_file() and digest(report.read_bytes()) == report_sha256,
+                "The project report.md differs from the approved findings record.")
+    else:
+        require(report_sha256 is None, "An empty findings record cannot bind a project report.")
     ids = set()
     for finding in findings:
         require_text(finding, ("id", "location", "original_conclusion", "evidence", "verification"), "finding")
@@ -127,9 +132,11 @@ def applicable_inputs(kind, main=None, target=None, withdrawal=None):
         if "confirmed_revision" in finding:
             require_text(finding["confirmed_revision"], ("new_conclusion", "user_confirmation"), "confirmed revision")
 
+    if comparison:
+        inputs["referee_comparison"] = True
     return inputs | {
         "target": {key: original.get(key) for key in ("version", "public_date", "sha256")},
-        "report_sha256": approval["report_sha256"],
+        "report_sha256": report_sha256,
         "report_findings": findings,
         "withdrawal": approval.get("withdrawal") if withdrawal else None,
     }
@@ -278,6 +285,12 @@ def check_evidence(checks, inputs, candidate):
             require_text(locations, ("statement", "proof"), f"target {target}")
     else:
         require_text(checks, ("scope",), "referee scope check")
+        if inputs.get("referee_comparison"):
+            compared = checks.get("comparison")
+            require(isinstance(compared, dict) and set(compared) == set(inputs["targets"]),
+                    "Compare every approved target with the preserved original and locate its treatment in the report.")
+            for target, locations in compared.items():
+                require_text(locations, ("original", "script", "report"), f"comparison for target {target}")
         covered = checks.get("findings")
         require(isinstance(covered, dict) and set(covered) == {finding["id"] for finding in inputs["report_findings"]},
                 "Locate every approved finding in the rendered referee report.")

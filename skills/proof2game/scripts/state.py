@@ -955,12 +955,11 @@ def verify_approval(task, state):
         "report_findings": state["findings"], "report_sha256": report,
         "original_sha256": state["target"]["sha256"], "build": build_result,
     }
+    public = state["target"]["project_type"] == "public"
+    if public:
+        approval["referee_comparison"] = True
     atomic_write(install / "approval.json", json_bytes(approval))
-    kinds = ["game"]
-    if state["target"]["project_type"] == "unpublished":
-        kinds.append("paper")
-    elif state["findings"]:
-        kinds.append("referee")
+    kinds = ["game", "referee" if public else "paper"]
     state["delivery"] = {"snapshot_digest": digest, "approval_path": str((install / "approval.json").relative_to(task)),
                          "approval": approval, "products": {kind: {"status": "pending"} for kind in kinds}}
     state["phase"] = "delivery"

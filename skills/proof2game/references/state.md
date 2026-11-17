@@ -143,7 +143,10 @@ changes using the same workflow. Never reinitialize around an existing legacy le
 
 After `advance` at a guided approval, read `state.delivery`: the same immutable filtered
 `main.tex` and adjacent `approval.json` supply both downstream workers. No currently
-discarded material is copied by the snapshot projector. Report-only withdrawal has
+discarded material is copied by the snapshot projector. Public approvals schedule both
+`game` and `referee`, with `referee_comparison: true` binding Writer's comparison of
+the snapshot to the preserved original. Confirmed original-text findings are included
+when present. Unpublished approvals schedule `game` and `paper`. Report-only withdrawal has
 `snapshot_digest:null` and a distinct withdrawal certificate; it authorizes only Writer's
 public referee report. No game/paper is generated for the unpublished last-target branch.
 

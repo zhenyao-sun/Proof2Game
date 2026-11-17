@@ -5,7 +5,8 @@ Writer runs inside guided delivery. Use the configured Writer model and effort (
 ## Choose the delivery
 
 - **Unpublished project with active targets.** Write a complete English paper from the same filtered approved snapshot used by the game. Cover every active target in Main Results. Hand the user the checked compiled PDF and the independent LaTeX source directory with all necessary resources.
-- **Public project with approved original-text findings.** Write an English referee report using the exact original, the project's `report.md`, and the approved version of the game script. When the user confirms withdrawal of the final target on verified evidence, start the report directly using the preserved original and the withdrawal record. Hand the user the checked compiled referee PDF.
+- **Public project with active targets.** Write a generic English referee report for the exact original. Compare it with the same final approved script used by the game. Deliver the checked compiled PDF even when there are no confirmed flaws.
+- **Public project with confirmed withdrawal of the final target.** Use the preserved original, verified findings and withdrawal record. Deliver the checked compiled referee PDF.
 - In guided mode these deliveries and the game can proceed in parallel when applicable. The coordinator checks that the receipt is still current, hands over each checked artifact individually, and completes the same Goal after every applicable artifact has been checked and handed over. The coordinator retains receipt and validation records for recovery.
 
 ## Complete paper
@@ -18,9 +19,11 @@ Retain each accepted target's strength, scope, hypotheses and proof route. Reade
 
 ## Referee report
 
-Identify the exact processed original version and publication date. For every approved finding, state the precise source locator (e.g. page and equation), the verified counterexample or other checkable evidence, and the affected original conclusion. Include approved findings from discarded dependencies. A necessary detour and replacement proof stay in the game script and project verification record. When the user has confirmed a revised target, state the original conclusion, counterexample and confirmed new conclusion. For a final target withdrawal, state the documented withdrawal after explaining the original conclusion and verified evidence. Start with [writer-referee.tex](../assets/writer-referee.tex).
+Identify the exact original version and publication date. Address a general mathematical audience without choosing a target journal or applying a venue's editorial criteria. Compare each active target and the reasoning that supports it with the corresponding material in the original. Use the differences to decide which comments matter to a reader of the original and how much explanation to give. Summarize the contribution and give a scoped assessment. Include substantive clarifications, suggestions and corrections supported by the comparison, with precise original locations. Treat reorganization for the game and equivalent presentations as such. When no substantive flaw was confirmed, give the assessment and any warranted suggestions without inventing a finding or claiming to have certified the entire paper. Use the completed verification as evidence and carry out the comparison without repeating the mathematical review workflow. Start with [writer-referee.tex](../assets/writer-referee.tex).
 
-Use the project's preserved original and `report.md` to check the structured findings and locators. The coordinator binds the approved report to the original's SHA-256 in `original_sha256` and the report's SHA-256 in `report_sha256`. Its `report_findings` has one record per approved finding, with nonempty `id`, `location`, `original_conclusion`, `evidence` and `verification`, and optional `confirmed_revision` containing `new_conclusion` and `user_confirmation`. These are locatable records from the underlying mathematical work. The snapshot-free final-withdrawal authorization has `schema: 1`, `kind: "referee"`, `project_type: "public"`, `reason: "last-target-withdrawn"`, `snapshot_digest: null`, the fixed `cutoff`, the same findings bindings, and `withdrawal` with `targets` (list of withdrawn target labels), `counterexample`, `evidence` and `user_confirmation`.
+For every approved finding, including findings from discarded dependencies, give the original location, verified counterexample or other checkable evidence, and affected original conclusion. When the user has confirmed a revised target, state the original conclusion, evidence and confirmed new conclusion. Keep complete replacement proofs in the game script and verification record. For a final target withdrawal, explain the original conclusion and evidence before stating the documented withdrawal.
+
+The approved snapshot binds the preserved original by `original_sha256` and records `referee_comparison: true`. When findings exist, use the bound project `report.md` as supporting evidence and check its `report_sha256`. The `report_findings` list is empty when no hard finding was confirmed; otherwise each record has nonempty `id`, `location`, `original_conclusion`, `evidence` and `verification`, and optional `confirmed_revision` with `new_conclusion` and `user_confirmation`. The snapshot-free final-withdrawal authorization has `schema: 1`, `kind: "referee"`, `project_type: "public"`, `reason: "last-target-withdrawn"`, `snapshot_digest: null`, the fixed `cutoff`, the findings bindings, and `withdrawal` with `targets`, `counterexample`, `evidence` and `user_confirmation`.
 
 ## Compile and check
 
@@ -30,7 +33,7 @@ These commands are internal to guided delivery. Substitute real absolute paths. 
 # Unpublished project
 inputs=(--kind paper --main "$snapshot/main.tex")
 
-# Or verified public project with approved findings
+# Or verified public project with active targets
 inputs=(--kind referee --main "$snapshot/main.tex" --target "$task/target.json")
 
 # Or final public withdrawal
@@ -42,7 +45,12 @@ python3 "$skill/scripts/writer.py" compile "${inputs[@]}" --tex "$draft/main.tex
 
 Keep draft TeX and local compile resources in a dedicated source directory. Put build output in a separate new bundle directory. Use MacTeX's `latexmk` and `kpsewhich` from the configured execution environment. The compile step copies local sources, compiles them using the selected engine, checks the dependency recorder for external inputs, rejects unresolved or unstable references, then emits a candidate record and actual PDF. Keep this evidence with the build.
 
-Open the compiled PDF locally. Check document text, cross-references, citation targets, page and equation numbering, and math renderings in context. Check that the checked PDF and draft correspond. For the paper, compare all target statements and proof locations, assumptions and proof fidelity against the snapshot. For a referee report, compare wording, displayed math, citations, source locators and claims with the exact original and verified findings. Document actual observations and locations in a JSON self-check using the candidate's `input_digest`, `source_digest` and `pdf_sha256`. Include `worker_session`, `model`, `effort`, `render` and `references`. For paper add `fidelity` and `targets`, an object keyed by all target labels with `statement` and `proof` PDF locations. For referee add `scope` and `findings`, an object keyed by all approved finding IDs with `original_location`, `evidence` and `affected_conclusion` PDF locations. Include `confirmed_revision` location for findings with a confirmed revision and `withdrawal` location for final withdrawal. Correct ordinary writing or report transcription errors and compile a fresh candidate if needed.
+Open the compiled PDF locally. Check document text, cross-references, citation targets, page and equation numbering, and math renderings in context. Verify the PDF against the draft and record actual observations in a JSON self-check using the candidate's `input_digest`, `source_digest` and `pdf_sha256`. Include `worker_session`, `model`, `effort`, `render` and `references`.
+
+- For a paper, check statement and proof fidelity against the snapshot. Add `fidelity` and `targets`, an object keyed by every target label with its `statement` and `proof` PDF locations.
+- For a referee report, check its wording, mathematics, source locators and claims against the exact original, the script when available, and all verified findings. Add `scope` and `findings`, an object keyed by every approved finding ID with `original_location`, `evidence` and `affected_conclusion` PDF locations. Use an empty object when there are no findings. Include a `confirmed_revision` location for each finding with a confirmed revision and a `withdrawal` location for final withdrawal. When the approval has `referee_comparison: true`, also add `comparison`, an object keyed by every active target with nonempty `original`, `script` and `report` locators. A shared assessment in the report can cover several targets.
+
+Correct writing or transcription errors and compile a fresh candidate if needed.
 
 ```bash
 python3 "$skill/scripts/writer.py" finish "${inputs[@]}" --bundle "$bundle" --checks "$checks"

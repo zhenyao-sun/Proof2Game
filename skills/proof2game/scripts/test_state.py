@@ -457,6 +457,10 @@ class Ledger(unittest.TestCase):
         self.assertEqual(self.evaluate(), "route")
         self.result(self.action(role="public_route"), "pass")
         approval = self.change("advance")["delivery"]
+        self.assertEqual(set(approval["products"]), {"game", "referee"})
+        self.assertTrue(approval["approval"]["referee_comparison"])
+        self.assertEqual(approval["approval"]["report_findings"], [])
+        self.assertIsNone(approval["approval"]["report_sha256"])
         self.change("incident", kind="counterexample", snapshot_digest=approval["snapshot_digest"],
                     evidence="recheck a potential public counterexample", components=["main-proof"])
         fixer = self.bind(self.action(role="fixer"))
