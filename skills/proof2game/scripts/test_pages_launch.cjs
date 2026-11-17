@@ -173,7 +173,8 @@ test('a real Pages export downloads, starts the local runtime and restores a sav
   assert.match(preflight.headers.get('access-control-allow-headers'), /Authorization/);
   assert.equal(preflight.headers.get('access-control-allow-credentials'), null);
   assert.equal((await fetch(address + '/api/bridge', {headers})).status, 403);
-  assert.match(await fs.readFile(path.join(website,'play/index.html'),'utf8'), /src="\.\/app\.js"/);
+  assert.match(await fs.readFile(path.join(website,'play/index.html'),'utf8'), /src="\.\/app\.js\?release=v[\d.]+"/);
+  assert.match(await fs.readFile(path.join(website,'index.html'),'utf8'), /src="\.\/launch\.js\?release=v[\d.]+"/);
   assert.doesNotMatch(await fs.readFile(path.join(website,'launch.js'),'utf8'), /location\.replace/);
   async function session(origin) {
     const homepage = await fetch(origin);

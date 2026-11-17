@@ -604,9 +604,11 @@ def site_digest(inventory):
 
 
 def hosted_frontend(runtime):
+    release = (runtime.parents[3] / 'VERSION').read_text(encoding='ascii').strip()
     index = (runtime / 'index.html').read_text(encoding='utf-8')
     index = index.replace('src="/', 'src="./').replace('href="/', 'href="./')
     index = index.replace('href="./" aria-label="Proof2Game home"', 'href="./index.html" aria-label="Proof2Game home"')
+    index = index.replace('src="./app.js"', f'src="./app.js?release={release}"')
     index = index.replace('href="./api/save/export"', 'href="/api/save/export"')
     policy = ("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
               "img-src 'self' data:; font-src 'self'; connect-src http://127.0.0.1:*; "
@@ -645,6 +647,9 @@ def export_pages(output, game, content, script, verify_delivery):
     with tempfile.TemporaryDirectory(prefix='.proof2game-pages-', dir=output.parent) as td:
         stage = Path(td) / 'site'
         shutil.copytree(assets, stage)
+        launch = stage / 'index.html'
+        launch.write_text(launch.read_text(encoding='utf-8').replace(
+            'src="./launch.js"', f'src="./launch.js?release={release}"'), encoding='utf-8')
         (stage / '.nojekyll').touch()
         for name, payload in data.items():
             if (name != 'game.json' and not name.startswith(('snapshot/', 'translation/zh/'))) or any(
