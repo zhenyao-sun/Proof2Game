@@ -92,6 +92,15 @@ One Codex session coordinates the work. Each specialist takes a different part o
 
 Give the game ZIP to ChatGPT Desktop or Codex and ask it to launch the game on your Mac. It will open in your browser. The game and saves live on your computer. Tutor replies use your own Codex login and an internet connection.
 
+A shared GitHub Pages link opens a launch page. Copy its prompt into Codex
+on your Mac and leave the tab open. Allow the connection if your browser asks.
+The same tab opens the game when the connector is ready. You can also open the
+local game address from Codex directly. You need Node.js 20 or later and your
+own Codex login.
+
+Authors can [export and publish a game directory to GitHub Pages](skills/proof2game/references/game.md#export-a-shareable-link)
+from the approved bilingual snapshot.
+
 ## Manual setup
 
 Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players can run an exported game with Node.js 20 or later. The PDF navigation check uses `pdftotext` or `pypdf`.
@@ -101,8 +110,8 @@ If you already have a verified release checkout, use it and let Proof2Game check
 ```sh
 proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.1.15 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.15"
-python3 "$proof2game_releases/v0.1.15/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch v0.1.16 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.16"
+python3 "$proof2game_releases/v0.1.16/skills/proof2game/scripts/release.py" verify
 ```
 
 Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)

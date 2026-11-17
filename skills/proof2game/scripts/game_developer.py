@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from urllib.parse import urlsplit
 
 import manuscript
 from sources import published_by
@@ -590,12 +591,62 @@ Each revision of the game script needs a new game package.
 '''
 
 
+def public_reference_url(value):
+    if not isinstance(value, str) or any(char.isspace() or ord(char) < 32 for char in value):
+        return ''
+    try:
+        url = urlsplit(value)
+    except ValueError:
+        return ''
+    if url.scheme == 'https' and url.hostname and url.username is None and url.password is None:
+        return value
+    return ''
+
+
+def export_pages(output, game, content, script, verify_delivery):
+    """Stage a static site with game data and a launch page. Publication is separate."""
+    # Bundled PDFs belong to the private ZIP. Retain verified citations and
+    # links to sources without republishing the supplied copies.
+    for ref in game['references']:
+        ref['source_url'] = public_reference_url(ref['source_url'])
+    game['distribution'] = 'pages'
+    game['reference_files'] = {}
+    data = {'game.json': canonical(game), **content}
+    release = (script.parents[3] / 'VERSION').read_text(encoding='ascii').strip()
+    if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', release):
+        raise Rejected('Pages export requires a numbered Proof2Game release.')
+    manifest = dict(schema=1, connector=release, files={
+        name: dict(sha256=sha(payload), size=len(payload)) for name, payload in sorted(data.items())
+    })
+    if len(data) > 2048 or sum(map(len, data.values())) > 128 * 1024 * 1024:
+        raise Rejected('This game exceeds the Pages launch data limit.')
+    assets = script.parents[1] / 'assets/pages-launch'
+    with tempfile.TemporaryDirectory(prefix='.proof2game-pages-', dir=output.parent) as td:
+        stage = Path(td) / 'site'
+        shutil.copytree(assets, stage)
+        (stage / '.nojekyll').touch()
+        for name, payload in data.items():
+            if (name != 'game.json' and not name.startswith(('snapshot/', 'translation/zh/'))) or any(
+                not part or part.startswith('.') or any(c in '%\\?#' or ord(c) < 32 for c in part)
+                for part in name.split('/')
+            ):
+                raise Rejected('Unsupported filename for Pages export: ' + name)
+            target = stage / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+        (stage / 'proof2game.json').write_bytes(canonical(manifest) + b'\n')
+        verify_delivery()
+        if output.exists():
+            raise Rejected('Output already exists; select a new name.')
+        stage.rename(output)
+
+
 def export(main, output, approval=None, source_bindings=None, references_dir=None, translation=None,
-           model='gpt-6.1-sol', reasoning='medium'):
+           model='gpt-6.1-sol', reasoning='medium', *, pages=False):
     if sys.platform != 'darwin':
         raise Rejected('Proof2Game generation is supported on macOS.')
     output = Path(output).resolve()
-    if output.suffix.lower() != '.zip':
+    if not pages and output.suffix.lower() != '.zip':
         raise Rejected('Output must be a .zip archive.')
     if output.exists():
         raise Rejected('Output already exists; select a new name to preserve the previous delivery.')
@@ -608,6 +659,14 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     if {name: sha(data) for name, data in chinese_files.items()} != {
             name: game['snapshot_files'][name] for name in game['chinese']['files']}:
         raise Rejected('The Chinese translation changed before packaging.')
+    def verify_delivery():
+        current, _, _, _, _ = eligibility(main, approval)
+        if current['snapshot_digest'] != game['approval_snapshot_digest']:
+            raise Rejected('The approved game script changed before delivery.')
+
+    result = dict(ok=True, output=str(output), game_id=game['id'], levels=len(game['levels']),
+                  approval_snapshot_digest=game['approval_snapshot_digest'], snapshot_files=len(files),
+                  manuscript_preserved=True, runtime_validation='pending')
     script = Path(__file__).resolve()
     runtime = script.parents[1] / 'assets/game-runtime'
     release_license = script.parents[3] / 'LICENSE'
@@ -619,6 +678,10 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     if not all((runtime / name).is_file() for name in required):
         raise Rejected('The installed game runtime is incomplete.')
     output.parent.mkdir(parents=True, exist_ok=True)
+    if pages:
+        export_pages(output, game, {'snapshot/' + name: data for name, data in files.items()} | chinese_files,
+                     script, verify_delivery)
+        return dict(result, distribution='pages', published=False)
     with tempfile.TemporaryDirectory(prefix='proof2game-export-') as td:
         archive = Path(td) / 'game.zip'
         with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
@@ -643,16 +706,12 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
                 f.write(archive.read_bytes())
                 f.flush()
                 os.fsync(f.fileno())
-            current, _, _, _, _ = eligibility(main, approval)
-            if current['snapshot_digest'] != game['approval_snapshot_digest']:
-                raise Rejected('The approved game script changed before delivery.')
+            verify_delivery()
             os.link(staged, output)
         finally:
             if os.path.exists(staged):
                 os.unlink(staged)
-    return dict(ok=True, output=str(output), game_id=game['id'], levels=len(game['levels']),
-                approval_snapshot_digest=game['approval_snapshot_digest'], snapshot_files=len(files),
-                manuscript_preserved=True, runtime_validation='pending')
+    return result
 
 
 def main():
@@ -666,6 +725,8 @@ def main():
     p.add_argument('--tutor-reasoning', default='medium', choices=('low', 'medium', 'high', 'xhigh', 'max', 'ultra'))
     p.add_argument('--translation', help='Complete Chinese translation JSON from the mathematics translator.')
     action = p.add_mutually_exclusive_group()
+    action.add_argument('--pages', action='store_true',
+                        help='Export a separate static GitHub Pages directory instead of a private ZIP.')
     action.add_argument('--check', action='store_true', help='Read-only eligibility check; no archive.')
     action.add_argument('--prepare-translation', action='store_true',
                         help='Print the eligible snapshot’s translation input JSON without generating an archive.')
@@ -687,7 +748,7 @@ def main():
                 p.error('--translation is required to export a game')
             translation = json.loads(Path(args.translation).read_text(encoding='utf-8'))
             result = export(args.main, args.output, args.approval, args.source_bindings,
-                            args.references, translation, args.tutor_model, args.tutor_reasoning)
+                            args.references, translation, args.tutor_model, args.tutor_reasoning, pages=args.pages)
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except (Rejected, manuscript.Invalid, OSError, ValueError) as exc:
         print(json.dumps(dict(ok=False, error=str(exc)), ensure_ascii=False))

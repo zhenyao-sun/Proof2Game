@@ -43,6 +43,35 @@ reviewed snapshot. Correct a translation-only defect in the game translation.
    A valid ZIP needs no author-specific directory or separate Proof2Game
    installation. Delivery includes the ZIP and the startup note.
 
+## Export a shareable link
+
+When the author requests link sharing, use the same approved bilingual
+snapshot and add `--pages` to the export command. Set `--output` to a
+new directory such as `"$OUTPUT/game-pages"`. The directory can be served
+unchanged by GitHub Pages over HTTPS. Choose the hosting repository or
+folder with the author and use its URL ending in a slash when sharing.
+
+Review the files before publishing them. The site contains the game data
+and the bilingual script and figures needed to play. It excludes the
+citation PDFs, source binding records, approval and review files, and
+player saves. Citations retain their verified page locators and link to
+HTTPS source records when present. The export command only writes local
+files. Publish only the game directory and only with the author's approval.
+
+Open the published URL and copy the prompt into Codex on a Mac. The prompt
+uses the official release tag stored in the export. The connector downloads
+game data over HTTPS, checks its manifest, and starts its own local runtime.
+The browser may ask for access to the computer. Once paired, the current
+tab opens the game on loopback. If it cannot pair, use the loopback address
+printed immediately by the connector. All play and save files live on the
+player's computer. The teacher uses the player's Codex login. For a direct
+launch without browser pairing, pass only the HTTPS manifest URL to
+`node "$SKILL/scripts/launch-pages.mjs"`.
+
+Check the share link, the original tab's transition, direct launch without
+pairing, and reopening the same game with its local progress. Record the
+tested browser and whether the tutor was connected to a live model.
+
 ## Check delivery
 
 Extract a copy into a temporary folder on macOS. Follow its START.md and

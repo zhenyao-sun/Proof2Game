@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' http://127.0.0.1:47682; base-uri 'none'; form-action 'none'">
+  <title>Open Proof2Game</title>
+  <link rel="stylesheet" href="./launch.css">
+  <script type="module" src="./launch.js"></script>
+</head>
+<body>
+  <main>
+    <p class="brand">Proof2Game</p>
+    <h1 id="heading">Open the game</h1>
+    <p id="instructions">Copy the prompt below and send it to a local agent such as Codex on your Mac. Keep this tab open.</p>
+    <button id="copy" type="button" disabled>Copy launch prompt</button>
+    <textarea id="prompt" rows="7" aria-label="Launch prompt" readonly hidden></textarea>
+    <p id="status" role="status"></p>
+    <p class="muted" id="fallback">If the browser asks, allow the connection to your computer. You can also open the local game address your agent gives you.</p>
+  </main>
+</body>
+</html>

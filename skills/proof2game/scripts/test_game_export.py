@@ -80,6 +80,7 @@ class GameExportTests(unittest.TestCase):
             'sha256': game.sha(original.read_bytes()), 'page_count': 2,
             'authors': ['Ada Example'], 'title': 'A synthetic note', 'version': 'v1', 'edition': 'preprint',
             'public_date': '2026-02', 'cited_locations_physical_pages': {'Lemma 1': [2]},
+            'record_url': 'https://example.test/synthetic-note',
         }
         bindings = self.root / 'sources.json'
         bindings.write_text(json.dumps({'sources': [dict(good_source, public_date='2026-04-15')]}))
@@ -112,6 +113,21 @@ class GameExportTests(unittest.TestCase):
             self.assertEqual(archive.read('vendor/fonts/OFL.txt'), (ASSETS / 'game-runtime/vendor/fonts/OFL.txt').read_bytes())
             self.assertNotIn('approval.json', archive.namelist())
             self.assertNotIn('sources.json', archive.namelist())
+
+        site = self.root / 'site'
+        page_result = game.export(self.main, site, source_bindings=bindings, translation=translation, pages=True)
+        self.assertEqual(page_result['game_id'], result['game_id'])
+        public_game = json.loads((site / 'game.json').read_bytes())
+        self.assertEqual(public_game['reference_files'], {})
+        self.assertEqual(public_game['references'][0]['source_url'], good_source['record_url'])
+        self.assertEqual(public_game['references'][0]['locations'][0]['page'], 2)
+        self.assertFalse(any(site.rglob('*.pdf')))
+        self.assertFalse((site / 'sources.json').exists())
+        self.assertFalse((site / 'approval.json').exists())
+        manifest = json.loads((site / 'proof2game.json').read_bytes())
+        for name, entry in manifest['files'].items():
+            data = (site / name).read_bytes()
+            self.assertEqual(entry, {'size': len(data), 'sha256': game.sha(data)})
 
 
 if __name__ == '__main__':

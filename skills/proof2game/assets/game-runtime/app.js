@@ -228,9 +228,14 @@
   }
 
   function referenceLink(ref,label,page){
-    const link=element('a','reference-link',label);
-    link.href='/'+ref.file+(page?'#page='+page:'');link.target='_blank';link.rel='noopener noreferrer';
-    link.title=ref.title+' · PDF'+(page?' · '+(language()==='中文'?'第 '+page+' 页':'p. '+page):'');return link;
+    const hosted=state.game.distribution==='pages';
+    const href=hosted?ref.source_url:'/'+ref.file+(page?'#page='+page:'');
+    const reference=element(href?'a':'span','reference-link',label);
+    if(href){
+      reference.href=href;reference.target='_blank';reference.rel='noopener noreferrer';
+    }
+    reference.title=ref.title+(hosted?'':' · PDF')+(page?' · '+(language()==='中文'?'第 '+page+' 页':'p. '+page):'');
+    return reference;
   }
   function appendReferenceText(parent,text){
     const refs=(state?.game?.references||[]).filter(r=>typeof r.file==='string'&&/^references\/[A-Za-z0-9._-]+\.pdf$/.test(r.file)&&!r.file.includes('..'));
