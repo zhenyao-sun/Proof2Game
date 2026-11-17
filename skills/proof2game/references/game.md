@@ -48,7 +48,8 @@ reviewed snapshot. Correct a translation-only defect in the game translation.
 
 ## Publish the website
 
-Deliver the checked static site directory to the author. Deploy to GitHub
+Register the website directory and the exporter’s `artifact_sha256` with the
+guided delivery ledger. Deliver the checked site to the author. Deploy to GitHub
 Pages only when authorized for that game. Share the HTTPS URL ending in a
 slash. One site is tied to one original version and one approved snapshot.
 A new version of the original leaves that site and its saves intact. A

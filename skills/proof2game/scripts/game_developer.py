@@ -588,6 +588,21 @@ def paper_metadata(record, metadata):
     return dict(title=title.strip(), authors=[author.strip() for author in authors], version=version.strip())
 
 
+def site_inventory(root):
+    inventory = {}
+    for path in sorted(root.rglob('*')):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise Rejected('Unexpected file type in game site: ' + path.name)
+        if path.is_file():
+            payload = path.read_bytes()
+            inventory[path.relative_to(root).as_posix()] = dict(sha256=sha(payload), size=len(payload))
+    return inventory
+
+
+def site_digest(inventory):
+    return sha(canonical(inventory))
+
+
 def export_pages(output, game, content, script, verify_delivery):
     """Stage a static site with game data and a launch page. Publication is separate."""
     for ref in game['references']:
@@ -671,7 +686,7 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     output.parent.mkdir(parents=True, exist_ok=True)
     export_pages(output, game, {'snapshot/' + name: data for name, data in files.items()} | chinese_files,
                  script, verify_delivery)
-    return dict(result, distribution='pages', published=False)
+    return dict(result, distribution='pages', published=False, artifact_sha256=site_digest(site_inventory(output)))
 
 
 def main():

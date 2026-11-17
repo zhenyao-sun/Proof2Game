@@ -12,7 +12,6 @@ import subprocess
 import sys
 import tempfile
 import uuid
-import zipfile
 
 import intake
 from intake import resolve_task_path
@@ -994,30 +993,46 @@ def withdrawal_delivery(task, state):
 
 
 def verify_game_artifact(artifact, approval_path, approval):
-    require(artifact.suffix == ".zip", "game must be the checked ZIP artifact")
-    with zipfile.ZipFile(artifact) as archive:
-        names = archive.namelist()
-        require(len(names) == len(set(names)), "game archive contains duplicate paths")
-        for name in names:
-            path = Path(name)
-            require(not path.is_absolute() and ".." not in path.parts, "game contains an unsafe archive path")
-        require({"game.json", "START.md", "server.mjs", "app.js", "index.html"} <= set(names),
-                "game archive is missing runtime files")
-        package = json.loads(archive.read("game.json"))
-        require(package.get("approval_snapshot_digest") == approval["snapshot_digest"]
-                and package.get("project_type") == approval["project_type"] and package.get("cutoff") == approval["cutoff"],
-                "game archive does not bind the active approved snapshot")
-        require([level["id"] for level in package["levels"]] == approval["components"]
-                and package["chinese"]["levels"].keys() == set(approval["components"]),
-                "game must include the approved English and Chinese levels in scope")
-        for name, expected in {**package["snapshot_files"], **package["reference_files"]}.items():
-            require(hashlib.sha256(archive.read(name)).hexdigest() == expected, f"game archive resource changed: {name}")
-        main = approval_path.with_name("main.tex")
-        snapshot = manuscript.parse(main)[0]
-        for relative in ["main.tex", *snapshot["resources"], *(row["path"] for row in snapshot["components"])]:
-            expected = file_digest(confined(main.parent, relative))
-            require(expected == package["snapshot_files"].get("snapshot/" + relative),
-                    f"game script resource differs from its approval: {relative}")
+    from game_developer import site_digest, site_inventory
+
+    require(artifact.is_dir(), "game must be the checked website directory")
+    inventory = site_inventory(artifact)
+    assets = {".nojekyll", "index.html", "launch.css", "launch.js", "proof2game.json"}
+    require(assets | {"game.json"} <= inventory.keys(), "game website is missing launch files")
+    manifest = read_json(artifact / "proof2game.json")
+    package = read_json(artifact / "game.json")
+    require(manifest.get("schema") == 1 and package.get("distribution") == "pages",
+            "game website schema or distribution is invalid")
+    require(package.get("approval_snapshot_digest") == approval["snapshot_digest"]
+            and package.get("project_type") == approval["project_type"] and package.get("cutoff") == approval["cutoff"],
+            "game website does not bind the active approved snapshot")
+    require([level["id"] for level in package["levels"]] == approval["components"]
+            and package["chinese"]["levels"].keys() == set(approval["components"]),
+            "game must include the approved English and Chinese levels in scope")
+    require(not package["reference_files"], "game website must not embed reference files")
+    require(manifest.get("paper") == package.get("paper")
+            and (approval["project_type"] != "public" or bool(package.get("paper"))),
+            "game website must bind the launch page's paper attribution")
+    data = {name: entry for name, entry in inventory.items() if name not in assets}
+    require(manifest.get("files") == data and data.keys() == {"game.json"} | package["snapshot_files"].keys(),
+            "game website contains missing, changed or unexpected files")
+    for name, expected in package["snapshot_files"].items():
+        path = Path(name)
+        require(name.startswith(("snapshot/", "translation/zh/")) and path.suffix.lower() not in (".pdf", ".md")
+                and data[name]["sha256"] == expected, f"invalid game website resource: {name}")
+    main = approval_path.with_name("main.tex")
+    snapshot = manuscript.parse(main)[0]
+    for relative in ["main.tex", *snapshot["resources"], *(row["path"] for row in snapshot["components"])]:
+        expected = file_digest(confined(main.parent, relative))
+        require(expected == package["snapshot_files"].get("snapshot/" + relative),
+                f"game script resource differs from its approval: {relative}")
+    return site_digest(inventory)
+
+
+def checked_artifact_digest(kind, artifact, approval_path, approval):
+    if kind == "game" and artifact.is_dir():
+        return verify_game_artifact(artifact, approval_path, approval)
+    return file_digest(artifact)
 
 
 def deliverable(task, state, request):
@@ -1041,10 +1056,10 @@ def deliverable(task, state, request):
         require(product["status"] in ("pending", "blocked"), "product check was already recorded")
         artifact = confined(task, request["artifact"])
         expected = evidence(request.get("sha256"))
-        require(file_digest(artifact) == expected, "artifact bytes differ from its check receipt")
-        if kind == "game":
-            verify_game_artifact(artifact, approval_path, delivery["approval"])
-        else:
+        actual = (verify_game_artifact(artifact, approval_path, delivery["approval"]) if kind == "game"
+                  else file_digest(artifact))
+        require(actual == expected, "artifact bytes differ from its check receipt")
+        if kind != "game":
             import writer
             main = approval_path.with_name("main.tex") if delivery["snapshot_digest"] else None
             withdrawal = approval_path if main is None else None
@@ -1056,7 +1071,9 @@ def deliverable(task, state, request):
                        evidence=evidence(request.get("evidence")))
     elif status == "delivered":
         require(product["status"] == "checked", "check the artifact before delivering it")
-        require(file_digest(confined(task, product["artifact"])) == product["sha256"], "checked artifact changed before delivery")
+        artifact = confined(task, product["artifact"])
+        actual = checked_artifact_digest(kind, artifact, approval_path, delivery["approval"])
+        require(actual == product["sha256"], "checked artifact changed before delivery")
         product.update(status=status, message_receipt=evidence(request.get("evidence")))
         if all(item["status"] == "delivered" for item in delivery["products"].values()):
             state["phase"] = "complete"
@@ -1360,7 +1377,7 @@ def main():
         request = {"op": "status"} if arguments.status else (
             read_json(arguments.request) if arguments.request else json.load(sys.stdin))
         print(json.dumps(transact(arguments.task, request), ensure_ascii=False))
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, zipfile.BadZipFile) as exc:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
         print(json.dumps({"error": str(exc), "committed": False}, ensure_ascii=False), file=sys.stderr)
         return 2
     return 0

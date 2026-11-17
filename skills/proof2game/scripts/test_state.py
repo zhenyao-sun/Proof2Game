@@ -4,7 +4,6 @@ import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
-import zipfile
 
 import game_developer
 import intake
@@ -113,12 +112,12 @@ class Ledger(unittest.TestCase):
         self.change("pause", kind="user", evidence="fixture user temporarily paused delivery")
         self.assertEqual(self.change("refactor-decision", decision="resume", confirmation="fixture user resumed")["phase"],
                          "delivery")
-        invalid_game = self.task / "deliveries" / "bad.zip"
-        with zipfile.ZipFile(invalid_game, "w") as fixture:
-            fixture.writestr("game.json", "{}")
-        with self.assertRaisesRegex(state.Rejected, "runtime files"):
+        invalid_game = self.task / "deliveries" / "bad-site"
+        invalid_game.mkdir()
+        (invalid_game / "game.json").write_text("{}")
+        with self.assertRaisesRegex(state.Rejected, "launch files"):
             self.change("deliverable", kind="game", snapshot_digest=product["snapshot_digest"], status="checked",
-                        artifact="deliveries/bad.zip", sha256=state.file_digest(invalid_game), evidence="fixture attempted substitution")
+                        artifact="deliveries/bad-site", sha256="unused", evidence="fixture attempted substitution")
         main = certificate.with_name("main.tex")
         _, full = state.manuscript.parse(main)
         translation = game_developer.translation_input(product["snapshot_digest"], game_developer.resource_closure(main, full))
@@ -136,11 +135,18 @@ class Ledger(unittest.TestCase):
                 for phrase, translated in substitutions.items():
                     source = source.replace(phrase, translated)
                 translation["files"][name] = source
-        game = self.task / "deliveries" / "example.zip"
-        game_developer.export(main, game, translation=translation)
+        game = self.task / "deliveries" / "example-site"
+        export = game_developer.export(main, game, translation=translation)
         self.change("deliverable", kind="game", snapshot_digest=product["snapshot_digest"], status="checked",
-                    artifact="deliveries/example.zip", sha256=state.file_digest(game),
+                    artifact="deliveries/example-site", sha256=export["artifact_sha256"],
                     evidence="fixture game passed mechanical validation")
+        launch = game / "launch.js"
+        original = launch.read_bytes()
+        launch.write_bytes(original + b"\n")
+        with self.assertRaisesRegex(state.Rejected, "changed before delivery"):
+            self.change("deliverable", kind="game", snapshot_digest=product["snapshot_digest"], status="delivered",
+                        evidence="fixture attempted a changed launch script")
+        launch.write_bytes(original)
         self.change("deliverable", kind="game", snapshot_digest=product["snapshot_digest"], status="delivered",
                     evidence="synthetic chat delivery fixture")
         self.assertEqual(self.data["state"]["phase"], "delivery")
