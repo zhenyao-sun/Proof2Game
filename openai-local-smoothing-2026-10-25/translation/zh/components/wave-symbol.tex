@@ -1,0 +1,29 @@
+设 $n\ge2$、$d=n-1$，取标准正交空间标架 $X=(x,b)\in\mathbb R^d\times\mathbb R$。令
+\[
+t=(T+b)/\sqrt2,\qquad s_0=(b-T)/\sqrt2,\qquad \mathsf X=(t,x,s_0).
+\]
+对于频率 $\xi=(\xi_x,\xi_b)$，若 $\xi_b+|\xi|>0$，令
+\[
+\kappa=(\xi_b+|\xi|)/\sqrt2,\qquad v=\xi_x/\kappa,\qquad
+u_{\kappa,v}=c_{\kappa,v}\exp\!\left(\mathrm i\kappa(s_0+v\cdot x-|v|^2t/2)\right),
+\]
+其中 $\mathrm i$ 为 Fourier 变换中的通常虚单位。这就是物理相位为 $X\cdot\xi-T|\xi|$ 的平面波。令 $E_{ab}$ 为基本 $n\times n$ 矩阵，其指标为 $0\le a,b\le d$，令
+\[
+C^t=2E_{00},\qquad C^{x_j}=E_{0j}+E_{j0},\qquad C^{s_0}=-\sum_{j=1}^d E_{jj},
+\qquad \mathcal P=\sum_\mu C^\mu\partial_{\mathsf X^\mu},
+\]
+再令 $C(p)=\sum_\mu p_\mu C^\mu$。给定 $p=\kappa(-|v|^2/2,v,1)$，
+\[
+-C(p)=\kappa
+\begin{pmatrix}|v|^2&-v^{\mathsf t}\\-v&I_d\end{pmatrix},
+\qquad -w^{\mathsf t}C(p)w=\kappa|w'-vw_0|^2\quad(w=(w_0,w')\in\mathbb R^n).
+\]
+核由 $E(v)=(1,v)^{\mathsf t}$ 张成，且整个向量波
+\[
+f_{\rm sys}=\sum_{\kappa,v}\kappa^{d/2}E(v)u_{\kappa,v}
+\]
+满足 $\mathcal P f_{\rm sys}=0$。这里在任意有限多个互异频率 $\xi$ 上求和，其中 $\xi_b+|\xi|>0$，以 $(\kappa,v)$ 对频率重新标记，系数 $c_{\kappa,v}\in\mathbb C$ 任取。对实状态 $w_1,w_2\in\mathbb R^n$，令 $z=w_1+\mathbf k w_2=(R,\zeta)\in\mathbb C_{\mathbf k}\times\mathbb C_{\mathbf k}^d$，其中 $\mathbb C_{\mathbf k}=\mathbb R+\mathbf k\mathbb R$ 和 $\mathbf k^2=-1$。位移
+\[
+q^\mu=\tfrac12\sum_{\ell=1}^2w_\ell^{\mathsf t}C^\mu w_\ell=\tfrac12z^*C^\mu z
+\]
+将每个在 $\mathsf X-\mathrm i q$ 处的模式乘以 $e^{p\cdot q}=\exp(-\kappa|\zeta-vR|^2/2)$。对每个固定的 $R$，$\kappa^{d/2}e^{p\cdot q}$ 的平方积分为 $\pi^d$，积分在 $\zeta\in\mathbb C_{\mathbf k}^d$ 上进行，其 $2d$ 个实坐标采用通常的 Lebesgue 测度。

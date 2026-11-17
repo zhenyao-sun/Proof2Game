@@ -1,0 +1,29 @@
+The zero polynomial is immediate. For nonzero data, normalize
+\(\|f\|_2=1\) and fix the aperture \(\gamma\) and the constant
+\(K\) of \ref{ms:prop-5-1} for the given annulus. First assume
+\(h<1/(8K)\). Put \(a=Kh\), \(b=2a\), and write
+\(E(T,\tau)=\mathcal F(T,\tau)\) for the energy of Proposition~\ref{ms:prop-5-1}. This proposition supplies nonnegativity and smoothness on the open annulus \(a<|\tau|<4\), which contains the closed annulus \(b\le|\tau|\le3\). It also gives
+\(\Delta_{T,\tau}E\le V(|\tau|)E\) on \(b<|\tau|<3\), with
+\(V(s)=Cs^{-2}e^{-cs/h}\). For \ref{ms:lemma-6-1} the required
+integral is uniformly bounded because
+\[
+ \int_b^3s\log(s/b)V(s)\,ds
+ \le C\int_1^\infty \frac{\log t}{t}\,e^{-2cKt}\,dt .
+\]
+Also \(V\) is uniformly bounded on \([1/2,3/2]\). The bounds of
+\ref{ms:prop-5-1} at the two circles hold uniformly on each
+circle. Thus the circular mean \(H\) of \(E\) satisfies
+\[
+ H(0,2b)\le Ca^2\|f\|_{p_c}^{p_c},\qquad
+ H(T,b)\ge ca^2\|U(T)f\|_{p_c}^{p_c}\quad(1\le T\le2).
+\]
+Use \ref{ms:lemma-6-1} at \(r=2b\), cancel \(a^2\), and take
+\(p_c\)-th roots. This gives the claim because \(K\) is fixed and
+\(\log(3/(2Kh))\lesssim\log(2/h)\).
+The resulting inequality is homogeneous, so the normalization is
+removed by rescaling. When \(h\ge1/(8K)\) all contributing
+frequencies are in the fixed ball \(|\xi|\le8KC_0\).
+The Fourier coefficient at each such frequency is bounded by
+a constant times \(\|f\|_{p_c}\) by Hölder's inequality, and
+\(e^{-iT|\xi|}\) has modulus one. Summing the resulting finitely
+many pointwise bounds proves the estimate in this range as well.

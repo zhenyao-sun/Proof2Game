@@ -1,0 +1,15 @@
+对于四元数 Hermitian $m\times m$ 矩阵，令 $A:B=\operatorname{Re}\operatorname{tr}(AB)$。用 $\det A$ 表示 Moore 行列式，即将所有实特征值按四元数重数计入后相乘。它是次数为 $m$ 的齐次多项式。其余子式矩阵 $C(A)$ 是由下式确定的 Hermitian 矩阵
+\[
+C(A):B=\left.\frac{d}{dt}\det(A+tB)\right|_{t=0}.
+\]
+它是次数为 $m-1$ 的多项式，且 $C(A)=(\det A)A^{-1}$ 对 $A>0$ 成立。对 $A\ge0$，有 $C(A)\ge0$；若 $A$ 同时是奇异矩阵，$C(A)$ 在 $A$ 的像上为零。在正定矩阵上，$\log\det$ 是凹函数，并且关于矩阵序单调递增。
+
+对每个 Hermitian 矩阵 $A$、单位向量 $v\in\mathbb H^m$ 和实数 $t$，
+\[
+v^*C(A)v=\det(A|_{v^\perp}),\qquad
+\det(A+tvv^*)=\det A+t\,v^*C(A)v,
+\]
+其中 $A|_{v^\perp}$ 表示压缩到四元数正交补上，零维行列式等于一。对 Hermitian 矩阵 $M=\left(\begin{smallmatrix}\ell&c^*\\c&D\end{smallmatrix}\right)$，若 $D>0$，令 $\sigma=\ell-c^*D^{-1}c$，并令 $v_0$ 为第一个坐标向量。则
+\[
+\det M=(\det D)\sigma,\qquad M-\sigma v_0v_0^*\ge0.
+\]

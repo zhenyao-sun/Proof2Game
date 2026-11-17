@@ -1,0 +1,29 @@
+引理~\ref{ms:lemma-4-dirichlet} 给出光滑势函数、$A:B=0$，以及 $A$ 的半正定性和守恒性。引理~\ref{ms:lemma-3-2} 的 Schur 公式给出
+\[
+ H(B_0+u)=\sigma_0 e_Te_T^*+\Sigma,\qquad
+ \sigma_0=\ell-c^*D_u^{-1}c,\qquad \Sigma\ge0,\qquad
+ \det H(B_0+u)=\lambda\mu\sigma_0
+\]
+其中 $e_T$ 为第一个坐标向量。因此
+\[
+ A:H(u)=A:\Sigma+\mu\sigma_0=A:\Sigma+\lambda^{-1}\det H(B_0+u).
+\]
+标量 Schur 补将时间项单独分离出来，与 Serre \cite{r-71}, Proposition 2.2 的实张量估计中的做法相同。线段积分 $E_z$ 会产生一个 Laplace 项，用来抵消带符号的全行列式项。
+
+在这些纤维组成的总域上应用引理~\ref{ms:fiber-green}。由引理~\ref{ms:lemma-4-1} 的逆坐标图，紧参数集上方的闭纤维组成紧集，且 $r$ 在侧壁上的空间梯度非零。记 $\nu=G(r)/|\nabla r|$ 为编码后的外单位法向。
+
+取 $M=A$，对 $X_0$ 变号。由引理~\ref{ms:lemma-4-dirichlet}，正则化余子式矩阵的法向系数为零，因此边界项正是所述通量 $\mathcal B(z)=\int\rho\,G(r)^*A_{\rm w}G(r)\delta(r)\,\mathrm d\zeta$。内部恒等式给出
+\[
+ \Delta_z X_0(z)=\mathcal B(z)-\int_{\Omega_z} A:\Sigma\,\mathrm d\zeta
+ -\lambda^{-1}\int_{\Omega_z}\det H(B_0+u)\,\mathrm d\zeta .
+\]
+
+对于能量的第二项，取 $M=C(H(B_0+\theta u))$，其各列由引理~\ref{ms:lemma-3-3} 满足守恒律。将引理~\ref{ms:lemma-3-1} 的乘积法则应用于侧壁上的 $r\rho$，得到
+\[
+ H(B_0+\theta u)|_{\nu^\perp}=(B+\theta\rho H(r))|_{\nu^\perp},
+\]
+因为两个交叉项都含有因子 $G(r)$，压缩后消失。$H(r)$ 的零空间直线包含于 $\nu^\perp\cap\ker B$，见引理~\ref{ms:lemma-4-1}，故此压缩矩阵奇异。引理~\ref{ms:lemma-3-2} 的余子式矩阵限制恒等式给出 $\nu^*M\nu=0$，无需对 $H(B_0+\theta u)$ 假设符号。将同一恒等式用于 $e_T$，得到 $M_{TT}=\det D_{\theta u}$。因此，在 $\theta$ 中对 Green 公式积分并除以 $\lambda$，得到
+\[
+ \Delta_z E_z(u)=\lambda^{-1}\int_{\Omega_z}\det H(B_0+u)\,\mathrm d\zeta .
+\]
+事实上 $M:H(u)=\partial_\theta\det H(B_0+\theta u)$；积分下限的贡献为 $\det B=0$，因为由同一个全纯 Hessian 公式，$B$ 的秩至多为一。将两个 Laplace 恒等式相加，便得分布意义下的平衡式。纤维坐标图将体积积分和侧壁积分都光滑地转化为固定域上的积分，故恒等式逐点成立。由 $A$ 和 $\Sigma$ 的非负性得 $A:\Sigma\ge0$。

@@ -1,0 +1,302 @@
+% Copy this as main.tex and script-example/ as components/.
+% MScomponent arguments: ID, type, path, paired ID, theorem kind, optional title.
+% MSnode arguments: statement ID, explicit Main Results prefix (empty for descendants).
+\documentclass[12pt,a4paper]{amsart}
+\usepackage{amsmath,amssymb,graphicx,mathrsfs,mathtools,bm}
+\usepackage{hyperref}
+\usepackage{amsrefs}
+\setlength{\textwidth}{\dimexpr\paperwidth-2in\relax}
+\calclayout
+\newtheorem{Theorem}{Theorem}[section]
+\newtheorem{Lemma}[Theorem]{Lemma}
+\newtheorem{Proposition}[Theorem]{Proposition}
+\newtheorem{Corollary}[Theorem]{Corollary}
+\newtheorem{Claim}[Theorem]{Claim}
+\providecommand\MSgap[1]{\textbf{Proof obligation: }#1}
+\makeatletter
+\newcount\MSdepth
+\newif\ifMSmainroot
+\def\MSlevel{Section}
+\def\MSloc{0}
+\def\MSuppercasefirst#1#2\@nil{S#2}
+\def\MSrecordlevel#1#2{\expandafter\gdef\csname MSlevel@#1\endcsname{#2}}
+\newcommand\MSadoption[1]{%
+  \ifnum#1>0\relax
+    \par\noindent We adopt the settings of %
+    \ifMSmainroot
+      Section~1%
+      \ifnum#1>1\relax
+        \space and %
+        \ifnum#1=2\relax Subsection~1.1%
+        \else Subsections~1.1--1.\number\numexpr#1-1\relax\fi
+      \fi
+    \else
+      \ifnum#1=1\relax Subsection~1.1%
+      \else Subsections~1.1--1.#1\fi
+    \fi.\par
+  \fi}
+\newcommand\MSheading[1]{%
+  \expandafter\ifx\csname MStitle@#1\endcsname\@empty\else
+    \csname MStitle@#1\endcsname: \fi
+  Proof of \csname MSkind@#1\endcsname~\ref{ms:#1}}
+\newcommand\MSnode[2]{%
+  \global\advance\MSdepth by1
+  \ifcsname MSnum@\number\MSdepth\endcsname\else
+    \expandafter\newcount\csname MSnum@\number\MSdepth\endcsname
+  \fi
+  \global\advance\csname MSnum@\number\MSdepth\endcsname by1
+  \begingroup
+  \ifnum\MSdepth=1
+    \edef\MSloc{2.\number\csname MSnum@1\endcsname}%
+  \else
+    \edef\MSloc{\MSloc.\number\csname MSnum@\number\MSdepth\endcsname}%
+  \fi
+  \def\MSlevel{section}\count@=\MSdepth\relax
+  \loop\edef\MSlevel{sub\MSlevel}\advance\count@ by-1\relax\ifnum\count@>0\repeat
+  \edef\MSlevel{\expandafter\MSuppercasefirst\MSlevel\@nil}%
+  \phantomsection\edef\@currentlabel{\MSloc}%
+  \par\bigskip\noindent\textbf{\MSloc.\quad\MSheading{#1}}\par\medskip
+  \ifnum\MSdepth=1 \MSadoption{#2}\fi}
+\newcommand\MSendnode{%
+  \endgroup
+  \ifcsname MSnum@\number\numexpr\MSdepth+1\relax\endcsname
+    \global\csname MSnum@\number\numexpr\MSdepth+1\relax\endcsname=0
+  \fi
+  \global\advance\MSdepth by-1}
+\newcommand\MScomponent[6]{%
+  \def\MStype{#2}\def\MSstatement{statement}\def\MSproof{proof}%
+  \ifx\MStype\MSstatement
+    \expandafter\gdef\csname MSkind@#1\endcsname{#5}%
+    \expandafter\gdef\csname MStitle@#1\endcsname{#6}%
+    \def\MStitle{#6}%
+    \ifx\MStitle\@empty\begin{#5}\else\begin{#5}[#6]\fi
+    \label{ms:#1}\input{#3}\end{#5}%
+    \noindent The proof of #5~\ref{ms:#1} is given in
+    \ifcsname MSlevel@#4\endcsname\csname MSlevel@#4\endcsname\else Section\fi
+    ~\ref{proof:#4}.\par
+  \else\ifx\MStype\MSproof
+    \phantomsection\edef\@currentlabel{\MSloc}\label{proof:#1}%
+    \protected@write\@auxout{}{\string\MSrecordlevel{#1}{\MSlevel}}%
+    \begin{proof}[Proof of \csname MSkind@#4\endcsname~\ref{ms:#4}]\input{#3}\end{proof}%
+  \else
+    \ifnum\value{section}=1
+      \ifnum\value{subsection}=0\global\MSmainroottrue\fi
+    \fi
+    \input{#3}%
+  \fi\fi}
+\makeatother
+
+\begin{document}
+\section{Main Results}
+The proof begins by controlling the half-wave at the critical exponent on one frequency annulus.
+
+\MScomponent{thm-1-2}{statement}{components/thm-1-2.tex}{thm-1-2-proof}{Theorem}{Critical annular estimate}
+Interpolation and dyadic summation convert the annular bound into the Sobolev estimate.
+
+\MScomponent{thm-1-1}{statement}{components/thm-1-1.tex}{thm-1-1-proof}{Theorem}{Euclidean local smoothing}
+Applying the critical annular estimate of Theorem~\ref{ms:thm-1-2} to a focusing spherical wave gives a local spherical extension bound. This bound then controls the Kakeya tube averages.
+
+\MScomponent{cor-9-1}{statement}{components/cor-9-1.tex}{cor-9-1-proof}{Corollary}{Spherical extension and Kakeya}
+The local spherical bound also gives global extension estimates for the sphere and the truncated cone.
+
+\MScomponent{cor-9-3}{statement}{components/cor-9-3.tex}{cor-9-3-proof}{Corollary}{Global Fourier extension from the sphere and cone}
+A projective change of coordinates converts the directional tube estimate into the estimate for tubes through points.
+
+\MScomponent{nikodym}{statement}{components/nikodym.tex}{nikodym-proof}{Proposition}{Nikodym maximal estimate}
+We next use time averages of the half-wave to select thin frequency shells for Bochner--Riesz summation.
+
+\MScomponent{thm-10-1}{statement}{components/thm-10-1.tex}{thm-10-1-proof}{Theorem}{Bochner--Riesz means}
+Keeping the radial variation inside a square integral gives the corresponding square-function bound.
+
+\MScomponent{thm-11-1}{statement}{components/thm-11-1.tex}{thm-11-1-proof}{Theorem}{Stein's square function}
+Finally, flattening a small spherical cap connects the restriction argument with Schrödinger evolution.
+
+\MScomponent{cor-12-1}{statement}{components/cor-12-1.tex}{cor-12-1-proof}{Corollary}{Paraboloid extension and Schr\"odinger local smoothing}
+\section{Detailed Proofs}
+\MSnode{thm-1-2}{0}
+We begin the proof of the Euclidean annular estimate on a fixed spatial torus, with the data restricted to one frequency cap. The torus bound will be transferred to Euclidean space in the proof below.
+
+\MScomponent{prop-6-3}{statement}{components/prop-6-3.tex}{prop-6-3-proof}{Proposition}{Critical estimate on a fixed torus cap}
+\MScomponent{thm-1-2-proof}{proof}{components/thm-1-2-proof.tex}{thm-1-2}{}{}
+\MSnode{prop-6-3}{}
+\MScomponent{prop-5-1}{statement}{components/prop-5-1.tex}{prop-5-1-proof}{Proposition}{Energy estimates on a fixed fiber}
+\MScomponent{lemma-6-1}{statement}{components/lemma-6-1.tex}{lemma-6-1-proof}{Lemma}{Propagation across a thin cylinder}
+\MScomponent{prop-6-3-proof}{proof}{components/prop-6-3-proof.tex}{prop-6-3}{}{}
+\MSnode{prop-5-1}{}
+\MScomponent{prop-2-2}{statement}{components/prop-2-2.tex}{prop-2-2-proof}{Proposition}{The Euclidean wave current}
+\MScomponent{wave-cap-estimates}{statement}{components/wave-cap-estimates.tex}{wave-cap-estimates-proof}{Lemma}{Wave multiplier on a torus frequency cap}
+The energy argument pairs the wave current with a quaternionic Hessian. We first record the determinant and cofactor identities used in that pairing.
+
+\MScomponent{lemma-3-2}{statement}{components/lemma-3-2.tex}{lemma-3-2-proof}{Lemma}{Moore determinant and cofactor identities}
+\MScomponent{lemma-3-1}{statement}{components/lemma-3-1.tex}{lemma-3-1-proof}{Lemma}{Quaternionic Hessian calculus}
+\MScomponent{lemma-4-1}{statement}{components/lemma-4-1.tex}{lemma-4-1-proof}{Lemma}{Fiber geometry}
+\MScomponent{thm-a-1}{statement}{components/thm-a-1.tex}{thm-a-1-proof}{Theorem}{Periodic Dirichlet problem}
+\MScomponent{prop-4-2}{statement}{components/prop-4-2.tex}{prop-4-2-proof}{Proposition}{Energy balance}
+\MScomponent{lemma-4-3}{statement}{components/lemma-4-3.tex}{lemma-4-3-proof}{Lemma}{Energy comparison}
+\MScomponent{prop-5-1-proof}{proof}{components/prop-5-1-proof.tex}{prop-5-1}{}{}
+\MSnode{prop-2-2}{}
+\MScomponent{wave-symbol}{statement}{components/wave-symbol.tex}{wave-symbol-proof}{Lemma}{Null coordinates, polarization and Gaussian weight}
+\MScomponent{holomorphic-flux-map}{statement}{components/holomorphic-flux-map.tex}{holomorphic-flux-map-proof}{Lemma}{Conserved density in holomorphic flux coordinates}
+\MScomponent{prop-2-2-proof}{proof}{components/prop-2-2-proof.tex}{prop-2-2}{}{}
+\MSnode{wave-symbol}{}
+\MScomponent{wave-symbol-proof}{proof}{components/wave-symbol-proof.tex}{wave-symbol}{}{}
+\MSendnode
+\MSnode{holomorphic-flux-map}{}
+\MScomponent{lemma-2-1}{statement}{components/lemma-2-1.tex}{lemma-2-1-proof}{Lemma}{Two auxiliary flows and their conserved tensor}
+\MScomponent{holomorphic-flux-map-proof}{proof}{components/holomorphic-flux-map-proof.tex}{holomorphic-flux-map}{}{}
+\MSnode{lemma-2-1}{}
+\MScomponent{lemma-2-1-proof}{proof}{components/lemma-2-1-proof.tex}{lemma-2-1}{}{}
+\MSendnode
+\MSendnode
+\MSendnode
+\MSnode{wave-cap-estimates}{}
+\MScomponent{wave-cap-estimates-proof}{proof}{components/wave-cap-estimates-proof.tex}{wave-cap-estimates}{}{}
+\MSendnode
+\MSnode{lemma-3-2}{}
+\MScomponent{alesker-determinant}{convention}{components/alesker-determinant.tex}{}{}{}
+\MScomponent{lemma-3-2-proof}{proof}{components/lemma-3-2-proof.tex}{lemma-3-2}{}{}
+\MSendnode
+\MSnode{lemma-3-1}{}
+\MScomponent{lemma-3-1-proof}{proof}{components/lemma-3-1-proof.tex}{lemma-3-1}{}{}
+\MSendnode
+\MSnode{lemma-4-1}{}
+\MScomponent{lemma-4-1-proof}{proof}{components/lemma-4-1-proof.tex}{lemma-4-1}{}{}
+\MSendnode
+\MSnode{thm-a-1}{}
+The continuation argument needs a full second-derivative estimate for smooth solutions along its determinant path.
+
+\MScomponent{dirichlet-c2}{statement}{components/dirichlet-c2.tex}{dirichlet-c2-proof}{Lemma}{A priori second-derivative bound along the Dirichlet path}
+\MScomponent{thm-a-1-proof}{proof}{components/thm-a-1-proof.tex}{thm-a-1}{}{}
+\MSnode{dirichlet-c2}{}
+\MScomponent{dirichlet-c2-proof}{proof}{components/dirichlet-c2-proof.tex}{dirichlet-c2}{}{}
+\MSendnode
+\MSendnode
+\MSnode{prop-4-2}{}
+\MScomponent{lemma-3-3}{statement}{components/lemma-3-3.tex}{lemma-3-3-proof}{Lemma}{Column conservation of the Hessian cofactor}
+\MScomponent{lemma-4-dirichlet}{statement}{components/lemma-4-dirichlet.tex}{lemma-4-dirichlet-proof}{Lemma}{Regularized current and fiber potential}
+A Green identity on the total domain expresses the contribution from the moving wall. We will apply it to the wave current and the Hessian cofactor.
+
+\MScomponent{fiber-green}{statement}{components/fiber-green.tex}{fiber-green-proof}{Lemma}{Green identity for a moving fiber}
+\MScomponent{prop-4-2-proof}{proof}{components/prop-4-2-proof.tex}{prop-4-2}{}{}
+\MSnode{lemma-3-3}{}
+\MScomponent{lemma-3-3-proof}{proof}{components/lemma-3-3-proof.tex}{lemma-3-3}{}{}
+\MSendnode
+\MSnode{lemma-4-dirichlet}{}
+\MScomponent{lemma-4-dirichlet-proof}{proof}{components/lemma-4-dirichlet-proof.tex}{lemma-4-dirichlet}{}{}
+\MSendnode
+\MSnode{fiber-green}{}
+\MScomponent{fiber-green-proof}{proof}{components/fiber-green-proof.tex}{fiber-green}{}{}
+\MSendnode
+\MSendnode
+\MSnode{lemma-4-3}{}
+\MScomponent{lemma-4-3-proof}{proof}{components/lemma-4-3-proof.tex}{lemma-4-3}{}{}
+\MSendnode
+\MSendnode
+\MSnode{lemma-6-1}{}
+\MScomponent{lemma-6-1-proof}{proof}{components/lemma-6-1-proof.tex}{lemma-6-1}{}{}
+\MSendnode
+\MSendnode
+\MSendnode
+\MSnode{thm-1-1}{0}
+\MScomponent{mihlin-multiplier}{convention}{components/mihlin-multiplier.tex}{}{}{}
+\MScomponent{annular-lp}{statement}{components/annular-lp.tex}{annular-lp-proof}{Lemma}{Interpolated annular estimate}
+\MScomponent{thm-1-1-proof}{proof}{components/thm-1-1-proof.tex}{thm-1-1}{}{}
+\MSnode{annular-lp}{}
+\MScomponent{annular-lp-proof}{proof}{components/annular-lp-proof.tex}{annular-lp}{}{}
+\MSendnode
+\MSendnode
+\MSnode{cor-9-1}{0}
+\MScomponent{lemma-9-2}{statement}{components/lemma-9-2.tex}{lemma-9-2-proof}{Lemma}{Spherical extension from the critical wave estimate}
+\MScomponent{lemma-9-4}{statement}{components/lemma-9-4.tex}{lemma-9-4-proof}{Lemma}{Tube overlap from local spherical extension}
+\MScomponent{cor-9-1-proof}{proof}{components/cor-9-1-proof.tex}{cor-9-1}{}{}
+\MSnode{lemma-9-2}{}
+\MScomponent{lemma-9-2-proof}{proof}{components/lemma-9-2-proof.tex}{lemma-9-2}{}{}
+\MSendnode
+\MSnode{lemma-9-4}{}
+\MScomponent{lemma-9-4-proof}{proof}{components/lemma-9-4-proof.tex}{lemma-9-4}{}{}
+\MSendnode
+\MSendnode
+\MSnode{cor-9-3}{0}
+\MScomponent{cone-slicing}{statement}{components/cone-slicing.tex}{cone-slicing-proof}{Lemma}{Slicing the truncated cone}
+\MScomponent{cor-9-3-proof}{proof}{components/cor-9-3-proof.tex}{cor-9-3}{}{}
+\MSnode{cone-slicing}{}
+\MScomponent{cone-slicing-proof}{proof}{components/cone-slicing-proof.tex}{cone-slicing}{}{}
+\MSendnode
+\MSendnode
+\MSnode{nikodym}{0}
+\MScomponent{nikodym-distal}{statement}{components/nikodym-distal.tex}{nikodym-distal-proof}{Lemma}{Projective change of variables for ray segments}
+\MScomponent{nikodym-proof}{proof}{components/nikodym-proof.tex}{nikodym}{}{}
+\MSnode{nikodym-distal}{}
+\MScomponent{nikodym-distal-proof}{proof}{components/nikodym-distal-proof.tex}{nikodym-distal}{}{}
+\MSendnode
+\MSendnode
+\MSnode{thm-10-1}{0}
+\MScomponent{lemma-10-2}{statement}{components/lemma-10-2.tex}{lemma-10-2-proof}{Lemma}{Maximal estimate for a thin shell}
+\MScomponent{thm-10-1-proof}{proof}{components/thm-10-1-proof.tex}{thm-10-1}{}{}
+\MSnode{lemma-10-2}{}
+We first bound the thin-shell operators for radii between one and two. Dilation then gives the bound on each octave.
+
+\MScomponent{shell-unit-radius}{statement}{components/shell-unit-radius.tex}{shell-unit-radius-proof}{Lemma}{Thin-shell maximal estimate for unit-scale radii}
+\MScomponent{lemma-10-2-proof}{proof}{components/lemma-10-2-proof.tex}{lemma-10-2}{}{}
+\MSnode{shell-unit-radius}{}
+The thin-shell proof uses a half-wave estimate on one rescaled spatial-frequency annulus. The following lemma supplies that time estimate.
+
+\MScomponent{lemma-10-3}{statement}{components/lemma-10-3.tex}{lemma-10-3-proof}{Lemma}{Rescaled wave estimate on an annulus}
+\MScomponent{shell-unit-radius-proof}{proof}{components/shell-unit-radius-proof.tex}{shell-unit-radius}{}{}
+\MSnode{lemma-10-3}{}
+\MScomponent{lemma-10-3-proof}{proof}{components/lemma-10-3-proof.tex}{lemma-10-3}{}{}
+\MSendnode
+\MSendnode
+\MSendnode
+\MSendnode
+\MSnode{thm-11-1}{0}
+\MScomponent{stein-annular-square}{convention}{components/stein-annular-square.tex}{}{}{}
+\MScomponent{lemma-11-2}{statement}{components/lemma-11-2.tex}{lemma-11-2-proof}{Lemma}{One interval of radii}
+\MScomponent{lemma-11-3}{statement}{components/lemma-11-3.tex}{lemma-11-3-proof}{Lemma}{Combining dilates}
+\MScomponent{thm-11-1-proof}{proof}{components/thm-11-1-proof.tex}{thm-11-1}{}{}
+\MSnode{lemma-11-2}{}
+\MScomponent{lemma-11-2-proof}{proof}{components/lemma-11-2-proof.tex}{lemma-11-2}{}{}
+\MSendnode
+\MSnode{lemma-11-3}{}
+\MScomponent{lemma-11-3-proof}{proof}{components/lemma-11-3-proof.tex}{lemma-11-3}{}{}
+\MSendnode
+\MSendnode
+\MSnode{cor-12-1}{0}
+\MScomponent{prop-12-global}{statement}{components/prop-12-global.tex}{prop-12-global-proof}{Proposition}{Global extension for the compact paraboloid}
+\MScomponent{prop-12-fresnel}{statement}{components/prop-12-fresnel.tex}{prop-12-fresnel-proof}{Proposition}{Critical Schr\"odinger estimate on a frequency ball}
+\MScomponent{cor-12-1-proof}{proof}{components/cor-12-1-proof.tex}{cor-12-1}{}{}
+\MSnode{prop-12-global}{}
+The proof of the global extension proposition starts with the following local estimate for compact paraboloid data.
+
+\MScomponent{lemma-12-cap}{statement}{components/lemma-12-cap.tex}{lemma-12-cap-proof}{Lemma}{Local extension from the compact paraboloid}
+\MScomponent{prop-12-global-proof}{proof}{components/prop-12-global-proof.tex}{prop-12-global}{}{}
+\MSnode{lemma-12-cap}{}
+\MScomponent{lemma-12-cap-proof}{proof}{components/lemma-12-cap-proof.tex}{lemma-12-cap}{}{}
+\MSendnode
+\MSendnode
+\MSnode{prop-12-fresnel}{}
+\MScomponent{prop-12-fresnel-proof}{proof}{components/prop-12-fresnel-proof.tex}{prop-12-fresnel}{}{}
+\MSendnode
+\MSendnode
+\begin{bibdiv}
+\begin{biblist}
+\bib{r-2}{misc}{title={Semyon Alesker. Non-commutative linear algebra and plurisubharmonic functions of quaternionic variables. \emph{Bulletin des Sciences Mathématiques}, 127(1):1--35, 2003. doi: 10.1016/S0007-4497(02)00004-0.}}
+\bib{r-6}{misc}{title={M. S. Baouendi and F. Trèves. A microlocal version of Bochner's tube theorem. \emph{Indiana University Mathematics Journal}, 31(6):885--895, 1982. doi: 10.1512/iumj.1982.31.31060.}}
+\bib{r-7}{misc}{title={William Beckner, Anthony Carbery, Stephen Semmes, and Fernando Soria. A note on restriction of the Fourier transform to spheres. \emph{Bulletin of the London Mathematical Society}, 21(4):394--398, 1989. doi: 10.1112/blms/21.4.394.}}
+\bib{r-13}{misc}{title={Jean Bourgain. Besicovitch type maximal operators and applications to Fourier analysis. \emph{Geometric and Functional Analysis}, 1(2):147--187, 1991. doi: 10.1007/BF01896376.}}
+
+\bib{r-25}{misc}{title={Kurt O. Friedrichs. Symmetric hyperbolic linear differential equations. \emph{Communications on Pure and Applied Mathematics}, 7(2):345--392, 1954. doi: 10.1002/cpa.3160070206.}}
+\bib{r-30}{misc}{title={Chuanwei Gao, Diankun Liu, and Yakun Xi. Curved Kakeya sets and Nikodym problems on manifolds. \emph{Peking Mathematical Journal}, 2026. doi: 10.1007/s42543-025-00114-1. Published online February 2, 2026.}}
+\bib{r-31}{misc}{title={David Gilbarg and Neil S. Trudinger. \emph{Elliptic Partial Differential Equations of Second Order}. Classics in Mathematics. Springer, Berlin, second edition, 2001. doi: 10.1007/978-3-642-61798-0. Reprint of the revised second edition; originally published in Grundlehren der mathematischen Wissenschaften, vol.~224.}}
+\bib{r-32}{misc}{title={Loukas Grafakos. \emph{Classical Fourier Analysis}, volume 249 of \emph{Graduate Texts in Mathematics}. Springer, third edition, 2014. doi: 10.1007/978-1-4939-1194-3.}}
+\bib{r-38}{misc}{title={Lars Hörmander. Oscillatory integrals and multipliers on \(FL^p\). \emph{Arkiv för Matematik}, 11:1--11, 1973. doi: 10.1007/BF02388505.}}
+\bib{r-44}{misc}{title={Uri Keich. On \(L^p\) bounds for Kakeya maximal functions and the Minkowski dimension in \(\mathbb R^2\). \emph{Bulletin of the London Mathematical Society}, 31(2):213--221, 1999. doi: 10.1112/S0024609398005372.}}
+\bib{r-46}{misc}{title={Jongchon Kim. Some remarks on Fourier restriction estimates. Preprint, arXiv:1702.01231, 2017.}}
+\bib{r-51}{misc}{title={Sanghyuk Lee, Keith M. Rogers, and Andreas Seeger. On space-time estimates for the Schrödinger operator. \emph{Journal de Mathématiques Pures et Appliquées}, 99(1):62--85, 2013. doi: 10.1016/j.matpur.2012.06.003.}}
+\bib{r-61}{misc}{title={Fabio Nicola. Slicing surfaces and the Fourier restriction conjecture. \emph{Proceedings of the Edinburgh Mathematical Society}, 52(2):515--527, 2009. doi: 10.1017/S0013091507000995.}}
+\bib{r-71}{misc}{title={Denis Serre. Mixed determinants, compensated integrability, and new a priori estimates in gas dynamics. \emph{Quarterly of Applied Mathematics}, 81(2):281--295, 2023. doi: 10.1090/qam/1640.}}
+\bib{r-74}{misc}{title={Elias M. Stein. \emph{Harmonic Analysis: Real-Variable Methods, Orthogonality, and Oscillatory Integrals}, volume 43 of \emph{Princeton Mathematical Series}. Princeton University Press, Princeton, NJ, 1993. doi: 10.1515/9781400883929. With the assistance of Timothy S. Murphy.}}
+\bib{r-75}{misc}{title={Terence Tao. The Bochner--Riesz conjecture implies the restriction conjecture. \emph{Duke Mathematical Journal}, 96(2):363--375, 1999. doi: 10.1215/S0012-7094-99-09610-2.}}
+\end{biblist}
+\end{bibdiv}
+\end{document}

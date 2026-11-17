@@ -1,0 +1,93 @@
+记 $q=n/d$ 和 $\sigma=s/h$，下文始终假定 $2a\le s\le3$。起初取 $0<\gamma<w_0/8$。侧壁估计中的常数可取为与 $\gamma$ 无关。内部估计中的前置因子可依赖于 $\gamma$。下文的幂 $\sigma^m$ 表示固定的幂次，必要时可将指数提高有限次。逆辅助坐标图
+\[
+Y=\frac{\sqrt2\tau+aQ}{1+W\cdot W/2},\qquad P=WY,\qquad Z=\sqrt2Y-\tau
+\]
+使纤维在 $(W,Q)$ 坐标中的形状固定，并给出 $y\asymp s$。在侧壁 $r=0$ 与截断函数的支撑相交之处，由 $|Q|\le1/20$ 必有 $|W|\ge\sqrt3w_0/2$。另取内部区域，满足 $|W|\le\gamma$ 与 $|Q|\le1/400$。
+
+\smallskip
+\noindent\textit{空间平均与流的上界}
+对待定的仅依赖于维数的常数 $D\ge1$，令 $P_*(X)=(J_{Ds}*|g_T|^2)^{1/d}$ 和 $M=2n+4$。核 $J_{Ds}$ 严格为正，且 $\|g_T\|_2=1$，从而 $P_*>0$。对周期化的核逐项求到二阶导数，得到 $|\nabla_X^j J_{Ds}|\le C(Ds)^{-j}J_{Ds}$，因为伸缩后的欧氏核具有相同的相对导数界。对 $d$ 次方根求导，并用一阶估计控制其中的二次项，可得
+\[
+|\nabla_X^j P_*|\le C(Ds)^{-j}P_*\quad(j=1,2),\qquad
+\int_{\mathbb T^n}P_*^{d+1}\,\mathrm dX\le\|g_T\|_{p_c}^{p_c}.
+\]
+最后一个不等式是在 $L^q$ 中对概率核应用 Young 不等式，其中用到 $d+1=n$ 和 $2q=p_c$。
+
+由命题~\ref{ms:prop-2-2}，外积为 $A^0$ 的列向量，其各分量由放在四元数槽中的若干标量乘子输出相加而成，标量乘子符号是一个有界光滑因子乘以
+\[
+(\kappa/y)^{d/2}e^{-\Psi},\qquad \Psi=\kappa y|W-v|^2/2.
+\]
+将符号乘以固定的光滑环带截断函数，使它在数据的支撑上等于一，且支撑于满足 $|v|<w_0/3$ 与 $\kappa>0$ 的区域。在伸缩后的频率变量 $\eta=h\xi$ 中，符号直至 $M$ 阶的各导数均由 $C(hs)^{-d/2}\sigma^m$ 控制。事实上，$h\kappa$ 与 $v$ 在此截断函数的支撑上光滑，导数一致有界，而 $h\kappa$ 有统一正下界。$\Psi$ 不超过 $M$ 阶的各导数至多带来因子 $C\sigma$。在 $r=0$ 和 $g(Q)\ne0$ 的区域内，扩大后的球冠上满足 $|W-v|\ge\sqrt3w_0/2-w_0/3>0$。此时导数界多出一个衰减因子 $e^{-c_0\sigma}$，其中 $c_0>0$ 与 $\gamma$ 无关。
+
+若 $B$ 控制支撑于固定伸缩环带上的某符号直至 $M$ 阶的各导数，则在逆 Fourier 积分中对该符号施加 $(1-\Delta_\eta)^{n+2}$。其欧氏核的绝对值不超过 $CBh^{-n}(1+|X/h|^2)^{-M/2}$。周期化后得到环面上的核绝对值上界 $CBJ_h$，同一个论证适用于旋转后的标架及格点。针对概率核用 Cauchy--Schwarz 不等式，输出的模平方由 $CB^2(J_h*|g_T|^2)$ 控制。流中有限个标量槽均可如此估计。对 $A^0$ 的平滑还需与 $J_h$ 再卷积一次。在 $\mathbb R^n$ 上，$|Y'|\ge |X|/2$ 和 $|X-Y'|\ge |X|/2$ 至少有一个成立，卷积变量为 $Y'$，因此将两个正欧氏核卷积，所得不超过该核本身的常数倍。周期化给出 $J_h*J_h\le CJ_h$。因为 $Ds\ge h$，逐项比较得 $J_h\le(Ds/h)^nJ_{Ds}$。再用 $(hs)^{-d}=s^{-2d}\sigma^d$ 并重新标记 $m,c_0$，得到算子范数估计
+\[
+\|A_{\mathrm w}\|\le Cs^{-2d}\sigma^mP_*^d\quad(r\le0),\qquad
+\|A_{\mathrm w}\|\le Cs^{-2d}\sigma^m e^{-c_0\sigma}P_*^d\quad(r=0).
+\]
+
+$H(r)$ 的时间余子式为 $\det H_{\mathrm{fib}}(r)$，见引理~\ref{ms:lemma-3-2}。引理~\ref{ms:lemma-4-1} 表明它与 $a^{-2}s^{-2d}$ 可比。取 $J_{Ds}$ 中距离最近的格点项，得到下界 $\inf J_{Ds}\ge c_D h^{M-n}$：最近的代表元位于一个固定有界集内，且 $h\le s\le3$，于是该处伸缩后的核以下式为下界：$c_Ds^{M-n}$。故 $P_*^d\ge c_Dh^{M-n}$。由于 $a\ge h$ 与 $50n-2\ge M-n$，此界可吸收密度中余子式矩阵的贡献 $Ch^{50n}a^{-2}s^{-2d}$，特别地
+\[
+\mu\le Cs^{-2d}\sigma^mP_*^d\quad(r\le0).
+\]
+还将使用较弱的上界 $\mu^{1/d}\le\lambda$，当 $h$ 充分小时在各纤维上一致成立。由引理~\ref{ms:wave-cap-estimates}，有 $\kappa\asymp h^{-1}$，且各振幅绝对值之和为 $O(h^{-n/2})$。每个波权重为 $O(h^{-d})$，因为 $y\asymp s\ge h$，且每个列向量因子均有界。故 $\|(A^0)\|\lesssim h^{-n-2d}$，再平滑、截断并加上上述余子式估计，得到 $\mu\lesssim h^{-n-2d}+h^{50n-2-2d}$。此量不超过 $h^{-30nd}=\lambda^d$，其中 $h$ 要充分小。
+
+\smallskip
+\noindent\textit{侧壁比较与通量}
+令 $R=H_{\mathrm{fib}}(r)$ 和 $B_{\mathrm{fib}}=H_{\mathrm{fib}}(B_0)$。引理~\ref{ms:lemma-4-1} 给出 $R\ge cs^{-2}I$ 和 $G_{\mathrm{fib}}(r)G_{\mathrm{fib}}(r)^*\le CR$。引理~\ref{ms:lemma-3-1} 的 Hessian 乘积法则表明，$H_{\mathrm{fib}}(rP_*)$ 是 $P_*R$、$rH_{\mathrm{fib}}(P_*)$ 及两个混合梯度乘积之和。对四元数向量 $e$，将 $G_{\mathrm{fib}}(r)$ 和 $G_{\mathrm{fib}}(P_*)$ 与 $e$ 配对，所得绝对值分别不超过 $C(e^*Re)^{1/2}$ 和 $CD^{-1}P_*(e^*Re)^{1/2}$。由 $P_*$ 和 $|r|\le1$ 的二阶导数，$rH_{\mathrm{fib}}(P_*)$ 在二次型意义下带来的代价至多为 $CD^{-2}P_*R$。故 $H_{\mathrm{fib}}(rP_*)\ge(1-C/D)P_*R$。固定充分大的 $D$，使该系数至少为 $1/2$。
+
+正则项给出 $\mu>0$，因为 $R$ 与 $A_{\mathrm w}$ 均半正定。背景矩阵 $B_{\mathrm{fib}}$ 的秩为一，正特征值与 $\lambda$ 可比，见引理~\ref{ms:lemma-4-1}。可应用定理~\ref{ms:thm-a-1} 的 Dirichlet 定理和比较原理，因为 $r$ 的纤维 Hessian 严格正定，$\det B_{\mathrm{fib}}=0$，且指定行列式为 $\lambda\mu>0$。特别地，光滑解 $u$ 存在且 $u\le0$。对于 $v_*=C_1\sigma^{m_1}rP_*$，将其正定 Hessian 与背景矩阵相加后同 $B_{\mathrm{fib}}+\tfrac12 c C_1\sigma^{m_1}P_*s^{-2}I$ 比较。由引理~\ref{ms:lemma-3-2} 的行列式单调性和背景矩阵的特征值界，可得
+\[
+\det(B_{\mathrm{fib}}+H_{\mathrm{fib}}(v_*))
+\ge c\lambda(C_1\sigma^{m_1}P_*s^{-2})^d\ge\lambda\mu
+\]
+其中 $m_1,C_1$ 充分大。两个势函数都有相同的零边值，因此比较原理给出 $v_*\le u\le0$。除以 $r<0$，再按命题~\ref{ms:prop-4-2} 的方式光滑延拓至边界，得到 $0\le u/r\le C_1\sigma^{m_1}P_*$。
+
+命题~\ref{ms:prop-4-2} 表明 $\mathcal F$ 在整个开参数域内光滑：Dirichlet 解光滑直至移动侧壁，而辅助坐标图将纤维等同于固定的域。线段积分中的行列式是多项式，故在 $\theta=0$ 处仍光滑。在每根纤维上应用引理~\ref{ms:lemma-4-3}，取密度 $\mu=A_{TT}$ 及其光滑 Dirichlet 解 $u$，得到
+\[
+ 0\le \frac{n-1}{n+1}\int_{\Omega_z}(-u)\mu\,\mathrm d\zeta
+ \le \mathcal F(z)\le \int_{\Omega_z}(-u)\mu\,\mathrm d\zeta .
+\]
+其中 $u\le0$ 与 $\mu>0$ 由每根纤维上的 Dirichlet 构造给出。引理~\ref{ms:lemma-4-1} 的体积比较给出辅助坐标体积 $O(a^2s^{2d})$。利用 $u/r$、$\mu$ 的上界及 $\int P_*^{d+1}\,\mathrm dX\le\|g_T\|_{p_c}^{p_c}$，得到
+\[
+\mathcal F(T,\tau)\le Ca^2\sigma^m\|g_T\|_{p_c}^{p_c}.
+\]
+
+对于侧壁通量，命题~\ref{ms:prop-2-2} 给出 $(\partial\Phi)A^0=0$。由引理~\ref{ms:lemma-3-1} 的梯度恒等式，Hermitian 流作用于 $G(|\Phi|^2)$ 为零；乘以 $g(Q)$ 及卷积均保持此恒等式，因为 $\partial\Phi$ 与 $X$ 无关。因此只有 $|W|^2/w_0^2$ 所产生的部分对全梯度 $G(r)$ 有贡献。引理~\ref{ms:lemma-4-1} 给出 $|G(|W|^2)|\lesssim s^{-1}$，故 $G(r)^*A_{\mathrm w}G(r)\le Cs^{-2}\|A_{\mathrm w}\|$。在 $(W,Q)$ 坐标图中，同样的体积比较及固定椭球上的余面积公式表明，余面积测度 $\delta(r)\,\mathrm dP\,\mathrm dZ$ 的总质量至多为 $Ca^2s^{2d}$。命题~\ref{ms:prop-4-2} 将 $\Delta_z\mathcal F$ 控制在 $(u/r)G(r)^*A_{\mathrm w}G(r)\delta(r)$ 的侧壁积分之下。由侧壁流估计和 $u/r$ 的上界，得到
+\[
+\Delta_z\mathcal F(T,\tau)\le C(a/s)^2\sigma^me^{-c_0\sigma}\|g_T\|_{p_c}^{p_c}.
+\]
+
+\smallskip
+\noindent\textit{内部的恢复与下界}
+取中心 $(X,P,Z)$，使 $|W|\le\gamma$、$|Q|\le1/400$。以该点为中心、半径 $h$ 的球（取 $3n$ 个实空间槽）包含于 $|W|\le2\gamma$、$|Q|\le1/100$ 所给区域，只要 $K\gamma$ 和 $K$ 充分大。这是因为该坐标图给出 $\nabla W=O(s^{-1})$ 与 $\nabla\Phi=O(1)$ 的界，沿这类线段的变化量至多为 $Ch/s$ 和 $Ch$。这些导数界直至扩大后区域的边缘都成立，故若发生首次越界，就会违反所选取的界。该球上截断函数恒为一。
+
+由命题~\ref{ms:prop-2-2} 中的时间分量恒等式，有 $|\mathsf S_0g_T|^2\le A^0_{TT}$。将引理~\ref{ms:wave-cap-estimates} 中此符号的倒数乘以光滑环带截断函数，使它在数据支撑上等于一，并支撑于满足 $|v|\le2\gamma$ 的区域。球上有 $|W|\le2\gamma$，故扩大后的球冠上有 $|W-v|\le4\gamma$，且 $\Psi\le C\gamma^2\sigma$。直至 $M$ 阶的各导数（关于 $\eta=h\xi$ 变量）均由下式控制
+\[
+B_{\mathrm{inv}}=C_\gamma(hs)^{d/2}\sigma^me^{C\gamma^2\sigma}.
+\]
+这是因为 $h\kappa$ 保持统一的正下界，$\Psi$ 的各阶导数至多带来因子 $C\sigma$。小球冠的截断函数的导数影响 $C_\gamma$，而指数中的常数 $C$ 与 $\gamma$ 无关。
+
+对作用于 $\mathsf S_0g_T$ 的这一逆乘子应用核估计和 Cauchy--Schwarz 不等式。在实中心 $X$ 及球内任意辅助点处得到
+\[
+|g_T(X)|^2\le CB_{\mathrm{inv}}^2(J_h*A^0_{TT})(X).
+\]
+若 $|X'-X|\le h$，两个核值 $J_h(X'-Y')$ 与 $J_h(X-Y')$ 一致可比，这可由欧氏核相应的逐项比较得出。由于 $\mu\ge J_h*A^0_{TT}$，其中 $g(Q)=1$，这证明了整个球上的逐点下界
+\[
+\mu\ge m_X:=c_\gamma(hs)^{-d}\sigma^{-m}e^{-C_2\gamma^2\sigma}|g_T(X)|^2.
+\]
+
+令 $\ell$ 为空间槽中到中心的欧氏距离。当 $m_X>0$ 时，二次函数 $v_b=\epsilon m_X^{1/d}(\ell^2-h^2)$ 在球的边界上为零，且由三槽 Hessian 公式，其纤维 Hessian 为 $6\epsilon m_X^{1/d}I$。秩一背景矩阵与 $m_X^{1/d}\le \mu^{1/d}\le\lambda$ 对固定的充分小的 $\epsilon>0$ 给出
+\[
+\det(B_{\mathrm{fib}}+H_{\mathrm{fib}}(v_b))
+\le C[(\epsilon m_X^{1/d})^n+\lambda(\epsilon m_X^{1/d})^d]
+\le\lambda m_X .
+\]
+两个 Hessian 均为正定。由于球边界上有 $u\le0=v_b$，且 $\det D_u=\lambda\mu\ge\lambda m_X$，应用定理~\ref{ms:thm-a-1} 的局部比较原理，在球上得到 $u\le v_b$。在中心有 $(-u)\mu\ge\epsilon h^2m_X^{1+1/d}$。若 $m_X=0$，这一点由 $u\le0$ 和 $\mu\ge0$ 得出。
+
+$(P,Z)$ 内各中心的辅助坐标体积与 $a^2s^{2d}\gamma^{2d}$ 可比，这由引理~\ref{ms:lemma-4-1} 的 Jacobian 得出。由 $1+1/d=q$ 和 $2q=p_c$，对这些中心积分，再使用引理~\ref{ms:lemma-4-3} 的下界比较，得到
+\[
+\mathcal F(T,\tau)\ge c_\gamma a^2\sigma^{-m}e^{-C_3\gamma^2\sigma}\|g_T\|_{p_c}^{p_c};
+\]
+其中 $h^2s^{2d}(hs)^{-dq}=\sigma^{n-2}$，且指数中的常数仍与 $\gamma$ 无关。
+
+现在固定 $\gamma$ 使 $C_3\gamma^2<c_0/2$。取充分大的 $K$，使上述球包含关系成立，并使 $h<1/(4K)$ 给出前面所用的密度上界。由于 $\|g_T\|_2=1$，内部下界严格为正。将通量估计除以该下界，得到 $C_\gamma s^{-2}\sigma^{2m}e^{-(c_0-C_3\gamma^2)\sigma}$。减小指数中的常数后，这一量不超过 $Cs^{-2}e^{-c\sigma}$。在 $s=4a$ 和 $s=2a$ 处，比值 $\sigma$ 分别为 $4K$ 与 $2K$。第一个半径处的能量上界（其中 $g_0=f$）和第二个半径处的能量下界给出所述的圆周估计。

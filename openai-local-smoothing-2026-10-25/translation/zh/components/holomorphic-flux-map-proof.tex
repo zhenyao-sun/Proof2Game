@@ -1,0 +1,20 @@
+采用张量 $B$（见引理~\ref{ms:lemma-2-1}），在两个被动方向上以零延拓。对源坐标 $I$，令 $Q_I=\mathcal Z_1^I+\mathbf k\mathcal Z_2^I$。平面 $\mathbb C_{\mathbf i}$ 与 $\mathbf k\mathbb C_{\mathbf i}$ 关于 $\langle u,v\rangle=\operatorname{Re}(u\bar v)$ 正交，故 $B^{IL}=\operatorname{Re}(Q_I\overline{Q_L})$。它的实行及状态行为
+\[
+Q_{\mathsf X^\mu}=\sum_aM_{\mu a}\mathbf i G_a,\qquad
+(Q_{w_{1a}},Q_{w_{2a}})=(G_a,\mathbf k G_a).
+\]
+在一对源辅助坐标上乘以 $h=h_1+\mathbf k h_2$ 所对应的实行为 $(h_1,-h_2)$ 和 $(h_2,h_1)$，它们将 $(G_a,\mathbf kG_a)$ 映到 $(\bar hG_a,\mathbf k\bar hG_a)$。导数 $\partial_{z_a}\Theta_\mu=M_{\mu a}$ 由 $C^\mu$ 的对称性得到。再结合 $-\mathbf i h\mathbf i=\bar h$ 对 $h\in\mathbb C_{\mathbf k}$ 的公式可知，目标端的 Gram 行三元组为 $Q_{\mathsf X^\mu},-\mathbf iQ_{\mathsf X^\mu},-\mathbf jQ_{\mathsf X^\mu}$，被动方向的贡献为零。这就是表示一个四元数外积的三行 $\bar e_\alpha Q_{\mathsf X^\mu}$。
+
+由全纯性可知，实体积的 Jacobian 等于 $J$。在扩展映射下（该映射固定 $\mathsf X$），作为密度的推前为
+\[
+\widetilde B\circ\Theta=J^{-1}D\Theta\,B\,D\Theta^{\mathsf t}.
+\]
+根据刚算出的 Gram 行，得到 $\widetilde B=(\widetilde\chi\widetilde\chi^*)^{\mathbb R}$。令 $z$ 变化，同时固定 $\eta$，所得为 $M$ 的各列，故 $(\partial_\omega\eta)M=0$ 和 $(\partial_\omega\eta)\widetilde\chi=0$。
+
+对目标端的每一列 $K$，以具有紧支撑的实光滑函数 $\varphi$ 检验散度。换元后积分化为 $-\sum_{I,L}\int B^{IL}(\partial_L\Theta^K)\partial_I(\varphi\circ\Theta)$。分部积分得到
+\[
+J(\operatorname{div}\widetilde B)^K\circ\Theta
+=\sum_L(\partial_L\Theta^K)(\operatorname{div}B)^L
+ +\sum_{I,L} B^{IL}\partial_I\partial_L\Theta^K.
+\]
+由引理~\ref{ms:lemma-2-1}，第一项求和为零。在第二项中，两个对角状态块均为 $(\operatorname{Re}(G_a\overline{G_b}))_{ab}$，混合状态块为零。由 Cauchy--Riemann 方程，$\Theta$ 的实分量满足 $\partial_{w_{1a}}\partial_{w_{1b}}\Theta^K+\partial_{w_{2a}}\partial_{w_{2b}}\Theta^K=0$。其余坐标以仿射方式进入，故涉及这些坐标的项均消失。

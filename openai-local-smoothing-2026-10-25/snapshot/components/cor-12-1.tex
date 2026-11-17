@@ -1,0 +1,22 @@
+Let $d\geq 1$, $p_c=2(d+1)/d$, and $B_d=B(0,1)\subset\mathbb R^d$. For $g$ on $B_d$ set
+\[
+Eg(x,t)=\int_{B_d}e^{\mathrm i(x\cdot v+t|v|^2)}g(v)\,\mathrm dv.
+\]
+If $1<a\leq\infty$, $p_c<b<\infty$, and $b>(d+2)a'/d$, where $1/a+1/a'=1$, then
+\[
+\|Eg\|_{L^b(\mathbb R^{d+1})}\lesssim_{d,a,b}\|g\|_{L^a(B_d)}.
+\]
+
+Let $I\subset\mathbb R$ be a compact interval, and let $S(t)=e^{\mathrm i t\Delta}$ denote the Fourier multiplier $e^{-\mathrm i t|\xi|^2}$ on $\mathbb R^d$. If $N\geq 2$ and $f$ is Schwartz with $\operatorname{supp}\widehat f\subset B(0,N)$, then
+\[
+\|S(t)f\|_{L^{p_c}(\mathbb R^d\times I)}
+ \lesssim_{d,I}[\log(2+N)]^{2/p_c}\|f\|_{L^{p_c}(\mathbb R^d)}.
+\]
+
+If $p_c<p<\infty$ and $p\leq r\leq\infty$, set $s=d(1-2/p)-2/r$, with $1/\infty=0$. For every Schwartz $f$,
+\[
+\|S(t)f\|_{L^p(\mathbb R^d;L^r(I))}
+ \lesssim_{d,p,r,I}\|f\|_{B^s_{p,p}(\mathbb R^d)}
+ \lesssim_{d,p,s}\|(1-\Delta)^{s/2}f\|_{L^p(\mathbb R^d)}.
+\]
+Here $B^s_{p,p}$ is the inhomogeneous Besov space, defined using smooth inhomogeneous dyadic Fourier projections $P_j$ by the norm $(\sum_{j\geq 0}2^{jsp}\|P_jf\|_p^p)^{1/p}$. The cases $r=p$ and $r=\infty$ give, respectively, the spacetime estimate at order $d-2(d+1)/p$ and the maximal estimate at order $d(1-2/p)$.

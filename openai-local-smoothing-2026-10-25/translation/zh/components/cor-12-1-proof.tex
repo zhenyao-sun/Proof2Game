@@ -1,0 +1,13 @@
+全局延拓估计见 \ref{ms:prop-12-global}，临界频率球估计见 \ref{ms:prop-12-fresnel}。
+
+为证明混合范数估计，选取 $p_c<a<p$。由 $a>p_c=1+(d+2)/d$ 可知 $a>(d+2)a'/d$。于是 \ref{ms:prop-12-global} 给出 $E:L^a(B_d)\to L^a(\mathbb R^{d+1})$。Lee、Rogers 和 Seeger 的 Corollary~1.2 \cite{r-51} 在对角情形下断言：单位抛物面片满足全局 $L^a\to L^a$ 延拓估计，且 $2<a<\infty$，则对任意紧时间区间 $I$ 以及 $a<p<\infty$ 和 $p\leq r\leq\infty$，有
+\[
+\|e^{\mathrm it\Delta}f\|_{L^p(\mathbb R^d;L^r(I))}
+ \lesssim \|f\|_{B^{d(1-2/p)-2/r}_{p,p}(\mathbb R^d)}.
+\]
+将其应用于上述选取的 $a$。最后，由于指数关系，逐点比较时二进 $\ell^p$ 范数由二进 $\ell^2$ 范数控制，理由是 $p>2$。再用空间变量上的 Littlewood--Paley 理论，得到
+\[
+\|f\|_{B^s_{p,p}}\leq
+ \left\|\left(\sum_{j\geq0}2^{2js}|P_j f|^2\right)^{1/2}\right\|_p
+ \lesssim_{d,p,s}\|(1-\Delta)^{s/2}f\|_p.
+\]

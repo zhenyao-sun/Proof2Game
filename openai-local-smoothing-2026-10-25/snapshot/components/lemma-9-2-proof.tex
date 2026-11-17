@@ -1,0 +1,26 @@
+Put \(d=n-1\), \(L(R)=\log(2+R)\), and choose a nonzero, nonnegative \(\psi\in C_c^\infty((1,2))\). Define
+\[
+ M_N f=\int\psi(T)e^{iNT}U(T)\chi(|D|/N)f\,dT .
+\]
+Hölder's inequality in \(T\) and the assumed estimate give \(\|M_N f\|_p\lesssim L(N)^A\|f\|_p\), with extension by density to \(L^p\). Its multiplier is \(\chi(\rho/N)\widehat\psi(\rho-N)\) at \(\rho=|\xi|\), where \(\widehat\psi(s)=\int e^{-iTs}\psi(T)\,dT\). For \(1/2\le |Z|\le3\), its kernel is
+\[
+ K_N(Z)=c_n N^{d/2}|Z|^{-d/2}e^{iN|Z|}\psi(|Z|)+O(N^{d/2-1}),\qquad c_n\ne0 .
+\]
+Indeed, in polar coordinates the angular integral at \(u=\rho|Z|\) has expansion
+\[
+ \int_{S^{n-1}}e^{iu\omega_1}\,d\sigma(\omega)
+   =u^{-d/2}(c_+e^{iu}+c_-e^{-iu})+O(u^{-d/2-1})
+\]
+by stationary phase at its two poles, with \(c_+c_-\ne0\). The radial integral of the remainder is \(O(N^{d/2-1})\) by the annular support and integrability of \(\widehat\psi\). In each main term the prefactor \(\chi(\rho/N)\rho^{d/2}\), extended by zero to negative \(\rho\), equals \(N^{d/2}\) at \(N\) and has derivative \(O(N^{d/2-1})\). Replacing it by \(N^{d/2}\) in the integral over the real line costs \(O(N^{d/2-1})\) by the first absolute moment of \(\widehat\psi\). Fourier inversion then gives \(\psi(\pm|Z|)\), of which only the positive argument contributes.
+
+Set \(f_N(r\omega)=e^{-iNr}\psi(r)g(\omega)\), so \(\|f_N\|_p=C_\psi\|g\|_p\). The following linearization follows the passage from oscillatory integrals to extension in \cite{r-38}, Section 3, equations (3.8)--(3.9). For \(|X|\le R\), \(N\ge4R\), and \(r\in\operatorname{supp}\psi\),
+\[
+ N|r\omega-X/N|=Nr-X\cdot\omega+O(R^2/N).
+\]
+In the convolution against \(f_N\), the radial phases cancel and the amplitude changes by \(O(R/N)\) relative to its value at \(r\). The kernel expansion therefore gives
+\[
+ N^{-d/2}M_N f_N(X/N)
+  =c' Eg(-X)+O((1+R^2)N^{-1}\|g\|_1),\qquad
+ c'=c_n\int r^{d/2}\psi(r)^2\,dr\ne0.
+\]
+Choose \(N=(4+R)^{3+n/p}\). The error in \(L^p(B(0,R))\) is \(O(\|g\|_p)\), using finite sphere measure. The change of variables \(X=NY\) gives the prefactor \(N^{n/p-d/2}=1\) in the norm of the left side, and \(L(N)\lesssim_n L(R)\). Modulating \(g(\omega)\) by \(e^{iz\cdot\omega}\) translates the estimate to the ball centered at \(z\).

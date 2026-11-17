@@ -1,0 +1,29 @@
+当 $p=2$ 时，对符号求导并对空间变量应用 Plancherel 定理。在内层积分中换元至 $u=|\xi|^2/r^2$，得到
+\[
+\|\mathcal G_\alpha f\|_2^2=
+2\alpha^2\int_0^1u(1-u)^{2\alpha-2}\,du\,\|f\|_2^2
+=\frac{\alpha}{2\alpha-1}\|f\|_2^2.
+\]
+假设 $p>2$。令 $s_+(p)=\max\{0,(n-1)/2-n/p\}$，选取 $\varepsilon>0$ 使 $\sigma=s_+(p)+\varepsilon<\alpha-1/2$。在 $r=2^k s$ 上，其中 $1\le s\le2$，令 $\rho=2^{-k}|\xi|$ 并采用测度 $dr/r=ds/s$，它与 $ds$ 可比。$r\partial_r B_r^\alpha$ 的乘子在 $\rho>s$ 时为零，其余情形等于
+\[
+ m(s,\rho)=2\alpha \rho^2s^{-2\alpha}(s+\rho)^{\alpha-1}(s-\rho)^{\alpha-1}
+ \qquad (\rho<s).
+\]
+这是由对局部可积的正部幂求导得到的。由于 $\alpha>0$，边界不出现 Dirac 项。
+
+取光滑截断函数，使它在 $\rho=s$ 附近等于一，并支撑在满足 $|s-\rho|<1/2$ 的地方，其中 $s\in[1,2]$。在 $s$ 中插入一个光滑截断，使它在 $[1,2]$ 上等于一，支撑于 $(3/4,9/4)$。$(s-\rho)^{\alpha-1}$ 前的因子与截断函数相乘，得到光滑紧支撑振幅 $A(s,\rho)$，其中 $\rho$ 有统一正下界。对 $s-\rho>0$，用光滑二进分解 $\sum_j\eta(2^j(s-\rho))=1$（$\eta\in C_c^\infty((1/2,2))$）分解此边界项。由支撑范围可知只剩 $j\ge0$。在其支撑上有 $\delta=2^{-j}$ 和 $\varphi(u)=\eta(u)u^{\alpha-1}$，每项的符号为
+\[
+ \delta^{\alpha-1} A(s,\rho)\varphi((s-\rho)/\delta).
+\]
+
+对每个 $\delta$，令 $T_\delta^{(k)}$ 为 \ref{ms:lemma-11-2} 中的算子的空间伸缩，保持 $s\in[1,2]$ 不变。在固定紧环带上作至多 $N=n+3$ 次分部积分，变量为 $\xi$，可得未经伸缩的核 $K$ 及其一阶空间导数具有衰减 $C\delta^{-N}(1+|x|)^{-N}$，且关于 $s$ 一致。特别地，同一估计适用于它们的 $H=L^2([1,2],ds)$ 与 $H^n$ 范数。选择光滑环带投影 $P_k$，它们是同一个乘子的伸缩，该乘子在未伸缩的频率支撑上等于一。将 \ref{ms:lemma-11-3} 应用于输入 $P_kf$，使用 \ref{ms:lemma-11-2} 中的界，所估计的量为 $B_p$ 和 $B_2$。命题~\ref{ext:stein-annular-square} 给出所选光滑环带投影的输入平方函数范数上界 $C\|f\|_p$。合并半径的所有二进区间，薄壳贡献至多为
+\[
+ C\delta^{\alpha-1}
+ \left(\delta^{1/2}+\delta+
+ [1+\log(1/\delta)]^{1/2-1/p}\delta^{1/2-\sigma}\right)\|f\|_p.
+\]
+对所有 $j$ 求和收敛，因为 $\alpha-1/2-\sigma>0$。
+
+远离边界的其余乘子光滑。其支撑包含于 $\rho\le2$，其中 $s\in[1,2]$，且它在原点二阶消失。用光滑环带截断在 $\rho\asymp2^\ell$（$\ell\le2$）处分解它。将每项除以 $2^{2\ell}$，再将 $\rho$ 伸缩到单位环带，所得符号任意固定阶导数均一致有界。因此，未伸缩的核及一阶导数满足 \ref{ms:lemma-11-3}，其中 $\delta=1$，且 $C_*$ 可统一选取。相同的核衰减与卷积估计给出一致的 $B_2$ 和 $B_p$。对每个 $\ell$，使用尺度 $2^{k+\ell}$ 处的投影应用该引理。命题~\ref{ext:stein-annular-square} 取移位 $\ell$ 时，给出输入平方函数范数关于 $\ell$ 一致的界。由 $\sum_{\ell\le2}2^{2\ell}<\infty$，所得各界可求和。
+
+这些估计起初适用于有限个 $k$ 和有限个壳层项。对 Schwartz 函数 $f$，乘子积分对每个固定 $r$ 收敛到原积分，因为幂函数 $(s-\rho)^{\alpha-1}$ 局部可积且分解中的重叠次数有统一上界。先在平方积分中，再在 $x$ 中应用 Fatou 引理，即得到任意有限个半径区间上的界。由单调收敛得到完整估计。由稠密性，线性映射 $f\mapsto (r\partial_r B_r^\alpha f)_{r>0}$ 延拓为到 $L_x^p(L^2(dr/r))$ 的有界映射，其逐点 Hilbert 范数也因此得以延拓。

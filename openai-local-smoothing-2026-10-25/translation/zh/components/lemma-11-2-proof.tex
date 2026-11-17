@@ -1,0 +1,15 @@
+令 $U(t)=e^{-it|D|}$。暂去掉 $A$，允许 $s\in\mathbb R$，并将所得算子记为 $V_\delta$。若 $g$ 的频率支撑包含在固定的紧环带内，则对 $s$ 作 Fourier 变换，所用相位为 $e^{-ist}$，得到 $\delta\widehat\varphi(\delta t)U(t)g(x)$。于是对 $s$ 应用 Plancherel 定理，得
+\[
+\|V_\delta g(x,\cdot)\|_{L_s^2}
+=(2\pi)^{-1/2}\delta\|\widehat\varphi(\delta t)U(t)g(x)\|_{L_t^2}.
+\]
+在 $R\le|t|\le2R$ 上，其中 $R\ge1$ 取二进值，对时间变量用 Hölder 不等式并结合 \ref{ms:lemma-10-3}，可将该区间上的 $\|U(t)g\|_{L_x^p L_t^2}$ 控制为 $C R^{1/2-1/p}R^{1/p+\sigma}\|g\|_p$。对于 $|t|\le1$，使用 \ref{ms:lemma-10-3} 的短时估计，并由 $p\ge2$ 应用 Minkowski 不等式。对任意 $b>1/2+\sigma$，这些界给出
+\[
+ \|V_\delta g\|_{L_x^p L_s^2(\mathbb R)}
+ \lesssim \delta\left(1+\sum_{R=1,2,4,\ldots}
+ R^{1/2+\sigma}(1+\delta R)^{-b}\right)\|g\|_p
+ \lesssim \delta^{1/2-\sigma}\|g\|_p .
+\]
+最后一个不等式在 $R=\delta^{-1}$ 处分割求和即可得到。
+
+现在恢复 $A$，对其第一个自变量作 Fourier 反演。符号 $\widehat A_1(\eta,|\xi|)$ 支撑于固定的紧环带，且对任意有限组固定阶导数，均有界 $O_b((1+|\eta|)^{-b})$，对每个 $b>0$ 成立。由光滑紧支撑符号的可积核估计，相应算子在 $L^p$ 上以同样的速度衰减。对 $e^{is\eta}V_\delta(\widehat A_1(\eta,|D|)f)$ 在 $d\eta/(2\pi)$ 上积分，将范围限制到 $s\in[1,2]$，再应用 Minkowski 不等式即得第一个界。第二个界只需对空间变量应用 Plancherel 定理，因为在每个频率处，有界乘子都支撑于一个 $s$ 区间，长度为 $O(\delta)$。

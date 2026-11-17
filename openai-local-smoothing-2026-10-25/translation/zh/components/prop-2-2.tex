@@ -1,0 +1,43 @@
+设 $n\ge2$、$d=n-1$，令 $X=(x,b)$ 为标准正交空间标架，$u_{\rm w}=\sum_{\kappa,v}u_{\kappa,v}$ 为前向波模式的有限叠加。对任意有限多个互异频率 $\xi=(\xi_x,\xi_b)\in\mathbb R^d\times\mathbb R$ 求和，其中 $\xi_b+|\xi|>0$，以 $(\kappa,v)$ 对频率重新标记；各系数 $c_{\kappa,v}\in\mathbb C$ 任取。对每个这样的频率，令
+\[
+\kappa=(\xi_b+|\xi|)/\sqrt2>0,\qquad v=\xi_x/\kappa,\qquad
+u_{\kappa,v}=c_{\kappa,v}e^{\mathrm i(X\cdot\xi-T|\xi|)}.
+\]
+取四元数单位 $\mathbf i,\mathbf j,\mathbf k$，其中 $\mathbf{ij}=\mathbf k$ 和 $\mathbf{ki}=\mathbf j$，并令 $\mathbb C_{\mathbf k}=\mathbb R+\mathbf k\mathbb R$。使用零坐标 $\mathsf X=(t,x,s_0)$，其中 $t=(T+b)/\sqrt2$ 和 $s_0=(b-T)/\sqrt2$。记相应的复辅助坐标为 $\omega=(Y,P,S_1)\in\mathbb C_{\mathbf k}\times\mathbb C_{\mathbf k}^d\times\mathbb C_{\mathbf k}$。对 $Y\ne0$ 定义
+\[
+y=|Y|,\quad e=Y/y,\quad W=P/Y,\quad
+\Phi=S_1+\frac{P\cdot P}{2Y},\quad
+V^v=\bigl(1,(v+W)/2,-W\cdot v/2\bigr)^{\mathsf t}.
+\]
+复向量的点积是双线性的。在物理标架下，辅助坐标为 $(\tau,P,Z)$，其中 $Y=(\tau+Z)/\sqrt2$、$S_1=(Z-\tau)/\sqrt2$。对实变量 $\alpha,\beta$ 定义 $\iota_e(\alpha+\mathrm i\beta)=\alpha+e\mathbf i\beta$。令
+\[
+m_{\kappa,v}=(\kappa/y)^{d/2}e^{-\kappa y|W-v|^2/2},\qquad
+\chi=\sum_{\kappa,v} V^v\iota_e(\overline{u_{\kappa,v}})m_{\kappa,v},\qquad A^0=\chi\chi^* .
+\]
+分别记为 $x_{\mu0}=\mathsf X_\mu$ 和 $\omega_\mu=x_{\mu1}+\mathbf kx_{\mu2}$，使二者都与顺序 $\mu=0,\ldots,n$ 对应。对全纯标量或向量函数 $F$（依赖于 $\omega$），记 $\partial F$ 为其复 Jacobian，列为 $\partial_{\omega_\mu}F$，其中 $\partial_{\omega_\mu}=(\partial_{x_{\mu1}}-\mathbf k\partial_{x_{\mu2}})/2$。$\chi$ 与 $A^0$ 都光滑，$A^0\ge0$，且
+\[
+(\partial\Phi)V^v=0,\qquad
+(\partial W)V^v=\frac{v-W}{2Y},\qquad
+(\partial\Phi)A^0=0 .
+\]
+$(A^0)^\mathbb R$ 的各实列，其分量为
+\[
+(A^0)^\mathbb R_{\mu\alpha,\nu\beta}=\operatorname{Re}(\bar e_\alpha A^0_{\mu\nu}e_\beta),
+\qquad (e_0,e_1,e_2)=(1,\mathbf i,\mathbf j),
+\]
+均具有零散度，即对每个列指标 $(\nu,\beta)$，
+\[
+ \sum_{\mu=0}^n\sum_{\alpha=0}^2
+ \partial_{x_{\mu\alpha}}(A^0)^\mathbb R_{\mu\alpha,\nu\beta}=0.
+\]
+通过同时在三个槽中作正交变换，上述结论也在物理坐标下成立。在该标架中，
+\[
+V_T^v=(1+W\cdot v/2)/\sqrt2,\qquad A^0_{TT}=|\chi_T|^2.
+\]
+固定辅助点，令 $\mathsf S_0,\mathsf S_1$ 将 $u_{\rm w}$ 的每个空间模式乘以 $b_0m_{\kappa,v},b_1m_{\kappa,v}$，其中 $b_0,b_1\in\mathbb R$ 由 $V_T^v=b_0+\mathbf k b_1$ 定义。于是
+\[
+b_0=\frac{1+\operatorname{Re}(W)\cdot v/2}{\sqrt2},
+\qquad
+b_1=\frac{\operatorname{Im}_{\mathbf k}(W)\cdot v}{2\sqrt2},
+\qquad A^0_{TT}=|\mathsf S_0u_{\rm w}|^2+|\mathsf S_1u_{\rm w}|^2.
+\]

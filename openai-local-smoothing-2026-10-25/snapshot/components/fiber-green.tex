@@ -1,0 +1,26 @@
+Let $z=(T,\tau_1,\tau_2)$ vary in an open set $U\subset\mathbb R^3$. For $n\ge1$ let the spatial variables $\zeta$ range in a flat $n$-dimensional torus times an auxiliary open set in $\mathbb R^{2n}$. Let
+$\Omega=\{(z,\zeta):z\in U,\ r(z,\zeta)<0\}$ have lateral wall $r=0$, where $r$ is a smooth real function on a neighborhood of the closure relative to $U$. Write $\Omega_z=\{\zeta:r(z,\zeta)<0\}$. Assume the closed fibers over each compact subset of $U$ form a compact set and that the spatial gradient $\nabla_\zeta r$ is nonzero on the wall.
+
+Index the triples by $a\in\{T,1,\ldots,n\}$, so that $(x_{T0},x_{T1},x_{T2})=(T,\tau_1,\tau_2)$. For $1\le a\le n$ use the orthonormal flat torus directions in slot $0$ and the auxiliary coordinate pairs in slots $1$ and $2$. Write $\partial_{a\alpha}=\partial/\partial x_{a\alpha}$ for $\alpha\in\{0,1,2\}$. Use the real associative quaternion algebra $\mathbb H$ with unit $1$, basis $(1,\mathbf i,\mathbf j,\mathbf k)$, and multiplication
+\[
+ \mathbf i^2=\mathbf j^2=\mathbf k^2=-1,\qquad
+ \mathbf i\mathbf j=\mathbf k,\quad
+ \mathbf j\mathbf k=\mathbf i,\quad
+ \mathbf k\mathbf i=\mathbf j .
+\]
+Reversing the order of distinct imaginary units changes the sign. Quaternion conjugation $q\mapsto\bar q$ fixes the real coefficient $\operatorname{Re}q$ and negates the three imaginary coefficients. The notation $^*$ denotes conjugate transpose.
+
+Let $M=(M_{ab})_{a,b\in\{T,1,\ldots,n\}}$ be a smooth quaternionic matrix field up to the wall, with $M=M^*$. Thus $M_{TT}$ is the diagonal entry for the time triple. For $(e_0,e_1,e_2)=(1,\mathbf i,\mathbf j)$ and smooth real $w$, define the column $G(w)$, the matrix $H(w)$, and the real tensor $M^{\mathbb R}$ by
+\[
+G_a(w)=\sum_{\alpha=0}^2e_\alpha\partial_{a\alpha}w,\quad
+H_{ab}(w)=\sum_{\alpha,\beta=0}^2e_\alpha\bar e_\beta\,\partial_{a\alpha}\partial_{b\beta}w,\quad
+M^\mathbb R_{a\alpha,b\beta}=\operatorname{Re}(\bar e_\alpha M_{ab}e_\beta).
+\]
+Assume the real columns have zero divergence, so $\sum_{a,\alpha}\partial_{a\alpha}M^\mathbb R_{a\alpha,b\beta}=0$ for every $b,\beta$. Suppose $u$ is real and smooth up to the wall with $u=0$ there, and let $\rho$ be the smooth boundary value of $u/r$. With $\Delta_z$ the Euclidean Laplacian on $U$, for every $\eta\in C_c^\infty(U)$ one has
+\[
+ \int_\Omega u M_{TT}\Delta_z\eta\,dz\,d\zeta
+ = \int_\Omega \eta\operatorname{Re}\operatorname{tr}(MH(u))\,dz\,d\zeta
+ - \int_U \eta(z)\int_{\partial\Omega_z}\rho\,G(r)^*MG(r)
+                 \frac{dS_{\rm fib}}{|\nabla_\zeta r|}\,dz .
+\]
+Here $dS_{\rm fib}$ is the Euclidean surface measure in the spatial fiber and $dz\,d\zeta$ is product volume.

@@ -1,0 +1,17 @@
+Apply the local spherical extension estimate \ref{ms:lemma-9-2} with $n=d+1$. Its logarithmic exponent is $A=2/p_c$ by the critical annular bound \ref{ms:thm-1-2}. For $0<\delta\leq 1/2$, parametrize a cap on $S^d$ by $\omega(v)=(\delta v,\sqrt{1-\delta^2|v|^2})$, $v\in B_d$. Define the spherical density $G$ there by $G(\omega(v))=g(v)\sqrt{1-\delta^2|v|^2}$ and set it to zero off the cap. Then
+\[
+G(\omega)\,\mathrm d\sigma(\omega)=\delta^d g(v)\,\mathrm dv,
+\qquad
+\|G\|_{L^{p_c}(S^d)}\lesssim \delta^{d/p_c}\|g\|_{p_c}.
+\]
+At $X=(x/\delta,-2t/\delta^2)$ its spherical extension is $\delta^d e^{-2\mathrm it/\delta^2} E_\delta g(x,t)$, where $E_\delta$ is the extension with $|v|^2$ replaced by
+\[
+q_\delta(v)=\frac{2(1-\sqrt{1-\delta^2|v|^2})}{\delta^2}.
+\]
+The change to $X$ has absolute Jacobian $2\delta^{-(d+2)}$, and maps $B(0,R)$ into $B(0,CR/\delta^2)$. The spherical bound therefore gives
+\[
+\|E_\delta g\|_{L^{p_c}(B(0,R))}
+ \lesssim \delta^{-d+(d+2)/p_c+d/p_c}
+ [\log(2+R/\delta^2)]^A\|g\|_{p_c}.
+\]
+The exponent of $\delta$ vanishes. Uniformly on $B_d$, $q_\delta(v)=|v|^2+O(\delta^2)$. Since $|t|\leq R$ on the observation ball, the pointwise difference is bounded by $CR\delta^2\|g\|_1$. Its $L^{p_c}$ norm there is bounded by $C R^{1+(d+1)/p_c}\delta^2\|g\|_{p_c}$. With $\delta=(2R)^{-(d+2)}$ this is $O(\|g\|_{p_c})$ and $\log(2+R/\delta^2)\lesssim_d \log(2+R)$. For a ball centered at $z=(z_x,z_t)$ apply the estimate at the origin to $e^{\mathrm i(z_x\cdot v+z_t|v|^2)}g(v)$.

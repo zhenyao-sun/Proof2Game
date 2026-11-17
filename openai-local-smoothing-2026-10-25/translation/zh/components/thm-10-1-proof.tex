@@ -1,0 +1,14 @@
+记 $s_+(p)=\max\{0,(n-1)/2-n/p\}$。对 $2\le p<\infty$，选取 $s_+(p)<\sigma<\alpha$。取 $\eta\in C_c^\infty((1/2,2))$，使 $\sum_{j\in\mathbb Z}\eta(2^jv)=1$ 对 $v>0$ 成立。将其应用于 $v=1-\rho$，其中 $0\le\rho<1$。对 $\delta=2^{-j}\le1/8$，$(1-\rho^2)_+^\alpha$ 对应的分块等于
+\[
+\delta^\alpha\psi_\delta((1-\rho)/\delta),\qquad
+\psi_\delta(u)=\eta(u)u^\alpha(2-\delta u)^\alpha,
+\]
+此表达式在 $\eta$ 的支撑外定义为零。各剖面函数的光滑半范数一致有界。余项在 $\rho=1$ 附近为零，在原点附近等于 $(1-\rho^2)^\alpha$，因此其径向延拓是光滑紧支撑的。该余项的核具有一个可积的径向递减控制函数。因此余项伸缩的上确界逐点由 Hardy--Littlewood 极大函数的常数倍控制。对其余各项用 \ref{ms:lemma-10-2}。它们对应的极大函数的 $L^p$ 范数之和由下式控制
+\[
+C\sum_{j\ge3}2^{-j(\alpha-\sigma)}\|f\|_p.
+\]
+这就证明了 Schwartz 函数的极大估计。在这一范围内 $\delta(p)=s_+(p)$，故也得到固定半径的界。
+
+每个固定的 $B_r^\alpha$ 在 Schwartz 函数上自伴，且共轭指数满足 $\delta(p)=\delta(p')$。对偶性给出 $1<p<2$ 的固定半径界。当 $p=1,\infty$ 时，假设为 $\alpha>(n-1)/2$。径向 Fourier 反演给出单位半径的核，它等于 $|x|^{-n/2-\alpha}J_{n/2+\alpha}(|x|)$ 的常数倍，其中 $J_\nu$ 是第一类 Bessel 函数。核在原点有界，在无穷远处为 $O(|x|^{-(n+1)/2-\alpha})$，故其各伸缩核 $r^nK(rx)$ 具有相同的 $L^1$ 范数。对有限 $p$ 用稠密性，对 $p=\infty$ 使用卷积，得到所述延拓。
+
+对有紧 Fourier 支撑的 Schwartz 函数，当 $r\to\infty$ 时，符号连同各阶导数在支撑上收敛到常数一及其相应导数。因此这些平均在 Schwartz 拓扑中收敛。由稠密性及固定半径界，可得 $p<\infty$ 时的范数收敛。为证明几乎处处收敛和极大估计，选取这样的 $f_j$，满足 $\sum_j\|f-f_j\|_p<\infty$。Schwartz 函数上的极大估计表明 $\sum_j\sup_{r>0}|B_r^\alpha(f_{j+1}-f_j)|$ 几乎处处有限。在每个这样的点处，$B_r^\alpha f_j$ 关于 $r>0$ 一致收敛到 $r$ 的一个连续函数；对于每个固定的 $r$，它几乎处处与有界的 $L^p$ 延拓相符。由于连续性，对 $r$ 取的上确界可测，由 Fatou 引理得 $f$ 的极大估计。最后，$f_j(x)\to f(x)$ 几乎处处成立，利用 $r$ 中的一致逼近，即可将 $r\to\infty$ 时的收敛从 $f_j$ 推广到 $f$。

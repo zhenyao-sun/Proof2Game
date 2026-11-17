@@ -1,0 +1,40 @@
+令 $Q=H(\psi)$、$S=\operatorname{tr}Q^{-1}$ 和 $Lw=\operatorname{Re}\operatorname{tr}(Q^{-1}H(w))$。引理~\ref{ms:lemma-3-1} 的秩一 Hessian 法则给出实主符号 $\widehat\xi^*Q^{-1}\widehat\xi$，其中 $\widehat\xi$ 是实余向量的四槽编码。沿两个正定 Hessian 之间的线段对 $\log\det$ 的导数积分，即得比较原理。平均后的算子在紧闭包上具有正定的实主符号，因此可应用最大值原理。$\log\det$ 的求导公式及凹性见引理~\ref{ms:lemma-3-2}。
+
+两个端点的密度均严格大于 $\det H(B_0)$，由紧性可知差值有统一的正下界。选择 $0<b'<1<b$ 使得
+\[
+ \det H(B_0+b'r)<g_t<\det H(B_0+br)
+ \quad\text{on }\overline{\widetilde\Omega},\quad 0\le t\le1.
+\]
+取充分小的 $b'$，由上述差值可得下界。由 $H(r)\ge cI$，取充分大的 $b$ 可得上界。比较原理给出 $br\le u\le b'r$。在边界的领形邻域中作光滑除法，得 $u=\alpha_0r$，其中 $b'\le\alpha_0\le b$，故在边界上 $\nabla u=\alpha_0\nabla r$。另有 $Lr\ge cS$，由算术平均值与几何平均值不等式得 $S\ge mg_t^{-1/m}\ge c_0>0$。对任意常实单位方向 $e$，分别求一次导和两次导，后者利用凹性，得到
+\[
+ L\psi_e=(\log g_t)_e,\qquad L\psi_{ee}\ge(\log g_t)_{ee}.
+\]
+对 $\pm\psi_e+Cr$ 应用最大值原理，便可用梯度的边界值控制全部梯度，而边界值已由障碍函数及给定数据控制。再对 $\psi_{ee}+Cr$ 应用最大值原理，实 Hessian 上界的证明归结为边界估计。
+
+\emph{边界二阶导数。} 在以某个边界点为中心的平直坐标图中，记 $\nu$ 为实单位外法向，并将其视为相应的四元数列向量。实切方向 $v,w$ 在中心满足 $D^2u(v,w)=\alpha_0D^2r(v,w)$。为估计混合导数，固定实单位切向量 $e$，按下式构造局部四元数刚体运动的向量场 $X=(e+Ax)\cdot\nabla$
+\[
+ v=\frac{P_{\rm tan}D^2r\,e}{|\nabla r|},\qquad
+ A=v\nu^*-\nu v^*-\nu(\nu^*v)\nu^* .
+\]
+其中 $P_{\rm tan}$ 是在实切空间上的投影。由于 $\operatorname{Re}(\nu^*v)=0$，有 $A^*=-A$ 和 $A\nu=v$。在中心有 $Xr=0$，且对每个实切向量 $w$，
+\[
+ \partial_w(Xr)=D^2r(w,e)-|\nabla r|\,w\cdot A\nu=0.
+\]
+特别地，沿坐标图中的边界有 $|Xu|=|\alpha_0Xr|\le C|x|^2$。刚体运动的流由四元数酉旋转和平移构成。由协变性得 $L(X\psi)=X\log g_t$，因为对 $Q$ 作共轭所产生的任意交换子与 $Q^{-1}$ 的配对均为零。减去 $L(XB_0)$，便得 $|L(Xu)|\le CS$，其中用到数据的光滑性及 $S\ge c_0$。
+
+在一个固定的小坐标球内取 $w_0=C_1|x|^2-C_2r$。先取充分大的 $C_1$，使 $w_0\ge|Xu|$ 成立：在原区域的边界上用二次界，在坐标球的球面上用梯度界。然后取充分大的 $C_2$ 使 $L(w_0\pm Xu)\le0$ 成立，其中用到 $H(|x|^2)=8I$ 和 $Lr\ge cS$。最小值原理给出 $|Xu|\le w_0$。两边在中心均为零，因此该界控制此处的 $|\partial_\nu Xu|$。这就是 $|D^2u(\nu,e)|$，因为多出的一项 $\nabla u\cdot A\nu$ 为零，其中 $\nabla u$ 是法向而 $A\nu$ 是切向。由紧性可知估计在整个边界上一致成立。
+
+由引理~\ref{ms:lemma-3-1} 的乘积法则，在边界上
+\[
+ H(u)=\alpha_0H(r)+G(\alpha_0)G(r)^*+G(r)G(\alpha_0)^*,
+ \qquad G(r)=|\nabla r|\nu .
+\]
+交叉项在 $\nu$ 的四元数正交补上消失。因此 $Q$ 限制到 $\nu^\perp$ 所得的压缩矩阵有下界 $b'H(r)|_{\nu^\perp}\ge cI$。取以 $\nu$ 为第一个向量的四元数标准正交基，实秩一 Hessian 法则给出
+\[
+ Q=\begin{pmatrix}\psi_{\nu\nu}+c_1&z^*\\z&D\end{pmatrix},
+\]
+其中 $c_1,z,D$ 只依赖于已得到控制的实切向或混合二阶导数。对于 $m>1$，引理~\ref{ms:lemma-3-2} 给出
+\[
+ \psi_{\nu\nu}=g_t/\det D+z^*D^{-1}z-c_1,
+\]
+其有界性由 $D\ge cI$ 得到。对于 $m=1$，使用 $Q=g_t$。结合内部的 Hessian 上界，现在得到 $D^2\psi\le CI$。由于 $\Delta\psi=\operatorname{tr}Q>0$，实 Hessian 的每个特征值都以下式为下界：$-(4m-1)C$。于是获得一致的完整 $C^2$ 界。

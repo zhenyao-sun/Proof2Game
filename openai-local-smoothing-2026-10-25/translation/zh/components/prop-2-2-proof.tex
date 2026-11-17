@@ -1,0 +1,24 @@
+将引理~\ref{ms:wave-symbol} 应用于各模式、系统矩阵及位移。对引理~\ref{ms:holomorphic-flux-map} 的映射，在第 $s_0$ 槽添加被动坐标。采用状态变量 $z=(R,\zeta)$ 时，映射为
+\[
+(R,\zeta,\eta)\longmapsto(Y,P,S_1)=(R^2,R\zeta,\eta-\zeta\cdot\zeta/2).
+\]
+在 $Y\ne0$ 上，选取局部平方根 $R$，所开方的量为 $Y$。于是 $\zeta=P/R$、$W=\zeta/R$ 和 $\eta=\Phi$。复导数为分块下三角，其对角块为 $2R$、$RI_d$ 和 $1$。实的体积 Jacobian 为 $J=4|R|^{2d+2}$。它的状态导数 $M$ 将 $E(v)=(1,v)^{\mathsf t}$ 映为
+\[
+(2R,\zeta+Rv,-\zeta\cdot v)^{\mathsf t}=2RV^v.
+\]
+对复向量 $w$，记 $\ell(w)=(-w\cdot w/2,w,1)$。相位余向量为 $\kappa\ell(v)$，直接缩并得到 $\ell(w)V^v=-(w-W)\cdot(w-v)/2$。特别地，$\partial\Phi=\ell(W)$ 作用于 $V^v$ 为零，$\ell(v)$ 的作用也为零。对 $P/Y$ 求导得到 $(\partial W)V^v=(v-W)/(2Y)$。
+
+引理~\ref{ms:wave-symbol} 中的衰减给出 $|\zeta-vR|^2=y|W-v|^2$。由 $2|R|/\sqrt J=y^{-d/2}$，此模式对列向量 $\widetilde\chi$ 的贡献（见引理~\ref{ms:holomorphic-flux-map}）为
+\[
+V^v g\mathbf i\,\overline{u_{\kappa,v}}\,m_{\kappa,v},
+\qquad g=R/|R|.
+\]
+这里已将 Fourier 复平面与 $\mathbb C_{\mathbf i}$ 等同。将所有分量在右侧乘以 $(g\mathbf i)^{-1}$，其四元数外积不变。用 $\mathbf i$ 作共轭时 Fourier 平面保持不变，用 $g$ 作共轭时则将 $\mathbf i$ 映到 $g^2\mathbf i=e\mathbf i$，这里用 $\mathbf i c=\bar c\mathbf i$ 表示 $c\in\mathbb C_{\mathbf k}$。所得列向量正是命题中的 $\chi$。公式直接使用 $Y$，因此不再依赖分支的选择。守恒律就是引理~\ref{ms:holomorphic-flux-map} 中的守恒律。半正定性由外积直接得到，而由各模式的恒等式，在左侧乘以行向量 $\partial\Phi$ 得零。实指标的正交变换以相同方式作用于三个槽，且保持散度。所列的时间行由 $T=(t-s_0)/\sqrt2$ 得到。
+
+固定 $\kappa$ 及实变量 $W$，指数项为以 $\kappa W$ 为中心的 Gaussian 函数，变量为横向频率 $\kappa v$。由于 $V_t^v=1$，零坐标分量 $A^0_{tt}$ 等于对标量波作 Gaussian 加窗后在该 $\kappa$ 处的模平方。对整个波，应先对 $\kappa$ 求和再取模平方。
+
+固定辅助点，将 $V_T^v$ 分解成实部与 $\mathbf k$ 部分，得到 $\chi_T=\iota_e(\overline{\mathsf S_0u_{\rm w}})+\mathbf k\iota_e(\overline{\mathsf S_1u_{\rm w}})$。用 $g$ 作共轭，将两个正交平面 $\mathbb C_{\mathbf i}$ 与 $\mathbf k\mathbb C_{\mathbf i}$ 映到这两项所在的平面，因为 $g$ 与 $\mathbf k$ 交换。由此得到时间分量恒等式。在 $W=0$ 处得到
+\[
+2A^0_{TT}=\left|\sum_{\kappa,v}(\kappa/y)^{d/2}
+ e^{-\kappa y|v|^2/2}u_{\kappa,v}\right|^2.
+\]

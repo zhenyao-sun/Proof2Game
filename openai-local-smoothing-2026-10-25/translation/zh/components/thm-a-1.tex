@@ -1,0 +1,15 @@
+设 $m\ge1$，令 $\Lambda\subset\mathbb R^m$ 为满秩格，令 $V\subset\mathbb R^{2m}$ 为有界光滑域。记 $\Omega=(\mathbb R^m/\Lambda)\times V$。用 $x_{a0}$ 表示周期坐标，将 $V$ 的其余坐标分组为 $(x_{a1},x_{a2})_{a=1}^m$，放在 $\mathbf i,\mathbf j$ 槽中。令 $(e_0,e_1,e_2)=(1,\mathbf i,\mathbf j)$ 和 $\partial_{a\alpha}=\partial/\partial x_{a\alpha}$。对实函数 $v$，三槽 Hessian 为
+\[
+H_{ab}(v)=\sum_{\alpha,\beta=0}^2e_\alpha\bar e_\beta\,\partial_{a\alpha}\partial_{b\beta}v .
+\]
+该行列式采用 Moore 行列式。设 $r\in C^\infty(\overline V)$ 为定义函数，在 $V$ 内为负，满足 $\mathrm dr\ne0$（在 $\partial V$ 上），并满足 $H(r)>0$（在 $\overline\Omega$ 上）。设 $B_0,g\in C^\infty(\overline\Omega)$ 取实值且满足
+\[
+ H(B_0)\ge0,\qquad g>\det H(B_0)\quad\text{on }\overline\Omega .
+\]
+则以下问题有唯一光滑至边界的解
+\[
+ \det H(B_0+u)=g,\qquad H(B_0+u)>0,\qquad u|_{\partial\Omega}=0.
+\]
+存在常数 $b\ge b'>0$ 使得 $br\le u\le b'r$。对这种区域和数据的光滑有限维族，障碍函数的常数可在局部统一选取；在局部光滑地等同各区域后，解光滑依赖于参数，直至边界。
+
+比较原理在采用同一三槽算子的子域上也成立。若两个光滑实势函数 $\psi_i$ 的 Hessian 直至边界都正定，且子域内满足 $\det H(\psi_1)\ge\det H(\psi_2)$，其边界上满足 $\psi_1\le\psi_2$，则全子域上有 $\psi_1\le\psi_2$。

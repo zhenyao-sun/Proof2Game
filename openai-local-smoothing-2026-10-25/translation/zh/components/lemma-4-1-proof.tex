@@ -1,0 +1,9 @@
+求解 $Y,W,\Phi$ 的定义式，得到所述逆映射。其分母在 $|W|\le w_0$ 上有一致的正下界，且由 $|aQ|\le a/10<s/10$ 可得 $|Y|\asymp s$。因此这些公式定义了闭纤维邻域内互为逆映射的全纯映射，且光滑依赖于 $\tau$。
+
+令 $F=(W/w_0,10Q)$，记 $J$ 为它关于 $(\tau,P,Z)$ 的复 Jacobian，空间子矩阵为 $J_{\rm fib}$。由于 $r=|F|^2-1$，引理~\ref{ms:lemma-3-1} 给出 $H(r)=4J^*J$ 和 $G(r)=2J^*F\mathbf i$。矩阵 $J_{\rm fib}$ 可逆。在全空间中，改变 $\tau$ 并固定 $(W,Q)$，所得复方向张成 $\ker J$，所用标量域为 $\mathbb C_{\mathbf k}$。这个方向在四元数上的张成空间就是 $H(r)$ 的整个核，因为空间子矩阵可逆，$J$ 在 $\mathbb H$ 上的秩为 $n$。此核正交于 $G(r)\in\operatorname{im}J^*$，并包含于 $H(|\Phi|^2)$ 的核，因为 $J$ 的最后一行是 $\partial\Phi$ 的非零倍数。在逆坐标图中，$(P,Z)$ 对 $W$ 的导数为 $O(s)$，对 $Q$ 的导数为 $O(a)$。由此得到 $\|J_{\rm fib}^{-1}\|\lesssim s$ 和 Hessian 下界。为了估计梯度，使用 $|F|\le1$，得到
+\[
+  G_{\rm fib}(r)G_{\rm fib}(r)^*=4J_{\rm fib}^*FF^*J_{\rm fib}
+     \le4J_{\rm fib}^*J_{\rm fib}.
+\]
+
+固定 $\tau$，逆坐标图的复 Jacobian 行列式为 $\sqrt 2\,aY^d/(1+W\cdot W/2)$。事实上，将 $d$ 个 $P=WY$ 的微分与 $\mathrm dY$ 作外积，仅留下 $Y^d$ 乘以 $d$ 个 $W$ 的微分与 $\mathrm dY$ 的外积，同时 $\mathrm dZ=\sqrt 2\,\mathrm dY$ 且 $\partial_Q Y=a/(1+W\cdot W/2)$。对其绝对值平方得到体积估计。$H_{\rm fib}(r)$ 的四元数行列式为 $4^n|\det_{\mathbb C}J_{\rm fib}|^2$，因为正定复 Hermitian 矩阵 $J_{\rm fib}^*J_{\rm fib}$ 视为四元数 Hermitian 矩阵时具有相同的特征值。这证明了行列式估计。$\Phi$ 的空间导数有界，且 $\partial_Z\Phi=(1-W\cdot W/2)/\sqrt2$ 有统一正下界，因而全纯 Hessian 公式给出关于秩和特征值的断言。$W=P/Y$ 的所有一阶导数均为 $O(s^{-1})$，于是得到 $|G(|W|^2)|$ 的界。

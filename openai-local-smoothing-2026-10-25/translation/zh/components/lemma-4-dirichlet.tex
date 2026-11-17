@@ -1,0 +1,39 @@
+设 $n\ge2$、$d=n-1$、$h>0$、$K\ge1$、$a=Kh$ 和 $w_0=1/10$。采用 $T\in\mathbb R$ 和 $X\in\mathbb T^n=\mathbb R^n/(100\mathbb Z^n)$，覆盖空间上取空间标架 $X=(x,b)$，其中 $x\in\mathbb R^d$、$b\in\mathbb R$。辅助坐标为 $(\tau,P,Z)\in\mathbb C_{\mathbf k}\times\mathbb C_{\mathbf k}^d\times\mathbb C_{\mathbf k}$，其中 $\mathbb C_{\mathbf k}=\mathbb R+\mathbf k\mathbb R$。对 $Y=(\tau+Z)/\sqrt2\ne0$ 定义
+\[
+ W=P/Y,\qquad \Phi=(Z-\tau)/\sqrt2+(P\cdot P)/(2Y),\qquad
+ Q=\Phi/a,\qquad r=|W|^2/w_0^2+100|Q|^2-1 .
+\]
+点号表示复双线性乘积，范数为欧氏范数。对 $z=(T,\tau)$，若 $a<s=|\tau|<4$，令
+\[
+ \Omega_z=\{(X,P,Z)\in\mathbb T^n\times\mathbb C_{\mathbf k}^d\times\mathbb C_{\mathbf k}:Y\ne0,\ r<0\}.
+\]
+对于全算子，令 $j=0$ 对应 $T$ 和 $\tau$，令 $1\le j\le d$ 对应 $x_j$ 和 $P_j$，令 $j=n$ 对应 $b$ 和 $Z$。每个三元组中的 $x_{j0}$ 为实的时空坐标，$x_{j1},x_{j2}$ 为其对应辅助坐标中 $1,\mathbf k$ 的系数。空间槽 $0$ 的导数在覆盖空间上沿选定标架取值，作用于周期函数。令 $(e_0,e_1,e_2)=(1,\mathbf i,\mathbf j)$，其中 $\mathbf k\mathbf i=\mathbf j$，并记 $\partial_{j\alpha}=\partial/\partial x_{j\alpha}$。令
+\[
+ G_j(w)=\sum_{\alpha=0}^2 e_\alpha\partial_{j\alpha}w,\qquad
+ H_{jk}(w)=\sum_{\alpha,\beta=0}^2 e_\alpha\bar e_\beta\partial_{j\alpha}\partial_{k\beta}w .
+\]
+下标 $\mathrm{fib}$ 表示仅保留 $n$ 个空间指标 $1,\ldots,n$，同时固定 $z$。采用 Moore 行列式及其余子式矩阵 $C$，由下式刻画
+$\operatorname{Re}\operatorname{tr}(C(D)M)=\left.\frac{d}{dt}\det(D+tM)\right|_{t=0}$
+其中 $M$ 为 Hermitian 矩阵。
+
+设 $f$ 为该环面上的三角多项式，满足 $\|f\|_2=1$，且频率位于固定环带 $c_0\le h|\xi|\le C_0$ 中，其中 $0<c_0<C_0$。在所选标架 $X=(x,b)$ 中，假设支撑内的频率满足 $\kappa=(\xi_b+|\xi|)/\sqrt2>0$ 和 $|v|\le\gamma<w_0/4$，其中 $v=\xi_x/\kappa$。令 $y=|Y|$、$e=Y/y$ 和 $\iota_e(\alpha+\mathrm i\beta)=\alpha+e\mathbf i\beta$，其中 $\alpha,\beta$ 为实数。为得到波流，在零坐标 $t=(T+b)/\sqrt2$、$s_0=(b-T)/\sqrt2$ 下构造如下列向量
+\[
+ \chi=\sum_{\xi}
+ \begin{pmatrix}1\\(v+W)/2\\-W\cdot v/2\end{pmatrix}
+ \iota_e\!\bigl(\overline{\widehat f(\xi)e^{\mathrm i(X\cdot\xi-T|\xi|)}}\bigr)
+ (\kappa/y)^{d/2}e^{-\kappa y|W-v|^2/2}.
+\]
+采用从 $(t,x,s_0)$ 到 $(T,x,b)$ 的正交指标变换，将 $\chi$ 用物理坐标表示，并在该坐标下令 $A^0=\chi\chi^*$。对 $\ell>0$，令 $J_\ell$ 为概率核 $c_n\ell^{-n}(1+|X/\ell|^2)^{-n-2}$ 的周期化，其中 $c_n$ 使其积分归一化。固定一个光滑函数 $0\le g\le1$，定义在 $\mathbb C_{\mathbf k}$ 上，使其在 $|Q|\le1/100$ 上等于一、在 $|Q|\ge1/20$ 上等于零。定义
+\[
+ A_{\rm w}=g(Q)(J_h*_X A^0),\qquad A=A_{\rm w}+h^{50n}C(H(r)),\qquad
+ \mu=A_{TT},\qquad B_0=\lambda|\Phi|^2,\qquad\lambda=h^{-30n}.
+\]
+其中 $*_X$ 表示只对实周期变量作卷积。令 $B=H(B_0)$ 和 $B_{\rm fib}=H_{\rm fib}(B_0)$。
+
+对充分小的 $h>0$，当 $4a\le1$ 时，$A$ 半正定且各实列的散度均为零，并有 $\mu>0$、$A:B=0$、$C(H(r))G(r)=0$。空间矩阵 $B_{\rm fib}$ 的秩为一，其非零特征值 $\beta$ 满足 $\beta\asymp\lambda$。密度满足 $\mu^{1/d}\le\lambda$。每个闭纤维上存在唯一的实光滑函数 $u$，使得
+\[
+ D_u=H_{\rm fib}(B_0+u)>0,\qquad
+ \det D_u=\lambda\mu,\qquad u|_{\partial\Omega_z}=0.
+\]
+它满足 $u\le0$，且关于 $z$ 光滑直至侧壁。对 $0<\alpha\le\lambda$，
+$\det(B_{\rm fib}+\alpha I)=(\beta+\alpha)\alpha^d\asymp\lambda\alpha^d$。

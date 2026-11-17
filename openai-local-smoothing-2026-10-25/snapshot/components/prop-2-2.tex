@@ -1,0 +1,43 @@
+Let $n\ge2$, $d=n-1$, $X=(x,b)$ be an orthonormal spatial frame, and $u_{\rm w}=\sum_{\kappa,v}u_{\kappa,v}$ be a finite superposition of forward-wave modes. The sum ranges over an arbitrary finite set of distinct frequencies $\xi=(\xi_x,\xi_b)\in\mathbb R^d\times\mathbb R$ with $\xi_b+|\xi|>0$, relabelled by $(\kappa,v)$; each coefficient $c_{\kappa,v}\in\mathbb C$ is arbitrary. For each such frequency set
+\[
+\kappa=(\xi_b+|\xi|)/\sqrt2>0,\qquad v=\xi_x/\kappa,\qquad
+u_{\kappa,v}=c_{\kappa,v}e^{\mathrm i(X\cdot\xi-T|\xi|)}.
+\]
+Use quaternionic units $\mathbf i,\mathbf j,\mathbf k$ with $\mathbf{ij}=\mathbf k$ and $\mathbf{ki}=\mathbf j$, and let $\mathbb C_{\mathbf k}=\mathbb R+\mathbf k\mathbb R$. Use null coordinates $\mathsf X=(t,x,s_0)$, with $t=(T+b)/\sqrt2$ and $s_0=(b-T)/\sqrt2$. Denote the corresponding complex auxiliary coordinates by $\omega=(Y,P,S_1)\in\mathbb C_{\mathbf k}\times\mathbb C_{\mathbf k}^d\times\mathbb C_{\mathbf k}$. For $Y\ne0$ set
+\[
+y=|Y|,\quad e=Y/y,\quad W=P/Y,\quad
+\Phi=S_1+\frac{P\cdot P}{2Y},\quad
+V^v=\bigl(1,(v+W)/2,-W\cdot v/2\bigr)^{\mathsf t}.
+\]
+Dots of complex vectors are bilinear. In the physical frame, the auxiliary coordinates are $(\tau,P,Z)$, with $Y=(\tau+Z)/\sqrt2$, $S_1=(Z-\tau)/\sqrt2$. For real $\alpha,\beta$ define $\iota_e(\alpha+\mathrm i\beta)=\alpha+e\mathbf i\beta$. Put
+\[
+m_{\kappa,v}=(\kappa/y)^{d/2}e^{-\kappa y|W-v|^2/2},\qquad
+\chi=\sum_{\kappa,v} V^v\iota_e(\overline{u_{\kappa,v}})m_{\kappa,v},\qquad A^0=\chi\chi^* .
+\]
+Write $x_{\mu0}=\mathsf X_\mu$ and $\omega_\mu=x_{\mu1}+\mathbf kx_{\mu2}$ in the matching order $\mu=0,\ldots,n$. For a holomorphic scalar or vector function $F$ of $\omega$, write $\partial F$ for its complex Jacobian with columns $\partial_{\omega_\mu}F$, where $\partial_{\omega_\mu}=(\partial_{x_{\mu1}}-\mathbf k\partial_{x_{\mu2}})/2$. Both $\chi$ and $A^0$ are smooth, $A^0\ge0$, and
+\[
+(\partial\Phi)V^v=0,\qquad
+(\partial W)V^v=\frac{v-W}{2Y},\qquad
+(\partial\Phi)A^0=0 .
+\]
+Each real column of $(A^0)^\mathbb R$, with entries
+\[
+(A^0)^\mathbb R_{\mu\alpha,\nu\beta}=\operatorname{Re}(\bar e_\alpha A^0_{\mu\nu}e_\beta),
+\qquad (e_0,e_1,e_2)=(1,\mathbf i,\mathbf j),
+\]
+has zero divergence, meaning that for every column index $(\nu,\beta)$,
+\[
+ \sum_{\mu=0}^n\sum_{\alpha=0}^2
+ \partial_{x_{\mu\alpha}}(A^0)^\mathbb R_{\mu\alpha,\nu\beta}=0.
+\]
+These conclusions hold in the physical coordinates by the orthogonal change on all three slots. In that frame
+\[
+V_T^v=(1+W\cdot v/2)/\sqrt2,\qquad A^0_{TT}=|\chi_T|^2.
+\]
+At a fixed auxiliary point let $\mathsf S_0,\mathsf S_1$ multiply each spatial mode of $u_{\rm w}$ by $b_0m_{\kappa,v},b_1m_{\kappa,v}$, where $b_0,b_1\in\mathbb R$ are defined by $V_T^v=b_0+\mathbf k b_1$. Then
+\[
+b_0=\frac{1+\operatorname{Re}(W)\cdot v/2}{\sqrt2},
+\qquad
+b_1=\frac{\operatorname{Im}_{\mathbf k}(W)\cdot v}{2\sqrt2},
+\qquad A^0_{TT}=|\mathsf S_0u_{\rm w}|^2+|\mathsf S_1u_{\rm w}|^2.
+\]

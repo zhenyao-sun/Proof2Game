@@ -1,0 +1,14 @@
+The local extension bound of \ref{ms:lemma-12-cap} is $O_\varepsilon(R^\varepsilon)$ for every $\varepsilon>0$. The same holds on a fixed larger parameter ball. In fact, changing from $v$ to $Lv$ for fixed $L>1$ changes the physical coordinates by $(x,t)\mapsto (Lx,L^2t)$ and dilates the radius by at most a fixed factor. A smooth cutoff on that larger patch equal to one on $B_d$, times parameter measure $\mathrm dv$, gives a compactly supported smooth surface density $\mu$ with
+\[
+|\widehat\mu(x,t)|\lesssim (1+|(x,t)|)^{-d/2}.
+\]
+For $|x|$ much larger than $|t|$, this follows by integration by parts. Otherwise, when $|(x,t)|$ is large, the Hessian of the phase in $v$ is $2t I_d$ with $|t|\gtrsim |(x,t)|$, and stationary phase gives the bound.
+
+By duality the local estimate gives
+\[
+\|\widehat F(v,|v|^2)\|_{L^{p_c'}(\mu)}
+ \lesssim_\varepsilon R^\varepsilon\|F\|_{L^{p_c'}(\mathbb R^{d+1})}
+\]
+for smooth $F$ supported in any ball of radius $R\geq1$. To see that the cutoff does not change the local assumption, extend against $\mu$ by applying the enlarged-patch extension to the product of the input and the cutoff. The cutoff is bounded, so the $L^{p_c}(\mu)$ norm bounds the corresponding $L^{p_c}(\mathrm dv)$ norm of the product. Apply Tao's epsilon-removal theorem \cite{r-75}, Theorem~1.2, in the compact hypersurface form of Kim \cite{r-46}, Theorem~5.3. For a compact smooth hypersurface measure with power Fourier decay, local restriction at $1<u\leq v\leq 2$ with an arbitrarily small power loss on every ball implies global restriction from $L^w$ to $L^v(\mu)$ for $1\leq w<u$. Here $u=v=p_c'\in(1,2)$. Duality and zero extension of densities from $B_d$ therefore give $E:L^{p_c}(B_d)\to L^q(\mathbb R^{d+1})$ for every $p_c<q<\infty$. The finite measure of $B_d$ gives $E:L^q\to L^q$ in this range.
+
+If $a\geq b$, use $q=b$ and the finite measure of $B_d$. If $a<b$, set $q=1+b/a'$. The assumption gives $q>1+(d+2)/d=p_c$, and $a<b$ gives $q<b$. Interpolate $E:L^1\to L^\infty$ and $E:L^q\to L^q$ at $\theta=q/b$. Then $1/b=\theta/q$ and $1/a=1-\theta+\theta/q$. This is the interpolation calculation used in \ref{ms:cor-9-3} for the sphere.

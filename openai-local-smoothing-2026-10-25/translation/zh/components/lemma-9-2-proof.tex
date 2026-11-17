@@ -1,0 +1,26 @@
+令 \(d=n-1\)、\(L(R)=\log(2+R)\)，并选取一个非零、非负的 \(\psi\in C_c^\infty((1,2))\)。定义
+\[
+ M_N f=\int\psi(T)e^{iNT}U(T)\chi(|D|/N)f\,dT .
+\]
+对 \(T\) 应用 Hölder 不等式并使用所假设的估计，得 \(\|M_N f\|_p\lesssim L(N)^A\|f\|_p\)，再由稠密性延拓到 \(L^p\)。其乘子为 \(\chi(\rho/N)\widehat\psi(\rho-N)\)，在 \(\rho=|\xi|\) 处取值，其中 \(\widehat\psi(s)=\int e^{-iTs}\psi(T)\,dT\)。对 \(1/2\le |Z|\le3\)，其核为
+\[
+ K_N(Z)=c_n N^{d/2}|Z|^{-d/2}e^{iN|Z|}\psi(|Z|)+O(N^{d/2-1}),\qquad c_n\ne0 .
+\]
+事实上，在极坐标下对 \(u=\rho|Z|\) 处的角积分在两个极点应用驻相法，得展开式
+\[
+ \int_{S^{n-1}}e^{iu\omega_1}\,d\sigma(\omega)
+   =u^{-d/2}(c_+e^{iu}+c_-e^{-iu})+O(u^{-d/2-1})
+\]
+其中 \(c_+c_-\ne0\)。由环带支撑可得余项的径向积分为 \(O(N^{d/2-1})\)，此处还用到 \(\widehat\psi\) 的可积性。在每个主项中，将前置因子 \(\chi(\rho/N)\rho^{d/2}\) 在负 \(\rho\) 上以零延拓，它的取值等于 \(N^{d/2}\)，取值点为 \(N\)，导数为 \(O(N^{d/2-1})\)。在实线积分中将其换成 \(N^{d/2}\)，代价为 \(O(N^{d/2-1})\)，这是由 \(\widehat\psi\) 的一阶绝对矩给出的。再作 Fourier 反演得到 \(\psi(\pm|Z|)\)，其中只有正的自变量有贡献。
+
+令 \(f_N(r\omega)=e^{-iNr}\psi(r)g(\omega)\)，故 \(\|f_N\|_p=C_\psi\|g\|_p\)。下面的线性化沿用 \cite{r-38}, Section 3, equations (3.8)--(3.9) 中从振荡积分转向延拓算子的做法。对 \(|X|\le R\)、\(N\ge4R\) 和 \(r\in\operatorname{supp}\psi\)，
+\[
+ N|r\omega-X/N|=Nr-X\cdot\omega+O(R^2/N).
+\]
+在与 \(f_N\) 的卷积中，径向相位抵消，振幅变化了 \(O(R/N)\)，这里是与它在 \(r\) 处的值作比较。因此核的展开式给出
+\[
+ N^{-d/2}M_N f_N(X/N)
+  =c' Eg(-X)+O((1+R^2)N^{-1}\|g\|_1),\qquad
+ c'=c_n\int r^{d/2}\psi(r)^2\,dr\ne0.
+\]
+选择 \(N=(4+R)^{3+n/p}\)。利用球面测度有限可知，\(L^p(B(0,R))\) 中的误差为 \(O(\|g\|_p)\)。换元 \(X=NY\) 后，左边范数出现前置因子 \(N^{n/p-d/2}=1\)，且 \(L(N)\lesssim_n L(R)\)。调制 \(g(\omega)\)，使用的调制因子为 \(e^{iz\cdot\omega}\)，便将该估计平移到以 \(z\) 为中心的球。

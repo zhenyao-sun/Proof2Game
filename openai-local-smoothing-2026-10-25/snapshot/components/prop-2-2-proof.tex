@@ -1,0 +1,24 @@
+Apply Lemma~\ref{ms:wave-symbol} to the modes, the system matrices and the displacement. For the map of Lemma~\ref{ms:holomorphic-flux-map}, add the passive coordinate in the $s_0$ slot. With state variables $z=(R,\zeta)$ the map is
+\[
+(R,\zeta,\eta)\longmapsto(Y,P,S_1)=(R^2,R\zeta,\eta-\zeta\cdot\zeta/2).
+\]
+On $Y\ne0$, choose a local square root $R$ of $Y$. Then $\zeta=P/R$, $W=\zeta/R$ and $\eta=\Phi$. The complex derivative is block lower triangular with diagonal blocks $2R$, $RI_d$ and $1$. The real volume Jacobian is $J=4|R|^{2d+2}$. Its state derivative $M$ sends $E(v)=(1,v)^{\mathsf t}$ to
+\[
+(2R,\zeta+Rv,-\zeta\cdot v)^{\mathsf t}=2RV^v.
+\]
+For a complex vector $w$ write $\ell(w)=(-w\cdot w/2,w,1)$. The phase covector is $\kappa\ell(v)$ and direct contraction gives $\ell(w)V^v=-(w-W)\cdot(w-v)/2$. In particular $\partial\Phi=\ell(W)$ annihilates $V^v$, as does $\ell(v)$. Differentiating $P/Y$ gives $(\partial W)V^v=(v-W)/(2Y)$.
+
+The attenuation in Lemma~\ref{ms:wave-symbol} gives $|\zeta-vR|^2=y|W-v|^2$. Since $2|R|/\sqrt J=y^{-d/2}$, the contribution of the mode to the column $\widetilde\chi$ of Lemma~\ref{ms:holomorphic-flux-map} is
+\[
+V^v g\mathbf i\,\overline{u_{\kappa,v}}\,m_{\kappa,v},
+\qquad g=R/|R|.
+\]
+Here the Fourier plane has been identified with $\mathbb C_{\mathbf i}$. Multiplying all entries on the right by $(g\mathbf i)^{-1}$ leaves their quaternionic outer product unchanged. Conjugation by $\mathbf i$ fixes the Fourier plane and conjugation by $g$ sends $\mathbf i$ to $g^2\mathbf i=e\mathbf i$, using $\mathbf i c=\bar c\mathbf i$ for $c\in\mathbb C_{\mathbf k}$. The resulting column is exactly $\chi$ in the statement. The formula uses $Y$ itself, so the branch choice disappears. The conservation law is the one in Lemma~\ref{ms:holomorphic-flux-map}. Positivity is immediate from the outer product, and left multiplication by the row $\partial\Phi$ gives zero by the mode identity. The orthogonal change of real index acts in the same way on the three slots, and preserves divergence. The displayed time row follows from $T=(t-s_0)/\sqrt2$.
+
+For fixed $\kappa$ and real $W$, the exponential is a Gaussian centered at $\kappa W$ in transverse frequency $\kappa v$. Since $V_t^v=1$, the null component $A^0_{tt}$ is the squared modulus of the Gaussian-windowed scalar wave at that $\kappa$. For the full wave the sum over $\kappa$ occurs before taking the square.
+
+At a fixed auxiliary point, splitting $V_T^v$ into its real and $\mathbf k$ parts gives $\chi_T=\iota_e(\overline{\mathsf S_0u_{\rm w}})+\mathbf k\iota_e(\overline{\mathsf S_1u_{\rm w}})$. Conjugation by $g$ sends the two orthogonal planes $\mathbb C_{\mathbf i}$ and $\mathbf k\mathbb C_{\mathbf i}$ to the planes of these two terms, since $g$ commutes with $\mathbf k$. This proves the time-component identity. At $W=0$ it gives
+\[
+2A^0_{TT}=\left|\sum_{\kappa,v}(\kappa/y)^{d/2}
+ e^{-\kappa y|v|^2/2}u_{\kappa,v}\right|^2.
+\]

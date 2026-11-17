@@ -1,0 +1,33 @@
+记 $p=p_c$、$A=2/p_c$、$S(t)=e^{\mathrm it\Delta}$ 和 $I_0=[1/2,1]$。固定 $\chi\in C_c^\infty(B(0,2))$，使它在 $B(0,1)$ 上等于一，并记 $P_N=\chi(D/N)$，于是 $P_Nf=f$。将 $\mathbb R^d$ 用立方体 $Q$ 铺满，其边长为 $N$，并令 $30Q$ 为边长 $30N$ 的同心立方体。
+
+对 $|z|\geq8N$ 和 $t\in I_0$，核 $K_{N,t}$（对应于 $S(t)P_N$）满足
+\[
+|K_{N,t}(z)|\leq C_M N^d(1+N|z|)^{-M}.
+\]
+事实上，经过 $\xi=N\eta$ 后，在 $\eta$ 变量上的相位梯度为 $Nz-2tN^2\eta$，它在截断函数的支撑上的模至少为 $N|z|/2$。其正阶导数要么是 $O(N^2)$，要么为零，且 $N^2\lesssim N|z|$。反复分部积分给出一致估计。对 $x\in Q$ 和 $y\notin30Q$，有 $|x-y|\geq8N$，故在每个立方体上，远处贡献都由将 $|f|$ 与 $C_M N^d(1+N|\cdot|)^{-M}$ 卷积所得的同一函数控制。当 $M>d$ 时，后一核的 $L^1$ 范数有界，故由 Young 不等式，得到界 $O(\|f\|_p)$，作用域为 $\mathbb R^d\times I_0$。
+
+对于近处贡献，将 $Q$ 平移到原点，在平移后的坐标下令 $h=f\mathbf 1_{30Q}$。两个乘子在 $L^2$ 上可交换，且
+\[
+S(t)P_Nh(x)=P_NS(t)h(x)
+ =\int\check\chi(w)\,S(t)h(x-w/N)\,\mathrm dw.
+\]
+这里 $\check\chi$ 表示带因子 $(2\pi)^{-d}$ 的逆 Fourier 变换。取 $\lambda=16\sqrt d\,N$ 和 $g(v)=h(\lambda v)$，后者支撑于 $B_d=B(0,1)\subset\mathbb R^d$。由于 $h\in L^1\cap L^2$，可以应用 Fresnel 公式，且其中的空间积分绝对收敛。作代换 $y=\lambda v$，得到
+\[
+|S(t)h(z)|=(4\pi t)^{-d/2}\lambda^d
+ \left|Eg\!\left(-\frac{\lambda z}{2t},\frac{\lambda^2}{4t}\right)\right|,
+\quad
+Eg(x,t)=\int_{B_d}e^{\mathrm i(x\cdot v+t|v|^2)}g(v)\,\mathrm dv.
+\]
+对 $z=x-w/N$，若 $x\in Q$ 和 $t\in I_0$，两个自变量落在同一个半径为 $C_d(N^2+|w|)$ 的球中。映射 $(x,t)\mapsto(-\lambda(x-w/N)/(2t),\lambda^2/(4t))$ 由其最后一个坐标可知是单射。其 Jacobian 的绝对值为 $(\lambda/(2t))^d\lambda^2/(4t^2)\asymp_d\lambda^{d+2}$。由 $\|g\|_p=\lambda^{-d/p}\|h\|_p$，\ref{ms:lemma-12-cap} 给出
+\[
+\|S(t)h(x-w/N)\|_{L^p(Q\times I_0)}
+ \lesssim_d \lambda^{d-(2d+2)/p}[\log(2+N^2+|w|)]^A\|h\|_p.
+\]
+$\lambda$ 的幂次为零。利用 Minkowski 不等式和 $\check\chi$ 的快速衰减，近处贡献的范数至多为 $C[\log(2+N)]^A\|f\|_{L^p(30Q)}$。对这些量求 $p$ 次幂，再对 $Q$ 求和，其中用到 $30Q$ 的重叠次数有统一上界，再加上远处贡献的界。这就证明了 $I_0$ 上的结论。
+
+在 $[a/2,a]$ 上，其中 $a>0$，令 $f_a(x)=f(\sqrt a\,x)$。遂有 $S(t)f_a(x)=(S(at)f)(\sqrt a\,x)$，且 $\widehat f_a$ 的支撑半径至多为 $\sqrt a\,N$。对 $I_0$ 上的估计作伸缩，空间因子相互抵消，得到
+\[
+\|S(t)f\|_{L^p(\mathbb R^d\times[a/2,a])}
+ \lesssim_d a^{1/p}[\log(2+\max(2,\sqrt a\,N))]^A\|f\|_p.
+\]
+对于有界的正时间，求 $p$ 次幂之和，所用区间由 $a=T2^{-j}$、$j\geq0$ 与固定的 $T>0$ 给出。对数项由 $C_T\log(2+N)$ 控制，并且 $\sum_j T2^{-j}<\infty$。对于负时间，采用 $S(-t)f=\overline{S(t)\overline f}$，其频率球条件相同。这便给出 $I$ 上的结果。

@@ -1,0 +1,39 @@
+Let $n\ge2$, $d=n-1$, $h>0$, $K\ge1$, $a=Kh$, and $w_0=1/10$. Use $T\in\mathbb R$ and $X\in\mathbb T^n=\mathbb R^n/(100\mathbb Z^n)$, with spatial frame $X=(x,b)$ on the covering space, $x\in\mathbb R^d$, $b\in\mathbb R$. The auxiliary coordinates are $(\tau,P,Z)\in\mathbb C_{\mathbf k}\times\mathbb C_{\mathbf k}^d\times\mathbb C_{\mathbf k}$, where $\mathbb C_{\mathbf k}=\mathbb R+\mathbf k\mathbb R$. For $Y=(\tau+Z)/\sqrt2\ne0$ define
+\[
+ W=P/Y,\qquad \Phi=(Z-\tau)/\sqrt2+(P\cdot P)/(2Y),\qquad
+ Q=\Phi/a,\qquad r=|W|^2/w_0^2+100|Q|^2-1 .
+\]
+The dot is the complex bilinear product and the norms are Euclidean. For $z=(T,\tau)$ with $a<s=|\tau|<4$, let
+\[
+ \Omega_z=\{(X,P,Z)\in\mathbb T^n\times\mathbb C_{\mathbf k}^d\times\mathbb C_{\mathbf k}:Y\ne0,\ r<0\}.
+\]
+For the full operators let $j=0$ correspond to $T$ and $\tau$, $1\le j\le d$ to $x_j$ and $P_j$, and $j=n$ to $b$ and $Z$. In each triple $x_{j0}$ is the real spacetime coordinate, and $x_{j1},x_{j2}$ are the coefficients of $1,\mathbf k$ in its corresponding auxiliary coordinate. The spatial slot-$0$ derivatives are taken along the chosen frame on the covering space and act on periodic functions. Let $(e_0,e_1,e_2)=(1,\mathbf i,\mathbf j)$, with $\mathbf k\mathbf i=\mathbf j$, and write $\partial_{j\alpha}=\partial/\partial x_{j\alpha}$. Set
+\[
+ G_j(w)=\sum_{\alpha=0}^2 e_\alpha\partial_{j\alpha}w,\qquad
+ H_{jk}(w)=\sum_{\alpha,\beta=0}^2 e_\alpha\bar e_\beta\partial_{j\alpha}\partial_{k\beta}w .
+\]
+A subscript $\mathrm{fib}$ restricts to the $n$ spatial indices $1,\ldots,n$ at fixed $z$. Use the Moore determinant and its cofactor $C$, characterized by
+$\operatorname{Re}\operatorname{tr}(C(D)M)=\left.\frac{d}{dt}\det(D+tM)\right|_{t=0}$
+for Hermitian $M$.
+
+Let $f$ be a trigonometric polynomial on this torus with $\|f\|_2=1$, frequencies in a fixed annulus $c_0\le h|\xi|\le C_0$ with $0<c_0<C_0$. In the chosen frame $X=(x,b)$, assume the supported frequencies have $\kappa=(\xi_b+|\xi|)/\sqrt2>0$ and $|v|\le\gamma<w_0/4$, where $v=\xi_x/\kappa$. Set $y=|Y|$, $e=Y/y$, and $\iota_e(\alpha+\mathrm i\beta)=\alpha+e\mathbf i\beta$ for real $\alpha,\beta$. To obtain the wave current, form the following column in null coordinates $t=(T+b)/\sqrt2$, $s_0=(b-T)/\sqrt2$:
+\[
+ \chi=\sum_{\xi}
+ \begin{pmatrix}1\\(v+W)/2\\-W\cdot v/2\end{pmatrix}
+ \iota_e\!\bigl(\overline{\widehat f(\xi)e^{\mathrm i(X\cdot\xi-T|\xi|)}}\bigr)
+ (\kappa/y)^{d/2}e^{-\kappa y|W-v|^2/2}.
+\]
+Use the orthogonal change of index from $(t,x,s_0)$ to $(T,x,b)$ to express $\chi$ in physical coordinates and set $A^0=\chi\chi^*$ there. For $\ell>0$ let $J_\ell$ be the periodization of the probability kernel $c_n\ell^{-n}(1+|X/\ell|^2)^{-n-2}$, with $c_n$ normalizing the integral. Fix a smooth $0\le g\le1$ on $\mathbb C_{\mathbf k}$ equal to one on $|Q|\le1/100$ and zero on $|Q|\ge1/20$. Define
+\[
+ A_{\rm w}=g(Q)(J_h*_X A^0),\qquad A=A_{\rm w}+h^{50n}C(H(r)),\qquad
+ \mu=A_{TT},\qquad B_0=\lambda|\Phi|^2,\qquad\lambda=h^{-30n}.
+\]
+Here $*_X$ denotes convolution in the real periodic variables only. Put $B=H(B_0)$ and $B_{\rm fib}=H_{\rm fib}(B_0)$.
+
+For sufficiently small $h>0$ with $4a\le1$, $A$ is positive semidefinite with divergence-free real columns, $\mu>0$, $A:B=0$, and $C(H(r))G(r)=0$. The spatial matrix $B_{\rm fib}$ has rank one and its nonzero eigenvalue $\beta$ satisfies $\beta\asymp\lambda$. The density satisfies $\mu^{1/d}\le\lambda$. There is a unique smooth real $u$ on each closed fiber such that
+\[
+ D_u=H_{\rm fib}(B_0+u)>0,\qquad
+ \det D_u=\lambda\mu,\qquad u|_{\partial\Omega_z}=0.
+\]
+It satisfies $u\le0$ and is smooth in $z$ up to the lateral boundary. For $0<\alpha\le\lambda$,
+$\det(B_{\rm fib}+\alpha I)=(\beta+\alpha)\alpha^d\asymp\lambda\alpha^d$.

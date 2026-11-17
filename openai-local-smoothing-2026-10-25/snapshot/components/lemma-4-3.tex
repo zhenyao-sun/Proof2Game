@@ -1,0 +1,32 @@
+Let $\mathbb H$ be the real associative algebra with basis $(1,\mathbf i,\mathbf j,\mathbf k)$, unit $1$, and multiplication determined by
+$\mathbf i^2=\mathbf j^2=\mathbf k^2=-1$, $\mathbf i\mathbf j=\mathbf k$, $\mathbf j\mathbf k=\mathbf i$, and $\mathbf k\mathbf i=\mathbf j$, with the opposite products having the opposite signs. Quaternionic conjugation is
+$\overline{q_0+q_1\mathbf i+q_2\mathbf j+q_3\mathbf k}=q_0-q_1\mathbf i-q_2\mathbf j-q_3\mathbf k$.
+Write $\mathbb C_{\mathbf k}=\{x+\mathbf k y:x,y\in\mathbb R\}$ for the complex subalgebra with the inherited multiplication and conjugation. We use quaternionic columns with scalars acting on the right, and $A^*$ denotes quaternionic conjugate transpose.
+
+Fix an integer $n\ge2$, a real parameter $a>0$, and $z=(T,\tau)\in\mathbb R\times\mathbb C_{\mathbf k}$ with $a<|\tau|<4$. Let $\Omega_z=(\mathbb R^n/(100\mathbb Z^n))\times V_z$, where $V_z$ is the open set of $(P,Z)\in\mathbb C_{\mathbf k}^{n-1}\times\mathbb C_{\mathbf k}$ for which
+\[
+ Y=(\tau+Z)/\sqrt2\ne0,\qquad
+ 100\left|P/Y\right|^2+100\left|\frac{(Z-\tau)/\sqrt2+P\cdot P/(2Y)}{a}\right|^2<1,
+\]
+with $P\cdot P$ using the bilinear dot product. Write $x_{j0}$ for the spatial torus coordinates and $x_{j1}+\mathbf k x_{j2}$ for the components of $(P,Z)$ in matching order. With $(e_0,e_1,e_2)=(1,\mathbf i,\mathbf j)$ and $\partial_{j\alpha}=\partial/\partial x_{j\alpha}$, put
+\[
+G_{{\rm fib},j}(v)=\sum_{\alpha=0}^2e_\alpha\partial_{j\alpha}v,\qquad
+H_{{\rm fib},jk}(v)=\sum_{\alpha,\beta=0}^2 e_\alpha\bar e_\beta
+      \partial_{j\alpha}\partial_{k\beta}v .
+\]
+Use the Moore determinant on Hermitian quaternionic matrices. Its cofactor is defined by
+$\operatorname{Re}\operatorname{tr}(C(D)B)=\left.\frac{d}{dt}\det(D+tB)\right|_{t=0}$
+for Hermitian $B$. Let $B_0\in C^\infty(\overline\Omega_z;\mathbb R)$ have positive semidefinite spatial quaternionic Hessian $B_{\rm fib}=H_{\rm fib}(B_0)$ of rank one. Let $\lambda>0$ be a constant and $\mu:\overline\Omega_z\to(0,\infty)$ the smooth Dirichlet density. Let $u\in C^\infty(\overline\Omega_z;\mathbb R)$ satisfy $u\le0$, $u|_{\partial\Omega_z}=0$, $D_u>0$ in $\Omega_z$, and $\det D_u=\lambda\mu$, where $D_v=H_{\rm fib}(B_0+v)$. Set
+\[
+ \mathcal F=\lambda^{-1}\int_{\Omega_z}u\int_0^1\det D_{\theta u}\,\mathrm d\theta\,\mathrm d\zeta
+  -\int_{\Omega_z}u\mu\,\mathrm d\zeta,
+ \qquad X_0=\int_{\Omega_z}(-u)\mu\,\mathrm d\zeta.
+\]
+Then
+\[
+ \mathcal F=\frac{n-1}{n+1}X_0+\frac{1}{\lambda n(n+1)}
+ \int_{\Omega_z} G_{\rm fib}(u)^* C(D_u)G_{\rm fib}(u)\,\mathrm d\zeta,
+ \qquad
+ \frac{n-1}{n+1}X_0\le\mathcal F\le\frac n{n+1}X_0.
+\]
+Here $\mathrm d\zeta=\mathrm dX\,\mathrm dP\,\mathrm dZ$ is ordinary fiber volume.

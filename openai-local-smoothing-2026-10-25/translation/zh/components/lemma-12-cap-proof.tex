@@ -1,0 +1,17 @@
+应用局部球面延拓估计 \ref{ms:lemma-9-2}，取 $n=d+1$。其对数指数为 $A=2/p_c$，见临界环带估计 \ref{ms:thm-1-2}。对于 $0<\delta\leq 1/2$，将 $S^d$ 上的一个球冠用 $\omega(v)=(\delta v,\sqrt{1-\delta^2|v|^2})$（$v\in B_d$）参数化。在此球冠上，定义球面密度 $G$，令其等于 $G(\omega(v))=g(v)\sqrt{1-\delta^2|v|^2}$，并在球冠外将密度置零。于是
+\[
+G(\omega)\,\mathrm d\sigma(\omega)=\delta^d g(v)\,\mathrm dv,
+\qquad
+\|G\|_{L^{p_c}(S^d)}\lesssim \delta^{d/p_c}\|g\|_{p_c}.
+\]
+在 $X=(x/\delta,-2t/\delta^2)$ 处，其球面延拓为 $\delta^d e^{-2\mathrm it/\delta^2} E_\delta g(x,t)$，其中 $E_\delta$ 是将 $|v|^2$ 换成下式后所得的延拓
+\[
+q_\delta(v)=\frac{2(1-\sqrt{1-\delta^2|v|^2})}{\delta^2}.
+\]
+转换到坐标 $X$，Jacobian 的绝对值为 $2\delta^{-(d+2)}$，并将 $B(0,R)$ 映入 $B(0,CR/\delta^2)$。因此由球面估计得到
+\[
+\|E_\delta g\|_{L^{p_c}(B(0,R))}
+ \lesssim \delta^{-d+(d+2)/p_c+d/p_c}
+ [\log(2+R/\delta^2)]^A\|g\|_{p_c}.
+\]
+$\delta$ 的指数为零。在 $B_d$ 上有一致估计 $q_\delta(v)=|v|^2+O(\delta^2)$。观测球上满足 $|t|\leq R$，故逐点差值由 $CR\delta^2\|g\|_1$ 控制。其在该球上的 $L^{p_c}$ 范数不超过 $C R^{1+(d+1)/p_c}\delta^2\|g\|_{p_c}$。取 $\delta=(2R)^{-(d+2)}$，即为 $O(\|g\|_{p_c})$，且 $\log(2+R/\delta^2)\lesssim_d \log(2+R)$。对以 $z=(z_x,z_t)$ 为中心的球，将原点处的估计应用于 $e^{\mathrm i(z_x\cdot v+z_t|v|^2)}g(v)$。

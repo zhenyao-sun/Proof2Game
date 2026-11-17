@@ -1,0 +1,9 @@
+Let $d_X,N\ge1$ be integers and $\mathcal U\subset\mathbb C^{d_X}$ open. For $1\le\mu\le d_X$ let $C^\mu$ be constant real symmetric $N\times N$ matrices. Let $f_{\rm sys}:\mathcal U\to\mathbb C^N$ be holomorphic and solve $\mathcal P f_{\rm sys}=0$, where $\mathcal P=\sum_{\mu=1}^{d_X} C^\mu\partial_{\mathsf X^\mu}$. Use real $\mathsf X\in\mathbb R^{d_X}$ and $w_1,w_2\in\mathbb R^N$. Define $q$ by the first formula below and the remaining quantities on the open set $\{(\mathsf X,w_1,w_2):\mathsf X-\mathrm i q\in\mathcal U\}$. State indices $a$ range from $1$ to $N$ and $\ell$ from $1$ to $2$.
+\[
+q^\mu=\tfrac12\sum_{\ell=1}^2w_\ell^{\mathsf t}C^\mu w_\ell,\quad
+G=\overline{f_{\rm sys}(\mathsf X-\mathrm i q)},\quad
+V_{\ell a}=\sum_\mu(C^\mu w_\ell)_a\partial_{\mathsf X^\mu},\quad
+D_{\ell a}=\partial_{w_{\ell a}}+\mathrm iV_{\ell a},\quad
+\mathcal Z_\ell=\sum_aG_aD_{\ell a}.
+\]
+In the real coordinates $(\mathsf X,w_1,w_2)$ the tensor $B=\operatorname{Re}\sum_{\ell=1}^2\mathcal Z_\ell\otimes\overline{\mathcal Z_\ell}$ is symmetric and positive semidefinite, with zero divergence in every column.

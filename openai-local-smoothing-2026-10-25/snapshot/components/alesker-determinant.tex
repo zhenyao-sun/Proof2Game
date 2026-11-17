@@ -1,0 +1,17 @@
+The rank-one perturbation of the Moore determinant follows from the diagonal perturbation formula and unitary invariance below. The proof will differentiate the resulting formula to identify the corresponding cofactor.
+
+\begin{Proposition}[Alesker, Theorem 1.1.9(ii) and Proposition 1.1.11]\label{ext:alesker-determinant}
+Let $\mathbb H$ be the real associative algebra with unit $1$ and basis $(1,\mathbf i,\mathbf j,\mathbf k)$, with $\mathbf i^2=\mathbf j^2=\mathbf k^2=\mathbf i\mathbf j\mathbf k=-1$. Conjugation fixes the real coefficient and negates the other three. On quaternionic columns use right scalar multiplication and inner product $v^*w$, with $^*$ denoting conjugate transpose.
+
+For $m\ge1$, every quaternionic $m\times m$ matrix $A=A^*$ has a quaternionic orthonormal eigenbasis with real eigenvalues $\lambda_1,\ldots,\lambda_m$ by Claim~1.1.7 of \cite{r-2}. For each real $\lambda$, the number of entries equal to $\lambda$ in this list is $\dim_{\mathbb H}\ker(A-\lambda I_m)$, so the list with multiplicities is independent of the basis up to order. Define the Moore determinant by
+\[
+ \det A=\prod_{a=1}^m\lambda_a.
+\]
+Thus $\det I_m=1$. The unitary invariance of Theorem~1.1.9(ii) and the real diagonal formula of Example~1.1.10(a) in \cite{r-2} identify this product with the normalized determinant of Theorem~1.1.8. For every quaternionic $m\times m$ matrix $U$ with $U^*U=I_m$ and every real diagonal $T=\operatorname{diag}(t_1,\ldots,t_m)$,
+\[
+ \det(U^*AU)=\det A,\qquad
+ \det(A+T)=\sum_{I\subseteq\{1,\ldots,m\}}
+          \left(\prod_{i\in I}t_i\right)\det A_{I^c,I^c}.
+\]
+Here $A_{I^c,I^c}$ is the principal submatrix on $I^c$ and the determinant of the empty matrix is one. See \cite{r-2}, pp.~7--8, for the normalization and the identities.
+\end{Proposition}

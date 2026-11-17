@@ -1,0 +1,24 @@
+低频波乘子在原点以外光滑。以下乘子界用它在原点以外的导数估计来控制它。
+
+\begin{Proposition}[Mihlin--H\"ormander 乘子界]\label{ext:mihlin-multiplier}
+设 $n\ge1$、$N=\lfloor n/2\rfloor+1$ 和 $1<p<\infty$。对复值符号 $m\in C^N(\mathbb R^n\setminus\{0\})$，假设
+\[
+ A=\max_{|\alpha|\le N}\ \sup_{\xi\ne0}|\xi|^{|\alpha|}
+             |\partial_\xi^\alpha m(\xi)|<\infty.
+\]
+对 $f\in\mathcal S(\mathbb R^n)$，用下式定义 $m(D)f=(m\widehat f)^\vee$
+\[
+ \widehat f(\xi)=\int_{\mathbb R^n}e^{-ix\cdot\xi}f(x)\,dx,\qquad
+ g^\vee(x)=(2\pi)^{-n}\int_{\mathbb R^n}e^{ix\cdot\xi}g(\xi)\,d\xi .
+\]
+$m$ 在原点的取值无关紧要。则
+\[
+ \|m(D)f\|_{L^p(\mathbb R^n)}
+ \le C_{n,p} A\|f\|_{L^p(\mathbb R^n)}
+ \qquad (f\in\mathcal S(\mathbb R^n)).
+\]
+由稠密性，$m(D)$ 唯一延拓为 $L^p(\mathbb R^n)$ 上的有界算子，且对每个 $f\in L^p(\mathbb R^n)$ 都满足同一个不等式。
+事实上，所列导数界蕴含如下环带 $L^2$ 界
+$\|\partial^\alpha m\|_{L^2(\{R<|\xi|<2R\})}\le C_n A R^{n/2-|\alpha|}$
+这正是 \cite{r-32}, Theorem~6.2.7 and (6.2.14), p.~446 中所用的界。
+\end{Proposition}

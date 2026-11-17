@@ -1,0 +1,42 @@
+设 $n\ge2$、$d=n-1$、$p_c=2n/d$，固定 $0<c_1<c_2$。在空间环面 $\mathbb T^n=\mathbb R^n/(100\mathbb Z)^n$ 上，于标准正交标架中记 $X=(x,b)$，其中 $x\in\mathbb R^d$。对每个满足 $\xi_b+|\xi|>0$ 的频率，令 $\kappa=(\xi_b+|\xi|)/\sqrt2$ 和 $v=\xi_x/\kappa$。存在常数 $\gamma>0$、$K\ge1$ 和 $c,C>0$，只依赖于 $n,c_1,c_2$，，具有下述性质。设 $0<h<1/(4K)$、$a=Kh$，令 $f$ 为三角多项式，其 $L^2$ 范数为一，Fourier 支撑由满足 $c_1\le h|\xi|\le c_2$、$\xi_b+|\xi|>0$ 和 $|v|\le\gamma$ 的频率组成。记 $g_T=e^{-\mathrm i T|D|}f$。
+
+以下定义结论所用的能量。对于 $z=(T,\tau)$，其中 $\tau$ 位于四元数中的复平面 $\mathbb C_{\mathbf k}$ 上，且 $s=|\tau|\in(a,4)$，取辅助空间坐标 $(P,Z)\in\mathbb C_{\mathbf k}^{d}\times\mathbb C_{\mathbf k}$。令
+\[
+Y=(\tau+Z)/\sqrt2,\quad S_1=(Z-\tau)/\sqrt2,\quad
+y=|Y|,\quad W=P/Y,\quad \Phi=S_1+P\cdot P/(2Y),\quad Q=\Phi/a .
+\]
+复向量的点积是双线性的。取 $w_0=1/10$，设 $\Omega_z$ 为环面与辅助区域 $Y\ne0$ 的乘积，其中 $r=|W|^2/w_0^2+100|Q|^2-1<0$。记 $\mathrm d\zeta=\mathrm dX\,\mathrm dP\,\mathrm dZ$。全四元数 Hessian 与梯度 $H,G$ 对每个指标采用三个实槽 $(1,\mathbf i,\mathbf j)$，其中 $\mathbf k\mathbf i=\mathbf j$。在这些以 $e_\alpha$ 为基的槽中，各分量为
+\[
+H_{ab}(w)=\sum_{\alpha,\beta=0}^2 e_\alpha\overline{e_\beta}\,\partial_{a\alpha}\partial_{b\beta}w,\qquad
+G_a(w)=\sum_{\alpha=0}^2e_\alpha\partial_{a\alpha}w .
+\]
+下标 $\mathrm{fib}$ 表示固定 $z$ 时取空间块。这些 Hermitian 矩阵的行列式及余子式矩阵分别指 Moore 行列式及其矩阵导数。
+
+对 $\ell>0$，令 $J_\ell$ 为 $c_n\ell^{-n}(1+|X/\ell|^2)^{-n-2}$ 的周期化，选取 $c_n$ 使得核的积分为一。取固定的光滑截断函数 $0\le g\le1$，使它在 $|Q|\le1/100$ 上等于一，在 $|Q|\ge1/20$ 上等于零。波流 $A^0=\chi\chi^*$ 在零坐标中为
+\[
+\chi=\sum_\xi
+\begin{pmatrix}1\\(v+W)/2\\-W\cdot v/2\end{pmatrix}
+\iota_{Y/y}(\overline{\widehat f(\xi)e^{\mathrm i(X\cdot\xi-T|\xi|)}})
+(\kappa/y)^{d/2}e^{-\kappa y|W-v|^2/2},
+\qquad
+\iota_e(\alpha+\mathrm i\beta)=\alpha+e\mathbf i\beta .
+\]
+对坐标指标作变换 $T=(t-s_0)/\sqrt2$、$b=(t+s_0)/\sqrt2$，回到物理坐标。对 $X$ 作卷积，定义
+\[
+A_{\mathrm w}=g(Q)(J_h*A^0),\qquad
+\mu=(A_{\mathrm w})_{TT}+h^{50n}\operatorname{Cof}(H(r))_{TT},\qquad
+B_0=\lambda|\Phi|^2,\quad \lambda=h^{-30n},\quad
+D_w=H_{\mathrm{fib}}(B_0+w).
+\]
+对纤维上的光滑零边值解 $u$，它满足 $D_u>0$、$\det D_u=\lambda\mu$，令
+\[
+\mathcal F(T,\tau)=\int_{\Omega_z}(-u)\mu\,\mathrm d\zeta+
+\frac1\lambda\int_{\Omega_z}u\left(\int_0^1\det D_{\theta u}\,\mathrm d\theta\right)\mathrm d\zeta .
+\]
+能量 $\mathcal F$ 非负，且在开参数域 $\mathbb R_T\times\{\tau:a<|\tau|<4\}$ 上光滑。以下范数均在环面上取值，
+\begin{align*}
+\mathcal F(0,\tau)&\le Ca^2\|f\|_{p_c}^{p_c} && (|\tau|=4a),\\
+\mathcal F(T,\tau)&\ge ca^2\|g_T\|_{p_c}^{p_c} && (|\tau|=2a),\\
+\Delta_z\mathcal F(T,\tau)&\le Cs^{-2}e^{-cs/h}\mathcal F(T,\tau) && (2a\le s\le3).
+\end{align*}
+最后两个估计对所有实 $T$ 成立，$\Delta_z$ 是 $T$ 和 $\tau$ 的两个实坐标上的欧氏 Laplace 算子。

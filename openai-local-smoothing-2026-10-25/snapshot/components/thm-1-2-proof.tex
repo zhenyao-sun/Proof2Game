@@ -1,0 +1,63 @@
+Write \(h=N^{-1}\) and choose a fixed compact annulus
+\(c_0\le|\eta|\le C_0\) containing the support of \(\varphi\).
+Choose a smooth finite partition \(\varphi=\sum_\nu\varphi_\nu\)
+subordinate to caps of the aperture in \ref{ms:prop-6-3} for this
+annulus. On the torus \(\mathbb R^n/(100\mathbb Z)^n\), apply
+\ref{ms:prop-6-3} to \(\varphi_\nu(hD)F\). Its \(L^{p_c}\) norm is
+bounded uniformly by \(C_\nu\|F\|_{p_c}\): its convolution kernel
+is the periodization of \(h^{-n}\check\varphi_\nu(\cdot/h)\),
+whose \(L^1\) norm is at most \(\|\check\varphi_\nu\|_1\).
+Here \(\check\varphi_\nu\) denotes the inverse Fourier transform.
+The torus carries ordinary Lebesgue volume on a fundamental cube,
+so the periodized kernel has the same multiplier at frequencies
+\((2\pi/100)\mathbb Z^n\). Summing over \(\nu\) yields
+\[
+ \|U(T)\varphi(hD)F\|_{L^{p_c}(I\times\mathbb T^n)}
+ \le C[\log(2/h)]^{2/p_c}\|F\|_{L^{p_c}(\mathbb T^n)}.
+\]
+
+On \(\mathbb R^n\) the convolution kernel is
+\[
+ K_h(T,X)=(2\pi h)^{-n}
+   \int e^{i(X\cdot\eta-T|\eta|)/h}\varphi(\eta)\,d\eta .
+\]
+For \(T\in I\) and \(|X|\ge3\), the phase \(\Phi=X\cdot\eta-T|\eta|\)
+satisfies \(|\nabla_\eta\Phi|\ge |X|/3\), and its derivatives of
+order at least two are uniformly bounded on the annulus. Integrate
+by parts with \(h\nabla_\eta\Phi\cdot\nabla_\eta/(i|\nabla_\eta\Phi|^2)\).
+The coefficient without \(h\) and all of its derivatives on the
+support are \(O(|X|^{-1})\). Thus \(M+n\) iterations for integer
+\(M\ge1\) give
+\[
+ |K_h(T,X)|\le C_M h^M(1+|X|)^{-M}
+ \qquad (T\in I,\ |X|\ge3).
+\]
+Tile \(\mathbb R^n\) by unit cubes \(Q\), and let \(10Q\) be the
+concentric cube of side ten. For \(X\in Q\) and \(Y\notin 10Q\)
+one has \(|X-Y|\ge9/2\). On every cube the far contribution is
+therefore bounded by the single function
+\[
+ C_M h^M\big((1+|\cdot|)^{-M}*|f|\big)(X).
+\]
+For \(M>n\), this function has \(L^{p_c}(I\times\mathbb R^n)\)
+norm at most \(C_M h^M\|f\|_{p_c}\) by Young's inequality and
+\(|I|=1\).
+
+For the near contribution put \(f_Q=f\mathbf 1_{10Q}\). Translate the
+center of \(Q\) to the origin and periodize \(f_Q\) at period \(100\).
+The periodic input has norm \(\|f\|_{L^{p_c}(10Q)}\). The periodic
+output uses \(\sum_{k\in\mathbb Z^n}K_h(T,X+100k)\) as its kernel.
+For \(X\in Q\), \(Y\in 10Q\), and \(k\ne0\), the argument
+\(X-Y+100k\) has length at least \(94.5|k|\): for every nonzero
+coordinate \(k_j\), \(|X_j-Y_j+100k_j|\ge 94.5 |k_j|\).
+The decay bound and \(M>n\) show that the periodic and Euclidean
+outputs differ on \(I\times Q\) by at most
+\(C_M h^M\|f_Q\|_1\) pointwise. The volume of \(10Q\) is fixed, so
+the torus bound and Hölder's inequality give
+\[
+ \|U(T)P_Nf_Q\|_{L^{p_c}(I\times Q)}
+ \le C[\log(2/h)]^{2/p_c}\|f\|_{L^{p_c}(10Q)}.
+\]
+Take \(p_c\)-th powers and sum over \(Q\). The cubes \(10Q\) have
+bounded overlap. Adding the far output proves the result since
+\(\log(2/h)\) is comparable to \(\log(2+N)\).

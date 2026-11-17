@@ -1,0 +1,37 @@
+Use the three-slot fiber with $Y=(\tau+Z)/\sqrt 2$, $W=P/Y$, $\Phi=(Z-\tau)/\sqrt 2+(P\cdot P)/(2Y)$, $Q=\Phi/a$, and $r=|W|^2/w_0^2+100|Q|^2-1$, where $w_0=1/10$, $a=Kh$, $K\ge1$, $d=n-1$, and $n\ge2$. Let $z=(T,\tau)$, $s=|\tau|$, $a<s<4$, and take $\Omega_z=\{r<0\}$ in the variables $(X,P,Z)$ with $X$ on the fixed spatial torus and $Y\ne0$. Write $x_{j0}$ for the real coordinates $(T,X)$ and $x_{j1}+\mathbf kx_{j2}$ for the corresponding auxiliary coordinates $(\tau,P,Z)$. Let $(e_0,e_1,e_2)=(1,\mathbf i,\mathbf j)$, with $\mathbf k\mathbf i=\mathbf j$, and write $\partial_{j\alpha}=\partial/\partial x_{j\alpha}$. Set
+\[
+ G_j(w)=\sum_{\alpha=0}^2 e_\alpha\partial_{j\alpha}w,\qquad
+ H_{jk}(w)=\sum_{\alpha,\beta=0}^2 e_\alpha\bar e_\beta\partial_{j\alpha}\partial_{k\beta}w .
+\]
+A subscript $\mathrm{fib}$ restricts to spatial indices. Use the Moore determinant and its cofactor $C$, characterized by
+$\operatorname{Re}\operatorname{tr}(C(D)M)=\left.\frac{d}{dt}\det(D+tM)\right|_{t=0}$
+for Hermitian $M$.
+
+Let $f$ be a trigonometric polynomial on this torus with $\|f\|_2=1$, frequencies in a fixed annulus $c_0\le h|\xi|\le C_0$ with $0<c_0<C_0$. In the chosen frame $X=(x,b)$, assume the supported frequencies have $\kappa=(\xi_b+|\xi|)/\sqrt2>0$ and $|v|\le\gamma<w_0/4$, where $v=\xi_x/\kappa$. Set $y=|Y|$, $e=Y/y$, and $\iota_e(\alpha+\mathrm i\beta)=\alpha+e\mathbf i\beta$ for real $\alpha,\beta$. To obtain the wave current, form the following column in null coordinates $t=(T+b)/\sqrt2$, $s_0=(b-T)/\sqrt2$:
+\[
+ \chi=\sum_{\xi}
+ \begin{pmatrix}1\\(v+W)/2\\-W\cdot v/2\end{pmatrix}
+ \iota_e\!\bigl(\overline{\widehat f(\xi)e^{\mathrm i(X\cdot\xi-T|\xi|)}}\bigr)
+ (\kappa/y)^{d/2}e^{-\kappa y|W-v|^2/2}.
+\]
+Use the orthogonal change of index from $(t,x,s_0)$ to $(T,x,b)$ to express $\chi$ in physical coordinates and set $A^0=\chi\chi^*$ there. For $\ell>0$ let $J_\ell$ be the periodization of the probability kernel $c_n\ell^{-n}(1+|X/\ell|^2)^{-n-2}$, with $c_n$ normalizing the integral. Fix a smooth $0\le g\le1$ on $\mathbb C_{\mathbf k}$ equal to one on $|Q|\le1/100$ and zero on $|Q|\ge1/20$. Define
+\[
+ A_{\rm w}=g(Q)(J_h*_X A^0),\qquad A=A_{\rm w}+h^{50n}C(H(r)),\qquad
+ \mu=A_{TT},\qquad B_0=\lambda|\Phi|^2,\qquad\lambda=h^{-30n}.
+\]
+Here $*_X$ denotes convolution in the real periodic variables only. Put $B=H(B_0)$ and $B_{\rm fib}=H_{\rm fib}(B_0)$.
+
+For sufficiently small $h>0$ with $4a\le1$, take the zero-boundary Dirichlet solution $u$ with $D_u>0$ and $\det D_u=\lambda\mu$, where $D_v=H_{\rm fib}(B_0+v)$. Write $\mathrm d\zeta=\mathrm dX\,\mathrm dP\,\mathrm dZ$,
+\[
+ X_0(z)=\int_{\Omega_z}(-u)\mu\,\mathrm d\zeta,\qquad
+ E_z(v)=\lambda^{-1}\int_{\Omega_z}v\int_0^1\det D_{\theta v}\,\mathrm d\theta\,\mathrm d\zeta,\qquad
+ \mathcal F(z)=E_z(u)+X_0(z).
+\]
+If $H(B_0+u)=\begin{pmatrix}\ell&c^*\\c&D_u\end{pmatrix}$, put
+$\Sigma=\begin{pmatrix}c^*D_u^{-1}c&c^*\\c&D_u\end{pmatrix}$.
+Let $\rho$ denote the smooth boundary value of $u/r$. Then $\mathcal F$ is smooth for $a<|\tau|<4$, $\Sigma\ge0$, and
+\[
+ \Delta_z\mathcal F(z)+\int_{\Omega_z} A:\Sigma\,\mathrm d\zeta
+ =\int \rho\, G(r)^*A_{\rm w}G(r)\,\delta(r)\,\mathrm d\zeta .
+\]
+Here $A:\Sigma=\operatorname{Re}\operatorname{tr}(A\Sigma)$, $\Delta_z$ is the Laplacian in the three real coordinates of $z$, $G(r)$ is the full gradient, and $\delta(r)\,\mathrm d\zeta=\mathrm dS_{\rm fib}/|\nabla_{\rm fib}r|$ on the fixed fiber wall. In particular the right-hand side is an upper bound on $\Delta_z\mathcal F$.

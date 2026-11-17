@@ -1,0 +1,28 @@
+记 \(d=n-1\)、\(p=p_c\)、\(q=p/2\) 和 \(L(R)=\log(2+R)\)。延拓估计对每个 \(g\in L^p(S^{n-1},d\sigma)\) 成立，管估计对每个 \(f\in L^n(\mathbb R^n)\) 成立，且各自关于相应输入一致。取一个在单位球面附近等于一的光滑径向环带截断函数，应用 \ref{ms:thm-1-2}。其中 \(A=2/p\) 在 \ref{ms:lemma-9-2} 中的幂次给出第一个估计。
+
+当 \(0<\delta\le1/2\) 时，取一个极大的 \(\delta\) 分离集 \(\{\omega_j\}\)，所在空间为 \(S^{n-1}\)。定义 \(K_\delta f(\omega)\) 的每个平均值，至多是相应的 \(2\delta\) 管平均值的常数倍，其中管的方向 \(\omega_j\) 在距原方向 \(\delta\) 以内，其中原方向为 \(\omega\)。事实上，前一根管包含在后一根管内，且两根管的体积均与 \(\delta^d\) 可比。管的示性函数在 \(L^q\) 中随平移和旋转连续变化，因此这些平均值随中心和方向连续，其上确界可测。半径为 \(\delta\) 的球冠覆盖给出
+\[
+ \|K_\delta f\|_{L^n(S^{n-1})}
+ \lesssim\left(\delta^d\sum_j K_{2\delta}f(\omega_j)^n\right)^{1/n}.
+\]
+用 \(a_j\ge0\) 对此离散范数作对偶测试，其中 \(\delta^d\sum_j a_j^q=1\)。对任意中心 \(x_j\)，令 \(T_j=T_{2\delta}(\omega_j,x_j)\)。由 Hölder 不等式和 \ref{ms:lemma-9-4} 得
+\[
+ \delta^d\sum_j \frac{a_j}{|T_j|}\int_{T_j}|f|
+ \lesssim\int |f|\sum_j a_j\mathbf 1_{T_j}
+ \lesssim L(1/\delta)^{2A}\|f\|_n.
+\]
+对中心和权重分别取上确界。对于 \(1/2\le\delta\le1\)，在每根管上应用 Hölder 不等式即可得到该界。
+
+设 \(F\) 在每个方向上都包含一条单位线段。它的开 \(\delta\) 邻域包含这些线段周围的管，故 \(1\lesssim L(1/\delta)^{2A}|F_\delta|^{1/n}\)。为证明 Hausdorff 测度的结论，取球覆盖，并按 \cite{r-44}, Claim 3.2 所述按半径分组。对于由球 \(B_j\) 构成的可数覆盖，其半径为 \(r_j\le e^{-2^m}\)，令
+\[
+ J_k=\{j:2^k\le\log(1/r_j)<2^{k+1}\},\quad
+ \delta_k=e^{-2^{k+1}},\quad G_k=\bigcup_{j\in J_k}2B_j,\quad v_k=\sum_{j\in J_k}r_j^n.
+\]
+给定一条单位线段，若其上一点被 \(J_k\) 中的一个球覆盖，则以该点为中心、半径为 \(\delta_k\) 的横向圆盘包含于该球的二倍膨胀中。不同点处的圆盘在管中构成不相交的横截面。因此第 \(k\) 组所覆盖的长度，至多是沿该线段方向的 \(K_{\delta_k}\mathbf1_{G_k}\) 的常数倍，常数仅依赖于维数。各组共同覆盖每个方向上长度为一的线段。用三角不等式、极大估计以及 \(k\) 中的 Hölder 不等式，可得对任意 \(\gamma>n-1\)，
+\[
+ 1\lesssim \sum_{k\ge m}2^{2Ak}v_k^{1/n}
+ \lesssim \left(\sum_j h_\gamma(r_j)\right)^{1/n}
+ \left(\sum_{k\ge m}k^{-\gamma/(n-1)}\right)^{(n-1)/n},
+\quad h_\gamma(r)=r^n[\log(1/r)]^{2An}[\log\log(1/r)]^\gamma .
+\]
+末尾的因子趋于零。由于量规函数在小半径处满足倍增条件，由球覆盖可知对应于 \(h_\gamma\) 的 Hausdorff 测度为无穷大。由于 \(h_\gamma(r)=o(r^s)\) 对每个 \(s<n\) 成立，维数为 \(n\)。

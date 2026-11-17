@@ -1,0 +1,14 @@
+设 $n\ge2$、$d=n-1$、$0<h\le1$ 和 $0<c_0<C_0$。取任意标准正交标架 $(x,b)$，位于 $\mathbb T^n=\mathbb R^n/(100\mathbb Z^n)$ 的覆盖空间上，在该标架中，记 $\xi=(\xi_x,\xi_b)$ 和 $\kappa=(\xi_b+|\xi|)/\sqrt2$。对满足 $\kappa>0$ 的频率，令 $v=\xi_x/\kappa$，并假设 $c_0\le h|\xi|\le C_0$ 与 $|v|\le1/10$。对 $y>0$ 和 $W\in\mathbb C_{\mathbf k}^d$，若 $|W|\le1/10$，其中 $\mathbb C_{\mathbf k}=\mathbb R+\mathbf k\mathbb R$ 和 $\mathbf k^2=-1$，令
+\[
+ b_0=\frac{1+\operatorname{Re}(W)\cdot v/2}{\sqrt2},\qquad
+ \Psi=\kappa y|W-v|^2/2,\qquad
+ m_0=b_0(\kappa/y)^{d/2}e^{-\Psi}.
+\]
+用 $\mathsf S_0$ 表示将 $\xi$ 处的系数乘以 $m_0$ 的乘子。在这些频率上，$\kappa\asymp h^{-1}$、$b_0\asymp1$，且
+\[
+ m_0^{-1}=b_0^{-1}(y/\kappa)^{d/2}e^\Psi
+     \asymp(hy)^{d/2}e^\Psi .
+\]
+特别地，$h^d m_0\asymp1$ 在 $y\asymp h$ 时成立。
+
+若 $f(X)=\sum_\xi c_\xi e^{\mathrm i X\cdot\xi}$ 为 $\mathbb T^n$ 上的三角多项式，且支撑于这些频率，则支撑内的频率数为 $O(h^{-n})$，且 $\sum_\xi|c_\xi|\lesssim h^{-n/2}\|f\|_2$。范数使用通常的环面体积。这些估计关于标架一致，常数依赖于 $n,c_0,C_0$；对于 $y\asymp h$ 时的双边估计，常数还依赖于 $y/h$ 的固定比较常数。

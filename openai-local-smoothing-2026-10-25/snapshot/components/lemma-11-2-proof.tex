@@ -1,0 +1,16 @@
+Let $U(t)=e^{-it|D|}$. Temporarily omit $A$, allow $s\in\mathbb R$, and denote the resulting operator by $V_\delta$. If $g$ is supported in a fixed compact annulus in frequency, the Fourier transform in $s$, taken with the phase $e^{-ist}$, gives $\delta\widehat\varphi(\delta t)U(t)g(x)$. Thus Plancherel in $s$ gives
+\[
+\|V_\delta g(x,\cdot)\|_{L_s^2}
+=(2\pi)^{-1/2}\delta\|\widehat\varphi(\delta t)U(t)g(x)\|_{L_t^2}.
+\]
+On $R\le|t|\le2R$ with dyadic $R\ge1$, H\"older in time and \ref{ms:lemma-10-3} bound $\|U(t)g\|_{L_x^p L_t^2}$ on that interval by
+$C R^{1/2-1/p}R^{1/p+\sigma}\|g\|_p$. For $|t|\le1$, use the short-time bound of \ref{ms:lemma-10-3} together with Minkowski's inequality since $p\ge2$. For any $b>1/2+\sigma$ these bounds give
+\[
+ \|V_\delta g\|_{L_x^p L_s^2(\mathbb R)}
+ \lesssim \delta\left(1+\sum_{R=1,2,4,\ldots}
+ R^{1/2+\sigma}(1+\delta R)^{-b}\right)\|g\|_p
+ \lesssim \delta^{1/2-\sigma}\|g\|_p .
+\]
+The last inequality follows by splitting at $R=\delta^{-1}$.
+
+To restore $A$, Fourier invert in its first argument. The symbols $\widehat A_1(\eta,|\xi|)$ are supported on a fixed compact annulus and have any fixed finite collection of derivatives bounded by $O_b((1+|\eta|)^{-b})$ for every $b>0$. The corresponding operators on $L^p$ have the same decay by the integrable kernel estimate for smooth compactly supported symbols. Integrate $e^{is\eta}V_\delta(\widehat A_1(\eta,|D|)f)$ in $d\eta/(2\pi)$, restricting to $s\in[1,2]$, and use Minkowski to obtain the first bound. For the second, spatial Plancherel suffices since for each frequency the bounded multiplier is supported on an $s$ interval of length $O(\delta)$.

@@ -1,0 +1,37 @@
+使用三槽纤维，给定 $Y=(\tau+Z)/\sqrt 2$、$W=P/Y$、$\Phi=(Z-\tau)/\sqrt 2+(P\cdot P)/(2Y)$、$Q=\Phi/a$ 和 $r=|W|^2/w_0^2+100|Q|^2-1$，其中 $w_0=1/10$、$a=Kh$、$K\ge1$、$d=n-1$ 和 $n\ge2$。设 $z=(T,\tau)$、$s=|\tau|$、$a<s<4$，取 $\Omega_z=\{r<0\}$，变量为 $(X,P,Z)$，其中 $X$ 在固定空间环面上且 $Y\ne0$。用 $x_{j0}$ 表示实坐标 $(T,X)$，用 $x_{j1}+\mathbf kx_{j2}$ 表示对应的辅助坐标 $(\tau,P,Z)$。令 $(e_0,e_1,e_2)=(1,\mathbf i,\mathbf j)$，其中 $\mathbf k\mathbf i=\mathbf j$，并记 $\partial_{j\alpha}=\partial/\partial x_{j\alpha}$。令
+\[
+ G_j(w)=\sum_{\alpha=0}^2 e_\alpha\partial_{j\alpha}w,\qquad
+ H_{jk}(w)=\sum_{\alpha,\beta=0}^2 e_\alpha\bar e_\beta\partial_{j\alpha}\partial_{k\beta}w .
+\]
+下标 $\mathrm{fib}$ 表示限制到空间指标。采用 Moore 行列式及其余子式矩阵 $C$，后者由下式刻画
+$\operatorname{Re}\operatorname{tr}(C(D)M)=\left.\frac{d}{dt}\det(D+tM)\right|_{t=0}$
+其中 $M$ 为 Hermitian 矩阵。
+
+设 $f$ 为该环面上的三角多项式，满足 $\|f\|_2=1$，且各频率位于固定环带 $c_0\le h|\xi|\le C_0$ 中，其中 $0<c_0<C_0$。在所选标架 $X=(x,b)$ 中，假设支撑内的频率满足 $\kappa=(\xi_b+|\xi|)/\sqrt2>0$ 和 $|v|\le\gamma<w_0/4$，其中 $v=\xi_x/\kappa$。定义 $y=|Y|$、$e=Y/y$ 和 $\iota_e(\alpha+\mathrm i\beta)=\alpha+e\mathbf i\beta$，其中 $\alpha,\beta$ 为实变量。为得到波流，在零坐标 $t=(T+b)/\sqrt2$、$s_0=(b-T)/\sqrt2$ 下构造以下列向量
+\[
+ \chi=\sum_{\xi}
+ \begin{pmatrix}1\\(v+W)/2\\-W\cdot v/2\end{pmatrix}
+ \iota_e\!\bigl(\overline{\widehat f(\xi)e^{\mathrm i(X\cdot\xi-T|\xi|)}}\bigr)
+ (\kappa/y)^{d/2}e^{-\kappa y|W-v|^2/2}.
+\]
+采用从 $(t,x,s_0)$ 到 $(T,x,b)$ 的正交指标变换，将 $\chi$ 用物理坐标表示，并在该坐标下令 $A^0=\chi\chi^*$。对 $\ell>0$，令 $J_\ell$ 为概率核 $c_n\ell^{-n}(1+|X/\ell|^2)^{-n-2}$ 的周期化，其中 $c_n$ 使其积分归一化。固定一个光滑函数 $0\le g\le1$，定义在 $\mathbb C_{\mathbf k}$ 上，使它在 $|Q|\le1/100$ 上等于一，在 $|Q|\ge1/20$ 上等于零。定义
+\[
+ A_{\rm w}=g(Q)(J_h*_X A^0),\qquad A=A_{\rm w}+h^{50n}C(H(r)),\qquad
+ \mu=A_{TT},\qquad B_0=\lambda|\Phi|^2,\qquad\lambda=h^{-30n}.
+\]
+其中 $*_X$ 表示只对实周期变量作卷积。令 $B=H(B_0)$ 和 $B_{\rm fib}=H_{\rm fib}(B_0)$。
+
+对充分小的 $h>0$，若 $4a\le1$，取零边值的 Dirichlet 解 $u$，它满足 $D_u>0$ 和 $\det D_u=\lambda\mu$，其中 $D_v=H_{\rm fib}(B_0+v)$。记 $\mathrm d\zeta=\mathrm dX\,\mathrm dP\,\mathrm dZ$，
+\[
+ X_0(z)=\int_{\Omega_z}(-u)\mu\,\mathrm d\zeta,\qquad
+ E_z(v)=\lambda^{-1}\int_{\Omega_z}v\int_0^1\det D_{\theta v}\,\mathrm d\theta\,\mathrm d\zeta,\qquad
+ \mathcal F(z)=E_z(u)+X_0(z).
+\]
+若 $H(B_0+u)=\begin{pmatrix}\ell&c^*\\c&D_u\end{pmatrix}$，令
+$\Sigma=\begin{pmatrix}c^*D_u^{-1}c&c^*\\c&D_u\end{pmatrix}$。
+用 $\rho$ 表示 $u/r$ 的光滑边界值。则 $\mathcal F$ 在 $a<|\tau|<4$、$\Sigma\ge0$ 时光滑，且
+\[
+ \Delta_z\mathcal F(z)+\int_{\Omega_z} A:\Sigma\,\mathrm d\zeta
+ =\int \rho\, G(r)^*A_{\rm w}G(r)\,\delta(r)\,\mathrm d\zeta .
+\]
+其中 $A:\Sigma=\operatorname{Re}\operatorname{tr}(A\Sigma)$，$\Delta_z$ 为 $z$ 的三个实坐标上的 Laplace 算子，$G(r)$ 为全梯度，且固定纤维的侧壁上有 $\delta(r)\,\mathrm d\zeta=\mathrm dS_{\rm fib}/|\nabla_{\rm fib}r|$。特别地，右端是 $\Delta_z\mathcal F$ 的上界。

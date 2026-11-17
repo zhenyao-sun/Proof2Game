@@ -1,0 +1,8 @@
+当 $r$ 介于 $2^k$ 与 $2^{k+1}$ 之间时，符号支撑于 $2^{k-1}\le|\xi|\le2^{k+1}$。取光滑环带符号 $\chi$，使其在 $1/2\le|\xi|\le2$ 上等于一，并记 $Q_k=\chi(2^{-k}D)$。
+
+对 $r=2^ks$、$1\le s\le2$，令 $g_k(y)=(Q_k f)(2^{-k}y)$。于是 $A_{\delta,r}f(2^{-k}y)=A_{\delta,s}g_k(y)$，输出范数中的因子 $2^{-kn/p}$ 与 $2^{kn/p}$ 抵消，后者来自 $\|g_k\|_p$。引理~\ref{ms:shell-unit-radius} 可用于 $g_k$，它的 Fourier 支撑包含在 $\chi$ 的固定环带中。因此，这个二倍尺度区间内上确界的 $L^p$ 范数由 $C\delta^{-\sigma}\|Q_k f\|_p$ 控制。跨各区间的上确界不超过它们逐点的 $\ell^p$ 范数。由于 $p\ge2$，Littlewood--Paley 平方函数不等式（\cite{r-32}, Theorem~6.1.2）给出
+\[
+ \left(\sum_{k\in\mathbb Z}\|Q_k f\|_p^p\right)^{1/p}
+ \le\left\|\left(\sum_{k\in\mathbb Z}|Q_k f|^2\right)^{1/2}\right\|_p
+ \lesssim\|f\|_p.
+\]

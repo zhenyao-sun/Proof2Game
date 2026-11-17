@@ -1,0 +1,15 @@
+Let $n\ge1$ and let $C^\mu$, $0\le\mu\le n$, be constant real symmetric $n\times n$ matrices. For an open set $\mathcal U\subset\mathbb C^{n+1}$ let $f_{\rm sys}:\mathcal U\to\mathbb C^n$ be holomorphic and solve $\sum_\mu C^\mu\partial_{\mathsf X^\mu}f_{\rm sys}=0$. Identify the Fourier complex plane with $\mathbb C_{\mathbf i}\subset\mathbb H$, and use quaternionic units $\mathbf i,\mathbf j,\mathbf k$ with $\mathbf{ij}=\mathbf k$ and $\mathbf{ki}=\mathbf j$. For $w_1,w_2\in\mathbb R^n$ put $z=w_1+\mathbf k w_2$ and $q^\mu=z^*C^\mu z/2$. Use real $\mathsf X\in\mathbb R^{n+1}$, and put $G=\overline{f_{\rm sys}(\mathsf X-\mathbf i q)}$ on the open set of $(\mathsf X,z)$ where $\mathsf X-\mathbf i q\in\mathcal U$. Add a passive complex coordinate $\eta\in\mathbb C_{\mathbf k}$ and choose a constant $c\in\mathbb R^{n+1}$. Define
+\[
+\Theta(z,\eta)_\mu=\tfrac12z^{\mathsf t}C^\mu z+c^\mu\eta,\quad
+M_{\mu a}=(C^\mu z)_a,\qquad J=|\det_{\mathbb C_{\mathbf k}}[M,c]|^2.
+\]
+On the indicated open set, use any local inverse chart at a point with $J>0$ for $(\mathsf X,z,\eta)\mapsto(\mathsf X,\omega)$, where $\omega=\Theta(z,\eta)$. The identities below hold on the image of that chart. Define a quaternionic column $\widetilde\chi$ by
+\[
+\widetilde\chi_\mu\circ\Theta=J^{-1/2}\sum_aM_{\mu a}\mathbf i G_a.
+\]
+For a Hermitian quaternionic matrix $A$, write
+\[
+A^{\mathbb R}_{\mu\alpha,\nu\beta}=\operatorname{Re}(\bar e_\alpha A_{\mu\nu}e_\beta),
+\qquad(e_0,e_1,e_2)=(1,\mathbf i,\mathbf j),
+\]
+using the real coordinates of the triples $\mathsf X^\mu+\omega_\mu\mathbf i$. Each real column of $(\widetilde\chi\widetilde\chi^*)^{\mathbb R}$ has zero divergence, and $(\partial_\omega\eta)\widetilde\chi=0$.
