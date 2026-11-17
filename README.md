@@ -98,6 +98,10 @@ You need Node.js 20 or later and your own Codex login.
 Authors can [export and publish a game directory to GitHub Pages](skills/proof2game/references/game.md#publish-the-website)
 from the approved bilingual snapshot.
 
+## Examples
+
+- [Local smoothing for the Euclidean wave equation](https://zhenyao-sun.github.io/Proof2Game-OpenAI-Local-Smoothing/) — based on the OpenAI manuscript dated October 25, 2026.
+
 ## Manual setup
 
 Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players can run an exported game with Node.js 20 or later. The PDF navigation check uses `pdftotext` or `pypdf`.
