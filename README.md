@@ -16,7 +16,7 @@ https://github.com/zhenyao-sun/Proof2Game
 
 Follow Manual setup in the repository README and load skills/proof2game/SKILL.md.
 Ask for my project folder and math manuscript or notes if I haven't provided them.
-Preserve my original, create or resume a Codex Goal, and run the guided workflow through delivery.
+Preserve my original and run the guided workflow through delivery. Track progress in the project ledger.
 ```
 
 You can attach a LaTeX file, Markdown notes, or a PDF, or paste an arXiv link. An unfinished draft is enough to get started.
@@ -104,7 +104,7 @@ from the approved bilingual snapshot.
 
 ## Manual setup
 
-Author in the Linux workspace of ChatGPT Work, or use macOS with ChatGPT Desktop or Codex. Guided verification requires terminal access, a real Codex Goal, and independent agent sessions. In Work, attach the manuscript or provide an accessible workspace project path. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players can run an exported game with Node.js 20 or later. The PDF navigation check uses `pdftotext` or `pypdf`.
+Author in the Linux workspace of ChatGPT Work, or use macOS with ChatGPT Desktop or Codex. Guided verification requires terminal access and independent agent sessions. The project ledger tracks progress and completion. A Codex Goal is optional. In Work, attach the manuscript or provide an accessible workspace project path. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players can run an exported game with Node.js 20 or later. The PDF navigation check uses `pdftotext` or `pypdf`.
 
 If you already have a verified release checkout, use it and let Proof2Game check for updates. For a fresh setup, run:
 

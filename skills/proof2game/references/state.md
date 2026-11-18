@@ -23,10 +23,10 @@ script or different host session never counts as a result.
 
 | Operation | Additional fields |
 | --- | --- |
-| `init` | `entry` (`guided`, `verify`, or `refactor`), actual `tool_release`, and optional `models` mapping role names from [roles.json](roles.json) to `[model,effort]`. Guided and verify require actual `goal:{id,evidence}` and `coordinator:{session,model,effort,evidence}`. Manual refactor takes the concrete `reason`. |
+| `init` | `entry` (`guided`, `verify`, or `refactor`), actual `tool_release`, and optional `models` mapping role names from [roles.json](roles.json) to `[model,effort]`. Guided and verify require actual `coordinator:{session,model,effort,evidence}`. Include optional `goal:{id,evidence}` only for a real host Goal bound to the task. Manual refactor takes the concrete `reason`. |
 | `start` | Same fields as init. Starts a new entry from completed state, or after an explicit abandonment at a paused boundary (`abandon_evidence`). Valid classifications and accumulated evidence remain. |
 | `advance` | No extra fields. Call while awaiting next dispatch, after a guided route pass (materializes the approved snapshot), or after confirmed last-target withdrawal (enters its applicable delivery path). |
-| `goal-complete` | The same `goal_id` and verifiable host completion `evidence`. Call the actual Goal tool only once the ledger shows `phase:complete`, then record its return. |
+| `goal-complete` | Optional receipt for a bound Goal. After the ledger reaches `phase:complete`, call the host Goal tool and record the matching `goal_id` and verifiable completion `evidence`. |
 | `select-release` | Actual approved `tool_release`, user `approval` receipt, verified `compatibility` evidence, and the supported ledger `schema` (currently 1). Retains completed results and rebinds unfinished actions. Finish an active application or delivery before switching their release. |
 
 The first round contains all Main Results components. Subsequently each new round schedules

@@ -1,4 +1,4 @@
 interface:
   display_name: "Proof2Game"
   short_description: "Verify a math draft and build a learning game"
-  default_prompt: "Use $proof2game to work through my manuscript, verify its game script, and build the applicable deliverables with a Codex Goal."
+  default_prompt: "Use $proof2game to work through my manuscript, verify its game script, and build the applicable deliverables."

@@ -106,15 +106,20 @@ def root_target(task):
     return target
 
 
+def optional_goal(request):
+    goal = request.get("goal")
+    if goal is not None:
+        require(isinstance(goal, dict), "provide a real host Goal receipt when binding a Goal")
+        evidence(goal.get("id"))
+        evidence(goal.get("evidence"))
+    return goal
+
+
 def init(task, target, live, request):
     entry = request["entry"]
     require(entry in ("guided", "verify", "refactor"), "unknown entry")
     tool_release = evidence(request.get("tool_release"))
-    goal = request.get("goal")
-    if entry != "refactor":
-        require(isinstance(goal, dict), "real host Goal receipt required")
-        evidence(goal.get("id"))
-        evidence(goal.get("evidence"))
+    goal = optional_goal(request)
     coordinator = request.get("coordinator")
     models = default_models()
     for role, value in request.get("models", {}).items():
@@ -1166,7 +1171,7 @@ def start_entry(task, state, request):
         record(state, "abandoned", round=state["round"], pause=state["pause"], evidence=request["abandon_evidence"])
     state["entry"] = entry
     state["phase"] = "dispatch"
-    state["goal"] = request.get("goal")
+    state["goal"] = optional_goal(request)
     state["goal_complete"] = None
     state["coordinator"] = request.get("coordinator")
     state["tool_release"] = evidence(request.get("tool_release"))
@@ -1174,10 +1179,6 @@ def start_entry(task, state, request):
         require(role in state["models"] and isinstance(config, list) and len(config) == 2, f"invalid role: {role}")
         state["models"][role] = [evidence(config[0]), evidence(config[1])]
     if entry != "refactor":
-        goal = state["goal"]
-        require(isinstance(goal, dict), "real host Goal receipt required")
-        evidence(goal.get("id"))
-        evidence(goal.get("evidence"))
         check_identity(state["coordinator"], state["models"]["coordinator"])
     state["pause"] = None
     state["round"] = None

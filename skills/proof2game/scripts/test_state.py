@@ -26,7 +26,7 @@ class Ledger(unittest.TestCase):
         (self.task / "original.md").write_text("Fixture manuscript\n")
         self.serial = 0
 
-    def init(self, entry="verify", kind="unpublished"):
+    def init(self, entry="verify", kind="unpublished", **fields):
         target = {"id": self.task.name, "project_type": kind, "original_path": "original.md",
                   "sha256": state.file_digest(self.task / "original.md"),
                   "cutoff": "2023-01-01" if kind == "public" else None,
@@ -36,7 +36,7 @@ class Ledger(unittest.TestCase):
             "op": "init", "entry": entry, "tool_release": "fixture-release",
             "coordinator": {"session": "fixture-main", "model": "gpt-6.1-sol", "effort": "medium",
                             "evidence": "synthetic coordinator fixture"},
-            "goal": {"id": "fixture-goal", "evidence": "synthetic Goal fixture"},
+            **fields,
         })
 
     def change(self, op, **fields):
@@ -431,6 +431,27 @@ class Ledger(unittest.TestCase):
                         session=first["identity"]["session"], verdict="pass", evidence="stale fixture")
         self.result(latest, "pass")
         self.assertEqual(self.data["state"]["phase"], "complete")
+        self.assertIsNone(self.data["state"]["goal"])
+        with self.assertRaisesRegex(state.Rejected, "active Goal is not ready"):
+            self.change("goal-complete", goal_id="unbound-goal", evidence="synthetic receipt")
+        restarted = self.change("start", entry="guided", tool_release="fixture-release",
+                                coordinator=self.data["state"]["coordinator"])
+        self.assertIsNone(restarted["goal"])
+        self.assertEqual(restarted["phase"], "dispatch")
+
+    def test_optional_goal_still_requires_valid_receipts_and_completed_work(self):
+        with self.assertRaisesRegex(state.Rejected, "real host Goal receipt"):
+            self.init(goal="fixture-goal")
+        goal = {"id": "fixture-goal", "evidence": "synthetic Goal binding"}
+        self.init(goal=goal)
+        with self.assertRaisesRegex(state.Rejected, "active Goal is not ready"):
+            self.change("goal-complete", goal_id=goal["id"], evidence="too early")
+        self.assertEqual(self.evaluate(), "route")
+        self.result(self.action(role="simplification"), "no-simplification")
+        with self.assertRaisesRegex(state.Rejected, "active Goal is not ready"):
+            self.change("goal-complete", goal_id="other-goal", evidence="wrong binding")
+        completed = self.change("goal-complete", goal_id=goal["id"], evidence="synthetic completion receipt")
+        self.assertEqual(completed["goal_complete"], "synthetic completion receipt")
 
     def test_private_simplification_failure_rolls_back_and_retains_round_counts(self):
         self.init()
