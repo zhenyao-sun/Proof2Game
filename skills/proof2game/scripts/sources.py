@@ -170,8 +170,6 @@ def select_source(request, local, cutoff, record, unavailable):
     chosen = versions[0]
     if "pdf_path" not in chosen:
         return {"state": "need_pdf", "work_key": work, "source": chosen, "required": required}
-    if not chosen["complete"]:
-        return {"state": "need_ocr", "work_key": work, "source": chosen}
     if request.get("for_use", True):
         facts = request.get("result_evidence", {})
         if (not isinstance(facts, dict) or facts.get("sha256") != chosen["sha256"]

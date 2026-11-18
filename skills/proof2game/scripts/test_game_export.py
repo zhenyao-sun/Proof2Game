@@ -75,7 +75,7 @@ class GameExportTests(unittest.TestCase):
                        cwd=self.root, input=b'', capture_output=True, timeout=30, check=True)
         original = self.root / 'reference.pdf'
         good_source = {
-            'citation_key': 'fixture', 'id': 'reference', 'complete': True, 'pdf_path': original.name,
+            'citation_key': 'fixture', 'id': 'reference', 'pdf_path': original.name,
             'sha256': game.sha(original.read_bytes()), 'page_count': 2,
             'authors': ['Ada Example'], 'title': 'A synthetic note', 'version': 'v1', 'edition': 'preprint',
             'public_date': '2026-02', 'cited_locations_physical_pages': {'Lemma 1': [2]},
@@ -88,6 +88,11 @@ class GameExportTests(unittest.TestCase):
         bindings.write_text(json.dumps({'sources': [dict(good_source, public_date='2026')]}))
         with self.assertRaisesRegex(game.Rejected, 'publication cutoff'):
             game.make_game(self.main, source_bindings=bindings, verify_numbering=False)
+        bindings.write_text(json.dumps({'sources': [dict(good_source, sha256='0' * 64)]}))
+        with self.assertRaisesRegex(game.Rejected, 'PDF missing, invalid or changed'):
+            game.make_game(self.main, source_bindings=bindings, verify_numbering=False)
+        bindings.write_text(json.dumps({'sources': [dict(good_source, complete=False)]}))
+        game.make_game(self.main, source_bindings=bindings, verify_numbering=False)
         bindings.write_text(json.dumps({'sources': [good_source, dict(good_source, citation_key='uncited')]}))
         site = self.root / 'site'
         with self.assertRaisesRegex(game.Rejected, 'metadata'):

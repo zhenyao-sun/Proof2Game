@@ -208,13 +208,12 @@ class IntakeTest(unittest.TestCase):
             intake.candidate(source_data("2024-13"))
 
     @unittest.skipUnless(shutil.which("pdfinfo") and shutil.which("pdftoppm"), "Poppler is required")
-    def test_pdf_images_ocr_resume_reference_binding_and_cutoff(self):
-        target = self.target()
+    def test_target_pdf_images_and_ocr_resume(self):
         original = self.project / "study.pdf"
         make_pdf(original)
-        ref = intake.register_reference(self.project, {**source_data("2024-12"), "pdf": str(original)})
-        key = {"kind": "reference", "id": ref["id"]}
-        self.assertEqual(ref["pending_pages"], [1, 2])
+        target = intake.init_target(self.project, {"input": str(original), "project_type": "unpublished"})
+        key = {"kind": "target", "id": target["id"]}
+        self.assertEqual(target["pending_pages"], [1, 2])
         rendered = [intake.render_page(self.project, {**key, "page": n}) for n in (1, 2)]
         self.assertNotEqual(rendered[0]["image_sha256"], rendered[1]["image_sha256"])
         self.assertEqual(Path(rendered[0]["image_path"]).read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
@@ -232,12 +231,45 @@ class IntakeTest(unittest.TestCase):
         self.assertTrue(completed["complete"])
         self.assertEqual(completed["sha256"], hashlib.sha256(original.read_bytes()).hexdigest())
         self.assertEqual(intake.finish_ocr(self.project, key), completed)
-        self.assertEqual(Path(completed["directory"], completed["pdf_path"]).read_bytes(), original.read_bytes())
-        self.assertIn("## PDF page 2", Path(completed["directory"], completed["sidecar_path"]).read_text())
-        bound = {"id": ref["id"], "sha256": completed["sha256"],
+        self.assertEqual(Path(completed["directory"], completed["original_path"]).read_bytes(), original.read_bytes())
+        self.assertIn("## PDF page 2", Path(completed["directory"], completed["proof_source_path"]).read_text())
+
+    @unittest.skipUnless(shutil.which("pdfinfo"), "Poppler is required")
+    def test_reference_pdf_binding_and_cutoff_without_transcription(self):
+        target = self.target()
+        original = self.project / "study.pdf"
+        make_pdf(original)
+        request = {**source_data("2024-12"), "pdf": str(original)}
+        ref = intake.register_reference(self.project, request)
+        directory = Path(ref["directory"])
+        self.assertEqual({p.name for p in directory.iterdir()}, {"original.pdf", "source.json"})
+        self.assertEqual((directory / "original.pdf").read_bytes(), original.read_bytes())
+        key = {"kind": "reference", "id": ref["id"]}
+        for method in (intake.render_page, intake.record_page, intake.finish_ocr):
+            with self.assertRaisesRegex(ValueError, "only to target PDF manuscripts"):
+                method(self.project, {**key, "page": 1})
+        bound = {"id": ref["id"], "sha256": ref["sha256"],
                  "cited_locations_physical_pages": {"Equation": [2]}}
-        binding = intake.verify_citations(self.project, {"task_id": target["id"], "sources": [bound]})
-        self.assertEqual(binding["sources"][0]["cited_locations_physical_pages"], {"Equation": [2]})
+        selected = {"work_key": "study", "preferred_version": "v1", "task_id": target["id"]}
+        self.assertEqual(intake.choose_source(self.project, {**selected, "for_use": False})["state"], "ready")
+        self.assertEqual(intake.choose_source(self.project, selected)["state"], "check_result")
+        self.assertEqual(intake.choose_source(self.project, {**selected, "result_evidence": {
+            "sha256": ref["sha256"], "locator": "Equation, physical page 2",
+        }})["state"], "ready")
+        source_record = directory / "source.json"
+        legacy_sidecar = directory / "sidecar.md"
+        legacy_sidecar.write_text("Preserved legacy transcription")
+        metadata = intake.read_json(source_record)
+        for fields in ({}, {"complete": False, "page_sha256": {"1": "old checkpoint"}},
+                       {"complete": True, "sidecar_path": "sidecar.md", "sidecar_sha256": "obsolete hash"}):
+            with self.subTest(legacy_fields=fields):
+                intake.write_json(source_record, {**metadata, **fields})
+                original_record = source_record.read_bytes()
+                self.assertEqual(intake.register_reference(self.project, request)["id"], ref["id"])
+                binding = intake.verify_citations(self.project, {"task_id": target["id"], "sources": [bound]})
+                self.assertEqual(binding["sources"][0]["cited_locations_physical_pages"], {"Equation": [2]})
+                self.assertEqual(source_record.read_bytes(), original_record)
+                self.assertEqual(legacy_sidecar.read_text(), "Preserved legacy transcription")
         too_early = self.target(public_date="2024-01-01")
         with self.assertRaisesRegex(ValueError, "published after"):
             intake.verify_citations(self.project, {"task_id": too_early["id"], "sources": [bound]})
@@ -261,7 +293,7 @@ class IntakeTest(unittest.TestCase):
                          first["source_url"])
 
     @unittest.skipUnless(shutil.which("pdfinfo"), "Poppler is required")
-    def test_failed_reference_reuse_leaves_no_original_that_blocks_retry(self):
+    def test_register_exact_target_pdf_as_reference_before_target_ocr(self):
         original = self.project / "first.pdf"
         make_pdf(original)
         second = self.project / "second.pdf"
@@ -271,15 +303,12 @@ class IntakeTest(unittest.TestCase):
             "input": str(original), "project_type": "public",
             **{key: info[key] for key in ("version", "public_date", "source_url", "publication_evidence")},
         })
-        reference = {**info, "id": "fixture", "pdf": str(original)}
-        with self.assertRaisesRegex(ValueError, "exact completed public target"):
-            intake.register_reference(self.project, {**reference, "reuse_target": target["id"]})
-        self.assertFalse((self.project / "references" / "fixture").exists())
-        retry = intake.register_reference(self.project, {**reference, "pdf": str(second)})
-        self.assertEqual(Path(retry["directory"], retry["pdf_path"]).read_bytes(), second.read_bytes())
+        reference = {**info, "id": "fixture", "pdf": str(Path(target["directory"], target["original_path"]))}
+        saved = intake.register_reference(self.project, reference)
+        self.assertEqual(Path(saved["directory"], saved["pdf_path"]).read_bytes(), original.read_bytes())
+        self.assertFalse(intake.checked_record(self.project, "target", target["id"])["complete"])
         with self.assertRaisesRegex(ValueError, "different original, version, or source"):
-            intake.register_reference(self.project, {**reference, "pdf": str(second),
-                                                     "source_url": "https://example.org/other-version"})
+            intake.register_reference(self.project, {**reference, "pdf": str(second)})
 
     @unittest.skipUnless(shutil.which("pdfinfo"), "Poppler is required")
     def test_target_pdf_cannot_be_used_before_ocr(self):

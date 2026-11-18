@@ -276,8 +276,6 @@ def source_references(files, source_bindings=None, references_dir=None, cutoff=N
                 raise Rejected('Source bindings need a string citation key.')
             if key not in keys:
                 continue
-            if record.get('complete') is not True:
-                raise Rejected('Cited source intake is not complete: ' + key)
             if cutoff:
                 public_date = record.get('public_date')
                 try:

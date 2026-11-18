@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preserve specified manuscript versions and project references with resumable OCR."""
+"""Preserve original reference PDFs and transcribe target PDF manuscripts."""
 
 import argparse
 import contextlib
@@ -277,9 +277,6 @@ def register_reference(project, request):
         "pdf_path": original.name,
         "sha256": sha,
         "page_count": count,
-        "sidecar_path": "sidecar.md",
-        "complete": False,
-        "page_sha256": {},
     }
     if "cited_locations_physical_pages" in request:
         metadata["cited_locations_physical_pages"] = checked_locations(request, count)
@@ -290,12 +287,8 @@ def register_reference(project, request):
                 raise ValueError("This reference ID already names a different original, version, or source.")
         return public_record(record, old)
     def place_reference(destination):
-        destination_record = destination / record.name
-        if reuse := request.get("reuse_target"):
-            previous = copy_target_transcription(project, reuse, destination_record, metadata)
-            metadata.update(previous)
         store_original(path, destination / original.name, sha)
-        write_json(destination_record, metadata)
+        write_json(destination / record.name, metadata)
 
     if folder.exists():
         # Preserve an unregistered folder that may already contain user material.
@@ -310,25 +303,6 @@ def register_reference(project, request):
             place_reference(staged)
             staged.rename(folder)
     return public_record(record, metadata)
-
-
-def copy_target_transcription(project, target_id, record, reference):
-    target_path = record_path(project, "target", target_id)
-    target = checked_record(project, "target", target_id)
-    if (
-        target["project_type"] != "public" or not target["complete"] or "sidecar_sha256" not in target
-        or any(target.get(key) != reference[key] for key in ("sha256", "public_date", "version", "page_count"))
-    ):
-        raise ValueError("Reuse requires the exact completed public target PDF edition.")
-    for page, sha in target["page_sha256"].items():
-        name = f"{int(page):05d}-{sha}.json"
-        source = inside(project, target_path.parent / "ocr" / "pages" / name)
-        destination = inside(project, record.parent / "ocr" / "pages" / name)
-        store_original(source, destination, sha)
-    original = inside(project, target_path.parent / target["sidecar_path"])
-    sidecar = inside(project, record.parent / reference["sidecar_path"])
-    store_original(original, sidecar, target["sidecar_sha256"])
-    return {key: target[key] for key in ("complete", "page_sha256", "sidecar_sha256")}
 
 
 def record_path(project, kind, name):
@@ -346,7 +320,7 @@ def checked_record(project, kind, name):
     original = inside(project, path.parent / value.get("original_path", value.get("pdf_path")))
     if not original.is_file() or digest(original) != value["sha256"]:
         raise ValueError(f"Original missing or changed; restore the exact preserved bytes: {original}")
-    if value.get("sidecar_sha256") and value["complete"]:
+    if kind == "target" and value.get("sidecar_sha256") and value["complete"]:
         sidecar = inside(project, path.parent / value["sidecar_path"])
         if not sidecar.is_file() or digest(sidecar) != value["sidecar_sha256"]:
             raise ValueError(f"Completed transcription missing or changed; reverify before use: {sidecar}")
@@ -354,6 +328,9 @@ def checked_record(project, kind, name):
 
 
 def public_record(path, value):
+    result = {**value, "directory": str(path.parent)}
+    if "pdf_path" in value:
+        return result
     pending = []
     if not value["complete"]:
         for page in range(1, value.get("page_count", 0) + 1):
@@ -361,13 +338,21 @@ def public_record(path, value):
             checkpoint = path.parent / "ocr" / "pages" / f"{page:05d}-{sha}.json"
             if not sha or not checkpoint.is_file() or digest(checkpoint) != sha:
                 pending.append(page)
-    return {**value, "directory": str(path.parent), "pending_pages": pending}
+    return {**result, "pending_pages": pending}
+
+
+def target_pdf_record(project, request):
+    if request.get("kind") != "target":
+        raise ValueError("Page-image transcription applies only to target PDF manuscripts.")
+    name = request.get("id")
+    value = checked_record(project, "target", name)
+    if "page_count" not in value:
+        raise ValueError("Page-image transcription applies only to target PDF manuscripts.")
+    return record_path(project, "target", name), value
 
 
 def validated_page(project, request):
-    kind, name = request.get("kind"), request.get("id")
-    value = checked_record(project, kind, name)
-    path = record_path(project, kind, name)
+    path, value = target_pdf_record(project, request)
     n = request.get("page")
     if type(n) is not int or not 1 <= n <= value.get("page_count", 0):
         raise ValueError("Provide a physical PDF page number starting at 1.")
@@ -385,7 +370,7 @@ def render_page(project, request):
         rendered = read_json(evidence)
         if rendered["source_sha256"] == value["sha256"] and rendered["image_sha256"] == digest(image):
             return {**rendered, "image_path": str(image)}
-    original = inside(project, record.parent / value.get("original_path", value.get("pdf_path")))
+    original = inside(project, record.parent / value["original_path"])
     result = subprocess.run(
         ["pdftoppm", "-f", str(n), "-l", str(n), "-r", str(dpi), "-png", "-singlefile", str(original)],
         capture_output=True, timeout=60,
@@ -423,18 +408,13 @@ def record_page(project, request):
     if old_hash != sha:
         value["page_sha256"][str(n)] = sha
         value["complete"] = False
-        if request["kind"] == "target":
-            value["proof_source_path"] = None
+        value["proof_source_path"] = None
         write_json(record, value)
     return {"page": n, "page_sha256": sha}
 
 
 def finish_ocr(project, request):
-    kind, name = request.get("kind"), request.get("id")
-    value = checked_record(project, kind, name)
-    record = record_path(project, kind, name)
-    if "page_count" not in value:
-        raise ValueError("OCR applies only to PDF manuscripts or PDF references.")
+    record, value = target_pdf_record(project, request)
     if value["complete"]:
         return public_record(record, value)
     chunks = ["# Original PDF transcription\n", f"\nOriginal SHA-256: `{value['sha256']}`\n"]
@@ -458,9 +438,7 @@ def finish_ocr(project, request):
     if sidecar.exists() and digest(sidecar) not in (value.get("sidecar_sha256"), sha):
         raise ValueError(f"Transcription exists with unrecorded changes; preserve it before continuing: {sidecar}")
     write_atomic(sidecar, content)
-    value.update({"complete": True, "sidecar_sha256": sha})
-    if kind == "target":
-        value["proof_source_path"] = value["sidecar_path"]
+    value.update({"complete": True, "sidecar_sha256": sha, "proof_source_path": value["sidecar_path"]})
     write_json(record, value)
     return public_record(record, value)
 
@@ -492,8 +470,6 @@ def verify_citations(project, request):
         if cutoff and not published_by(value["public_date"], cutoff):
             raise ValueError(f"{ref_id} was published after the target version cutoff ({cutoff}) "
                              "or its recorded date does not establish eligibility.")
-        if not value["complete"]:
-            raise ValueError(f"{ref_id} is missing a completed OCR transcription.")
         if row.get("sha256") != value["sha256"]:
             raise ValueError(f"{ref_id} citation evidence must bind the original's SHA-256.")
         checked = checked_locations(row, value["page_count"])
@@ -590,7 +566,7 @@ def choose_source(project, request):
     missing = missing_path(project, request)
     unavailable = read_json(missing) if missing is not None and missing.exists() else []
     result = select_source(request, local, cutoff, evidence, unavailable)
-    if result.get("state") == "ready":
+    if result["state"] in ("check_result", "ready"):
         ref = checked_record(project, "reference", result["source"]["id"])
         result["source"].update(public_record(record_path(project, "reference", ref["id"]), ref))
     return result
