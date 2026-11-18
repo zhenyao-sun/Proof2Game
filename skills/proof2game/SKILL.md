@@ -1,6 +1,6 @@
 ---
 name: proof2game
-description: Turn a supplied mathematics manuscript, draft, note, or arXiv link into a verified game script and a locally playable bilingual learning game. Use for Proof2Game guided setup, automated game-script verification, manual refactor, or paper ingestion. For unpublished work, guided setup also produces a complete English paper. Public-paper projects keep the selected version and its proof route. Requires macOS and Codex.
+description: Turn a supplied mathematics manuscript, draft, note, or arXiv link into a verified game script and a locally playable bilingual learning game. Use for Proof2Game guided setup, automated game-script verification, manual refactor, or paper ingestion. For unpublished work, guided setup also produces a complete English paper. Public-paper projects keep the selected version and its proof route. Author on macOS with Codex or in ChatGPT Work with a Linux workspace.
 ---
 
 # Proof2Game
