@@ -44,7 +44,7 @@ reviewed snapshot. Correct a translation-only defect in the game translation.
 
    Omit `--paper-metadata` for an unpublished project. Omit `--source-bindings`
    when there are no external citations. The default tutor is
-   `gpt-6.1-terra / medium`. Use the role configuration for any tutor override.
+   `deepseek-flash` (DeepSeek API). Use the role configuration for any tutor override.
 
 ## Publish the website
 
@@ -64,19 +64,10 @@ verified locators retained in the game.
 
 ## Check delivery
 
-Open the published link in a browser on macOS. The public-literature page
-shows the original paper's title, authors and version. Copy its prompt into
-Codex. The tagged official launcher downloads and validates the game data,
-then starts the local runtime and opens its local address in the default
-browser. Only the manifest URL is required. The launcher prints the local
-address so the player can reopen it or open it in another browser. All
-browsers on the same Mac using that address share the running game and its
-local saves. The player uses their own Codex account.
+Open the published GitHub Pages link directly in a browser, including when hosted under a repository subpath. For public literature, verify the original title, authors and exact version. The map must load without an API key or a local service.
 
-Verify launch from the real published link and opening the printed local
-address. Check canonical level order and unlocks, formulas, internal links,
-external links and citation locators, both languages and modes, and a live
-tutor turn at the configured model and effort. Check that Guide diagrams and drawings requested in Regular chat appear inline
-and survive saves. Check progress after a restart, plus manual save export and reimport. Use synthetic mathematics for
-live tutor checks unless the user has authorized this material. Record the
-browser and model actually tested.
+Use AI Connection to add, replace and clear the player's own DeepSeek key. The key is stored only in the current browser and is sent only to `https://api.deepseek.com/chat/completions`. It is excluded from saves, downloads, deployment files and diagnostics. Usage is billed to the player's account. The default model is `deepseek-flash`, which supports manuscript images. Verify actual official API compatibility before claiming a live tutor test.
+
+Check canonical order and unlocks, formulas and links, both languages and conversation modes, Guide and Regular chat diagrams, undo, reload, manual save downloads and imports. Same-origin tabs share browser storage; reject stale writes. Different browsers and devices use separate storage and can transfer progress through a downloaded save. Imports of existing same-snapshot local-runtime saves remain supported. No credentials are transferred.
+
+Test the real deployed URL and an actual tutor request when credentials are available. Unit tests and synthetic API responses do not establish live provider availability. Record precisely which checks ran. Existing published games and their saves are left intact; re-export or deployment of a specific game requires its author's authorization.

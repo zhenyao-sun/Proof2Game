@@ -140,10 +140,10 @@ class Ledger(unittest.TestCase):
         self.change("deliverable", kind="game", snapshot_digest=product["snapshot_digest"], status="checked",
                     artifact="deliveries/example-site", sha256=export["artifact_sha256"],
                     evidence="fixture game passed mechanical validation")
-        launch = game / "launch.js"
+        launch = game / "browser-entry.mjs"
         original = launch.read_bytes()
         launch.write_bytes(original + b"\n")
-        with self.assertRaisesRegex(state.Rejected, "changed before delivery"):
+        with self.assertRaisesRegex(state.Rejected, "changed before delivery|runtime.*changed"):
             self.change("deliverable", kind="game", snapshot_digest=product["snapshot_digest"], status="delivered",
                         evidence="fixture attempted a changed launch script")
         launch.write_bytes(original)
@@ -512,6 +512,60 @@ class Ledger(unittest.TestCase):
         self.assertNotEqual(new["token"], fixer["token"])
         self.assertEqual(new["purpose"], "incident")
         self.assertIsNone(new["identity"])
+
+
+    def test_worker_cleanup_finds_only_completed_ledger_workers_still_running(self):
+        self.init("guided")
+        self.change("advance")
+        opening = self.bind(self.action(component="setting"))
+        self.result(opening, "pass")
+        running = self.action(component="setting")["identity"]["session"]
+        statement = self.bind(self.action(component="main"))
+        completed = statement["identity"]["session"]
+        self.result(statement, "nonpass", issue="synthetic issue", location="statement")
+        inventory = {"agents": [
+            {"agent_name": name, "agent_status": "running"} for name in
+            (running, completed, "fixture-main", "unrelated-worker")
+        ]}
+        status = state.transact(self.task, {"op": "status"})
+        plan = state.worker_cleanup(status, inventory)
+        self.assertEqual(plan, {"revision": status["state"]["revision"], "running": 4, "retire": [completed]})
+        inventory["agents"][1]["agent_status"] = {"completed": "finished"}
+        self.assertEqual(state.worker_cleanup(status, inventory)["retire"], [])
+        self.assertEqual(state.transact(self.task, {"op": "status"}), status)
+        with self.assertRaisesRegex(state.Rejected, "current ledger"):
+            state.worker_cleanup({**status, "pending_write": True}, inventory)
+
+    def test_ready_source_resumes_a_reviewer_ahead_of_unbound_work(self):
+        self.init()
+        with patch.object(state, "REVIEW_LIMIT", 1):
+            self.change("advance")
+            for _ in range(4):
+                self.result(self.action(component="setting"), "pass")
+            self.result(self.action(component="setting"), "waiting-source", required=True,
+                        source="needed-study", source_version="v2", location="Required interface")
+            waiting = self.action(component="setting")
+            queued = self.action(component="main")
+            self.assertIsNone(queued["identity"])
+            pdf = self.project / "fixture.pdf"
+            make_pdf(pdf)
+            reference = intake.register_reference(self.project, {
+                **source_data(public_date="2022-01-01", version="v2"),
+                "work_key": "needed-study", "pdf": str(pdf),
+            })
+            self.change("source-resolve", token=waiting["token"], snapshot_digest=waiting["snapshot_digest"],
+                        status="available", reference_id=reference["id"], evidence="synthetic source receipt")
+            resumed = self.action(component="setting")
+            self.assertEqual(resumed["token"], waiting["token"])
+            self.assertEqual(resumed["identity"], waiting["identity"])
+            self.assertFalse(self.actions(component="main"))
+            self.result(resumed, "pass", sources=[{
+                "id": reference["id"], "sha256": reference["sha256"], "locators": {"Theorem A": [1]},
+            }])
+            self.result(self.action(component="setting"), "pass")
+            fresh = self.action(component="main")
+            self.assertNotEqual(fresh["token"], queued["token"])
+            self.assertIsNone(fresh["identity"])
 
 
 if __name__ == "__main__":

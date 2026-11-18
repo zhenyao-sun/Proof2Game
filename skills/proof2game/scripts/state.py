@@ -17,6 +17,8 @@ import intake
 from intake import resolve_task_path
 import manuscript
 
+REVIEW_LIMIT = 10
+
 GATES = {
     "statement": ("expression", "self_contained", "mathematics", "sources", "reuse"),
     "proof": ("expression", "decomposition", "self_contained", "mathematics", "sources", "reuse"),
@@ -195,7 +197,7 @@ def add_reviews(state):
     running = sum(not action["waiting"] for action in reviewers)
     dispatched = {action["component"] for action in reviewers}
     for component, review in current["reviews"].items():
-        if running == 10:
+        if running >= REVIEW_LIMIT:
             break
         if component not in dispatched and review["verdict"] is None:
             review_action(state, component, review)
@@ -399,8 +401,13 @@ def resolve_source(task, state, request):
         resolution.update(reference_id=reference["id"], reference_version=reference["version"],
                           reference_sha256=reference["sha256"])
     if action["role"] == "reviewer":
-        require(sum(row["role"] == "reviewer" and not row["waiting"] for row in state["actions"].values()) < 10,
-                "all Reviewer slots are active; resume this source when a slot opens")
+        assigned = [row for row in state["actions"].values()
+                    if row["role"] == "reviewer" and not row["waiting"]]
+        if len(assigned) >= REVIEW_LIMIT:
+            queued = next((row for row in reversed(assigned) if not row["identity"]), None)
+            require(queued is not None, "all Reviewer slots are bound; resume this source when a slot opens")
+            del state["actions"][queued["token"]]
+            record(state, "review-dispatch-deferred", action=queued, resumed=action["token"])
         reopen_review(state)
     action["waiting"] = None
     action["source_resolution"] = resolution
@@ -993,16 +1000,24 @@ def withdrawal_delivery(task, state):
 
 
 def verify_game_artifact(artifact, approval_path, approval):
-    from game_developer import site_digest, site_inventory
+    from game_developer import site_digest, site_inventory, browser_assets
 
     require(artifact.is_dir(), "game must be the checked website directory")
     inventory = site_inventory(artifact)
-    assets = {".nojekyll", "index.html", "launch.css", "launch.js", "proof2game.json"}
-    require(assets | {"game.json"} <= inventory.keys(), "game website is missing launch files")
+    require((artifact / "proof2game.json").is_file(), "game website is missing launch files")
     manifest = read_json(artifact / "proof2game.json")
+    if manifest.get("launch_mode") == "browser":
+        runtime = browser_assets()
+        assets = set(runtime) | {"proof2game.json"}
+        require(all((artifact / name).is_file() and (artifact / name).read_bytes() == payload
+                    for name, payload in runtime.items()), "browser runtime is missing or changed")
+    else:
+        # Retain verification of existing local-runtime deliveries and recovery checkpoints.
+        assets = {".nojekyll", "index.html", "launch.css", "launch.js", "proof2game.json"}
+    require(assets | {"game.json"} <= inventory.keys(), "game website is missing launch files")
     package = read_json(artifact / "game.json")
     require(manifest.get("schema") == 1 and package.get("distribution") == "pages"
-            and manifest.get("game_id") == package.get("id") and manifest.get("launch_mode") == "local",
+            and manifest.get("game_id") == package.get("id") and manifest.get("launch_mode") in ("local", "browser"),
             "game website schema or distribution is invalid")
     require(package.get("approval_snapshot_digest") == approval["snapshot_digest"]
             and package.get("project_type") == approval["project_type"] and package.get("cutoff") == approval["cutoff"],
@@ -1366,18 +1381,56 @@ def transact(task, request):
         return display(state)
 
 
+def worker_cleanup(status, inventory):
+    """Find completed ledger workers that still occupy a host slot."""
+    state = status["state"]
+    require(state is not None and not status["stale"] and not status["pending_write"],
+            "a current ledger is required to reconcile host sessions")
+    sessions = inventory.get("agents") if isinstance(inventory, dict) else None
+    require(isinstance(sessions, list), "supply a host session inventory with an agents array")
+    running = set()
+    names = set()
+    for row in sessions:
+        require(isinstance(row, dict) and "agent_status" in row, "invalid host session row")
+        session = evidence(row.get("agent_name"), field="agent_name")
+        require(session not in names, "duplicate host session identity")
+        names.add(session)
+        if row["agent_status"] == "running":
+            running.add(session)
+
+    retained = {action["identity"]["session"] for action in state["actions"].values()
+                if action.get("identity")}
+    current_round = state.get("round") or {}
+    for review in current_round.get("reviews", {}).values():
+        if review.get("verdict") is None and review.get("identity"):
+            retained.add(review["identity"]["session"])
+    if identity := current_round.get("fixer_identity"):
+        retained.add(identity["session"])
+
+    accepted = {entry["action"]["identity"]["session"] for entry in state["history"]
+                if entry["kind"] == "worker-result" and entry.get("action", {}).get("identity")}
+    owned = set(state["used_sessions"])
+    return {"revision": state["revision"], "running": len(running),
+            "retire": sorted(running & owned & accepted - retained)}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", type=Path, required=True)
-    parser.add_argument("--request", type=Path)
-    parser.add_argument("--status", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--request", type=Path)
+    mode.add_argument("--status", action="store_true")
+    mode.add_argument("--host-sessions", help="Compare a host agent inventory JSON path or - for stdin.")
     arguments = parser.parse_args()
-    if arguments.request and arguments.status:
-        parser.error("choose --status or --request")
     try:
-        request = {"op": "status"} if arguments.status else (
-            read_json(arguments.request) if arguments.request else json.load(sys.stdin))
-        print(json.dumps(transact(arguments.task, request), ensure_ascii=False))
+        if arguments.host_sessions:
+            inventory = json.load(sys.stdin) if arguments.host_sessions == "-" else read_json(Path(arguments.host_sessions))
+            result = worker_cleanup(transact(arguments.task, {"op": "status"}), inventory)
+        else:
+            request = {"op": "status"} if arguments.status else (
+                read_json(arguments.request) if arguments.request else json.load(sys.stdin))
+            result = transact(arguments.task, request)
+        print(json.dumps(result, ensure_ascii=False))
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
         print(json.dumps({"error": str(exc), "committed": False}, ensure_ascii=False), file=sys.stderr)
         return 2

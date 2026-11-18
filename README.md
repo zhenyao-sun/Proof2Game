@@ -35,7 +35,7 @@ Proof2Game keeps your original and builds a separate English game script. Indepe
 - **Follow the proof map.** Statements, lemmas, and proofs become levels. Unlock the next part as you go.
 - **Get help when you want it.** Ask the tutor to work through a step with you, or switch to open chat. Play in English or Chinese.
 - **See the source.** Follow citations to the DOI or official source and use the displayed locator.
-- **Pick up where you left off.** Save progress locally, undo a step, or export a save to continue the same game on another Mac.
+- **Pick up where you left off.** Save progress in your browser, undo a step, or export a save to continue the same game on another device.
 
 ## Meet the team
 
@@ -67,7 +67,7 @@ One Codex session coordinates the work. Each specialist takes a different part o
       <p align="center"><img src="docs/agents/game-developer.webp" width="144" alt="An otter assembling tiles for a game map"></p>
       <strong>Game Developer</strong><br>
       <em>“Try following that argument on a map.”</em><br>
-      Builds an unlockable, bilingual game from the reviewed script and bundles the cited PDFs.
+      Builds an unlockable, bilingual game from the reviewed script and links to the cited sources.
     </td>
   </tr>
   <tr>
@@ -90,17 +90,15 @@ One Codex session coordinates the work. Each specialist takes a different part o
 
 ## Play a shared game
 
-Open a shared GitHub Pages link and copy its prompt into Codex on your Mac.
-The launcher opens the local game in your default browser and prints its
-address, which you can reuse from another tab or browser on the same Mac.
-You need Node.js 20 or later and your own Codex login.
+Open the shared GitHub Pages link to enter the game directly in your browser. No Codex installation or local server is needed to play.
 
-Authors can [export and publish a game directory to GitHub Pages](skills/proof2game/references/game.md#publish-the-website)
-from the approved bilingual snapshot.
+Use **AI Connection** in the top right to add, replace or clear your own DeepSeek API key. It stays in this browser, is excluded from saves, and is sent only to the official DeepSeek API for tutor requests. Your DeepSeek account pays for usage. You can browse the map without a key. Progress and conversations are saved in this browser; download a save to move them to another device.
+
+Authors can [export and publish a game directory to GitHub Pages](skills/proof2game/references/game.md#publish-the-website) from the approved bilingual snapshot. Existing published games keep their original runtime until their author explicitly requests a new export.
 
 ## Examples
 
-- [Local smoothing for the Euclidean wave equation](https://zhenyao-sun.github.io/Proof2Game-OpenAI-Local-Smoothing/) — based on the OpenAI manuscript dated October 25, 2026.
+- [Local smoothing for the Euclidean wave equation](https://zhenyao-sun.github.io/Proof2Game-OpenAI-Local-Smoothing/) — based on the OpenAI manuscript dated October 25, 2026. This existing example uses the earlier Mac/Codex player.
 
 ## Revise an unpublished paper
 
@@ -108,15 +106,15 @@ After Writer delivers a paper, ask Proof2Game to revise it and share your feedba
 
 ## Manual setup
 
-Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players can run an exported game with Node.js 20 or later. The PDF navigation check uses `pdftotext` or `pypdf`.
+Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players only need a browser and their own DeepSeek API key for tutor conversations. The PDF navigation check uses `pdftotext` or `pypdf`. Writer revision comparisons also need `PyMuPDF>=1.24.11,<2` in the Writer environment.
 
 If you already have a verified release checkout, use it and let Proof2Game check for updates. For a fresh setup, run:
 
 ```sh
 proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.1.19 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.19"
-python3 "$proof2game_releases/v0.1.19/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch v0.1.30 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.30"
+python3 "$proof2game_releases/v0.1.30/skills/proof2game/scripts/release.py" verify
 ```
 
 Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)

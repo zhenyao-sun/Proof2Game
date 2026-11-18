@@ -19,6 +19,8 @@ and record them against the current revision one at a time. Retry a request reje
 a concurrent revision after checking the action is still pending. A superseded token, changed
 script or different host session never counts as a result.
 
+To check session capacity, use `python3 scripts/state.py --task TASK --host-sessions -` with the normalized actual host inventory. It returns a read-only retirement plan; the coordinator verifies actual session state before acting.
+
 ## Initialization, dispatch, and completion
 
 | Operation | Additional fields |

@@ -41,8 +41,8 @@
     saveGame:'Save game',savedGames:'Saved games',closeSaves:'Close saved games',saveCurrent:'Save current progress',
     uploadSave:'Upload save',downloadCurrent:'Download current progress',manualSaves:'Manual saves',
     saveDescription:'Save a progress point, load an earlier one, or download it to keep elsewhere. Loading or uploading replaces your current progress and conversations.',
-    inputLabel:'Tell the AI what is on your mind',checkConnection:'Check local AI connection',
-    aiUnavailable:'unavailable',aiCheckLogin:'check login',aiConnected:'connected',aiReady:'ready to connect',
+    inputLabel:'Tell the AI what is on your mind',checkConnection:'AI Connection',
+    aiUnavailable:'unavailable',aiCheckLogin:'add API key',aiConnected:'connected',aiReady:'ready to connect',
     loading:'Loading the map…',loadingProgress:'Loading Proof2Game…',untitled:'Let understanding grow.',
     reload:'Please restart the game and refresh this page.',level:'Level',seed:'A SEED OF UNDERSTANDING',
     lockedShort:'Locked',lockedError:'This level is locked.',reference:'Reference',formulaSource:'Formula — view source',
@@ -74,8 +74,8 @@
     saveGame:'保存游戏',savedGames:'存档',closeSaves:'关闭存档',saveCurrent:'保存当前进度',
     uploadSave:'上传存档',downloadCurrent:'下载当前进度',manualSaves:'手动存档',
     saveDescription:'可保存、载入或下载进度。载入或上传会替换当前的进度和对话。',
-    inputLabel:'输入你的问题或想法',checkConnection:'检查本地 AI 连接',
-    aiUnavailable:'不可用',aiCheckLogin:'请检查登录',aiConnected:'已连接',aiReady:'待连接',
+    inputLabel:'输入你的问题或想法',checkConnection:'AI Connection · AI 连接',
+    aiUnavailable:'不可用',aiCheckLogin:'请配置 API key',aiConnected:'已连接',aiReady:'待连接',
     loading:'正在加载地图…',loadingProgress:'正在加载 Proof2Game…',untitled:'Proof2Game',
     reload:'请重新启动游戏并刷新页面。',level:'关卡',seed:'起点',
     lockedShort:'未解锁',lockedError:'此关尚未解锁。',reference:'引用',formulaSource:'查看公式源码',
@@ -91,7 +91,7 @@
     apiError:'游戏未能完成这项操作，请重试。',
     saveMismatch:'此存档与当前游戏版本不匹配，当前进度未改变。',saveMissing:'找不到该存档。',
     changedSnapshot:'稿件文件有改动，请恢复原始游戏文件。',changedReference:'参考文献 PDF 有改动，请恢复原件。',
-    progressChanged:'进度已更新，请重试。',checkConnectionError:'无法连接本地 AI，请检查 Codex 的安装、登录和模型权限。'
+    progressChanged:'进度已更新，请重试。',checkConnectionError:'无法连接 DeepSeek，请检查网络、API key 和账户余额。'
   };
   function language(){return state?.game?.chinese&&state.progress.language==='中文'?'中文':'English';}
   function words(){return language()==='中文'?zh:en;}
@@ -181,7 +181,7 @@
       return locked;
     }
     const link=element('a','reference-link internal-reference',label);
-    link.href='/?level='+encodeURIComponent(ref.level_id)+'&ref='+encodeURIComponent(key);
+    link.href=(window.location?.pathname||'/')+'?level='+encodeURIComponent(ref.level_id)+'&ref='+encodeURIComponent(key);
     link.target='_self';
     link.title=(ref.name?kindName(ref.name):t('reference'))+' '+ref.number;
     return link;
@@ -556,7 +556,7 @@
       if (typeof imagePath!=='string' || !verifiedImages.has(imagePath) || !imagePath.startsWith('snapshot/') || imagePath.split('/').some(part=>part==='..'||part==='.') || !/\.(png|jpe?g|webp)$/i.test(imagePath)) continue;
       const figure=element('figure','manuscript-figure');
       const image=element('img');
-      image.src='/'+imagePath.split('/').map(encodeURIComponent).join('/');
+      image.src='./'+imagePath.split('/').map(encodeURIComponent).join('/');
       image.alt=imagePath.split('/').pop();image.loading='lazy';image.decoding='async';
       figure.append(image,element('figcaption','',image.alt));$('level-images').append(figure);
     }
@@ -619,6 +619,7 @@
     $('send-message').disabled=busy || saveBusy || !$('chat-input').value.trim();
   }
   async function request(path,body) {
+    if(window.proof2gameBrowser)return window.proof2gameBrowser.request(path,body);
     const options={headers:{'Accept':'application/json'},credentials:'same-origin'};
     if (body) {options.method='POST'; options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}
     const response=await fetch(path,options);
@@ -745,6 +746,14 @@
       await flushNavigation();return false;
     }
   }
+  function downloadSave(link,route){
+    if(!window.proof2gameBrowser)return;
+    link.addEventListener('click',async event=>{event.preventDefault();try{
+      const value=await window.proof2gameBrowser.request(route);
+      const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='proof2game-save.json';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(error){notice('save-error',error.message);}});
+  }
   function renderSaves(){
     const rows=$('save-list');if(!rows||!state)return;
     rows.replaceChildren();
@@ -757,7 +766,7 @@
       if(Number.isInteger(record.completed_count))info.append(element('span','',words().levelsComplete(record.completed_count,levels().length)));
       const controls=element('div','save-record-actions');
       const load=element('button','plain-button',t('load'));load.type='button';load.disabled=busy||saveBusy;load.setAttribute('aria-label',t('load')+' '+label);load.addEventListener('click',()=>saveAction('save_load',{save_id:record.id}));
-      const download=element('a','plain-button',t('download'));download.href='/api/saves/'+encodeURIComponent(record.id)+'/download';download.download='proof2game-save.json';download.setAttribute('aria-label',t('download')+' '+label);
+      const download=element('a','plain-button',t('download'));download.href='/api/saves/'+encodeURIComponent(record.id)+'/download';download.download='proof2game-save.json';downloadSave(download,'/api/saves/'+encodeURIComponent(record.id)+'/download');download.setAttribute('aria-label',t('download')+' '+label);
       const remove=element('button','plain-button save-delete',t('remove'));remove.type='button';remove.disabled=busy||saveBusy;remove.setAttribute('aria-label',t('remove')+' '+label);remove.addEventListener('click',()=>saveAction('save_delete',{save_id:record.id}));
       controls.append(load,download,remove);row.append(info,controls);rows.append(row);
     }
@@ -772,8 +781,9 @@
     notice('save-error','');notice('save-status','');renderSaves();
     if(!$('save-dialog').open)$('save-dialog').showModal();
     try{
-      const response=await fetch('/api/saves',{headers:{Accept:'application/json'},credentials:'same-origin'});
-      const result=await response.json();if(!response.ok)throw new Error(actionError(result,'saveListError'));
+      let result;
+      if(window.proof2gameBrowser)result=await window.proof2gameBrowser.request('/api/saves');
+      else{const response=await fetch('/api/saves',{headers:{Accept:'application/json'},credentials:'same-origin'});result=await response.json();if(!response.ok)throw new Error(actionError(result,'saveListError'));}
       state.saves=result.saves||[];renderSaves();
     }catch(error){notice('save-error',error.message);}
   }
@@ -788,7 +798,7 @@
       if(epoch!==actionEpoch)return false;
       if(restoring){
         closeLevel({keepPending:true});currentLevel=null;conversationDrafts.clear();forestViewInitialized=false;
-        window.history.replaceState(null,'','/');
+        window.history.replaceState(null,'',window.location.pathname);
       }
       saveBusy=false;accept(result);
       if(restoring){$('save-dialog').close();notice('global-error','');}
@@ -824,7 +834,7 @@
     if (!available.has(id)) {notice('global-error',t('unavailable'));return;}
     if(currentLevel)conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
     currentLevel=id;
-    const url='/?level='+encodeURIComponent(id)+(options.reference?'&ref='+encodeURIComponent(options.reference):'');
+    const url=window.location.pathname+'?level='+encodeURIComponent(id)+(options.reference?'&ref='+encodeURIComponent(options.reference):'');
     if(options.historyMode!=='none'&&window.location.pathname+window.location.search!==url)
       window.history[options.historyMode==='replace'?'replaceState':'pushState'](null,'',url);
     $('chat-input').value=conversationDrafts.get(id+':'+chatMode())??conversationState(id).draft??'';
@@ -910,14 +920,16 @@
   $('mode-chat').addEventListener('click',()=>switchMode('chat'));
   for(const id of ['language-map','language-level'])$(id).addEventListener('change',()=>switchLanguage($(id).value));
   $('understand-all').addEventListener('click',()=>act('understand_all'));
-  $('connection-check').addEventListener('click',()=>act('connection'));
+  $('connection-check').addEventListener('click',()=>window.proof2gameBrowser?window.openProof2GameConnection():act('connection'));
+  downloadSave($('export-current'),'/api/save/export');
+  window.addEventListener('storage',event=>{if(window.proof2gameBrowser&&(event.key===window.proof2gameBrowser.storageKey||event.key==='proof2game:deepseek-key'))request('/api/game').then(accept).catch(error=>notice('global-error',error.message));});
   $('next-level').addEventListener('click',()=>{const {next}=levelStatus();const first=next || levels()[0];if(first){lastFocusedNode=first.id;openLevel(first.id);}});
   function closeLevel(options={}) {
     if(!options.keepPending)pendingNavigation=null;
     clearTimeout(prefetchTimer);
     if(currentLevel)conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
     $('level-dialog').close();
-    if(options.historyMode!=='none'&&window.location.pathname+window.location.search!=='/')window.history.pushState(null,'','/');
+    if(options.historyMode!=='none'&&window.location.search)window.history.pushState(null,'',window.location.pathname);
   }
   $('close-level').addEventListener('click',closeLevel);$('close-level-small').addEventListener('click',closeLevel);
   $('level-dialog').addEventListener('cancel',event=>{event.preventDefault();closeLevel();});

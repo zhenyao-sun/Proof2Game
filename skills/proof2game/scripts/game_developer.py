@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export a verified game script as a bilingual macOS game."""
+"""Export a verified game script as a bilingual browser game from macOS."""
 import argparse
 from datetime import date
 import hashlib
@@ -605,6 +605,19 @@ def site_digest(inventory):
     return sha(canonical(inventory))
 
 
+def browser_assets():
+    runtime = Path(__file__).resolve().parents[1] / 'assets/game-runtime'
+    names = ['app.js', 'style.css', 'guide-diagram.mjs', 'browser-entry.mjs', 'browser-engine.mjs']
+    assets = {name: (runtime / name).read_bytes() for name in names}
+    assets['index.html'] = (runtime / 'browser.html').read_bytes()
+    assets['.nojekyll'] = b''
+    assets['LICENSE'] = (Path(__file__).resolve().parents[3] / 'LICENSE').read_bytes()
+    for path in (runtime / 'vendor').rglob('*'):
+        if path.is_file():
+            assets[path.relative_to(runtime).as_posix()] = path.read_bytes()
+    return assets
+
+
 def export_pages(output, game, content, script, verify_delivery):
     """Stage a static site with game data and a launch page. Publication is separate."""
     for ref in game['references']:
@@ -612,26 +625,27 @@ def export_pages(output, game, content, script, verify_delivery):
             raise Rejected('A DOI or official HTTPS source link is required for: ' + ref['key'])
         ref.pop('sha256', None)
     game['distribution'] = 'pages'
+    game['tutor_provider'] = 'deepseek'
     game['reference_files'] = {}
     data = {'game.json': canonical(game), **content}
     release = (script.parents[3] / 'VERSION').read_text(encoding='ascii').strip()
     if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', release):
         raise Rejected('Pages export requires a numbered Proof2Game release.')
-    manifest = dict(schema=1, connector=release, game_id=game['id'], launch_mode='local', files={
+    manifest = dict(schema=1, connector=release, game_id=game['id'], launch_mode='browser', files={
         name: dict(sha256=sha(payload), size=len(payload)) for name, payload in sorted(data.items())
     })
     if 'paper' in game:
         manifest['paper'] = game['paper']
     if len(data) > 2048 or sum(map(len, data.values())) > 128 * 1024 * 1024:
         raise Rejected('This game exceeds the Pages launch data limit.')
-    assets = script.parents[1] / 'assets/pages-launch'
+    assets = browser_assets()
     with tempfile.TemporaryDirectory(prefix='.proof2game-pages-', dir=output.parent) as td:
         stage = Path(td) / 'site'
-        shutil.copytree(assets, stage)
-        launch = stage / 'index.html'
-        launch.write_text(launch.read_text(encoding='utf-8').replace(
-            'src="./launch.js"', f'src="./launch.js?release={release}"'), encoding='utf-8')
-        (stage / '.nojekyll').touch()
+        stage.mkdir()
+        for name, payload in assets.items():
+            target = stage / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
         for name, payload in data.items():
             if (name != 'game.json' and not name.startswith(('snapshot/', 'translation/zh/'))) or any(
                 not part or part.startswith('.') or any(c in '%\\?#' or ord(c) < 32 for c in part)
@@ -652,6 +666,8 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
            model=TUTOR_MODEL, reasoning=TUTOR_REASONING, *, paper=None):
     if sys.platform != 'darwin':
         raise Rejected('Proof2Game generation is supported on macOS.')
+    if model not in ('deepseek-flash', 'deepseek-v4-pro'):
+        raise Rejected('Browser games require a supported DeepSeek tutor model.')
     output = Path(output).resolve()
     if output.suffix.lower() == '.zip':
         raise Rejected('Output must be a new directory for the hosted game.')
@@ -663,6 +679,8 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     attribution = paper_metadata(record, paper)
     game, files, _ = make_game(main, approval, source_bindings, references_dir,
                                             translation=translation, model=model, reasoning=reasoning)
+    if model == 'deepseek-v4-pro' and game.get('images'):
+        raise Rejected('Use deepseek-flash for games with manuscript images; deepseek-v4-pro does not support them.')
     if attribution is not None:
         game['paper'] = attribution
     chinese_files = {'translation/zh/' + name: source.encode()
@@ -683,7 +701,7 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     release_license = script.parents[3] / 'LICENSE'
     if not release_license.is_file():
         raise Rejected('The Proof2Game release license is missing from the installation.')
-    required = ('server.mjs', 'guide-diagram.mjs', 'index.html', 'app.js', 'style.css', 'vendor/katex.min.js',
+    required = ('browser-engine.mjs', 'browser-entry.mjs', 'guide-diagram.mjs', 'browser.html', 'app.js', 'style.css', 'vendor/katex.min.js',
                 'vendor/katex.min.css', 'vendor/auto-render.min.js', 'vendor/LICENSE-KaTeX.txt',
                 'vendor/fonts/OFL.txt')
     if not all((runtime / name).is_file() for name in required):

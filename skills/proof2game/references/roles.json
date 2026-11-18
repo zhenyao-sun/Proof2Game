@@ -10,5 +10,5 @@
   "game_developer": {"model": "gpt-6.2-sol", "reasoning_effort": "medium"},
   "writer": {"model": "gpt-6.2-sol", "reasoning_effort": "ultra"},
   "translator": {"model": "gpt-6.2-sol", "reasoning_effort": "medium"},
-  "tutor": {"model": "gpt-6.1-terra", "reasoning_effort": "medium"}
+  "tutor": {"model": "deepseek-flash", "reasoning_effort": "medium"}
 }

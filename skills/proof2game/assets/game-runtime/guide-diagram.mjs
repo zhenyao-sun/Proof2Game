@@ -89,7 +89,7 @@ const elementPattern = new RegExp([
 
 export function validGuideImage(image){
   if(!image || typeof image!=='object' || Object.keys(image).length!==2 || !validText(image.alt,500) ||
-    typeof image.svg!=='string' || !image.svg.isWellFormed() || Buffer.byteLength(image.svg)>24*1024 ||
+    typeof image.svg!=='string' || !image.svg.isWellFormed() || new TextEncoder().encode(image.svg).byteLength>24*1024 ||
     !image.svg.startsWith(start) || !image.svg.endsWith(end)) return false;
   elementPattern.lastIndex = start.length;
   const stop = image.svg.length-end.length;
