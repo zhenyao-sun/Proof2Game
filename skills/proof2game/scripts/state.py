@@ -1367,18 +1367,56 @@ def transact(task, request):
         return display(state)
 
 
+def worker_cleanup(status, inventory):
+    """Find completed ledger workers that still occupy a host slot."""
+    state = status["state"]
+    require(state is not None and not status["stale"] and not status["pending_write"],
+            "a current ledger is required to reconcile host sessions")
+    sessions = inventory.get("agents") if isinstance(inventory, dict) else None
+    require(isinstance(sessions, list), "supply a host session inventory with an agents array")
+    running = set()
+    names = set()
+    for row in sessions:
+        require(isinstance(row, dict) and "agent_status" in row, "invalid host session row")
+        session = evidence(row.get("agent_name"), field="agent_name")
+        require(session not in names, "duplicate host session identity")
+        names.add(session)
+        if row["agent_status"] == "running":
+            running.add(session)
+
+    retained = {action["identity"]["session"] for action in state["actions"].values()
+                if action.get("identity")}
+    current_round = state.get("round") or {}
+    for review in current_round.get("reviews", {}).values():
+        if review.get("verdict") is None and review.get("identity"):
+            retained.add(review["identity"]["session"])
+    if identity := current_round.get("fixer_identity"):
+        retained.add(identity["session"])
+
+    accepted = {entry["action"]["identity"]["session"] for entry in state["history"]
+                if entry["kind"] == "worker-result" and entry.get("action", {}).get("identity")}
+    owned = set(state["used_sessions"])
+    return {"revision": state["revision"], "running": len(running),
+            "retire": sorted(running & owned & accepted - retained)}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", type=Path, required=True)
-    parser.add_argument("--request", type=Path)
-    parser.add_argument("--status", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--request", type=Path)
+    mode.add_argument("--status", action="store_true")
+    mode.add_argument("--host-sessions", help="Compare a host agent inventory JSON path or - for stdin.")
     arguments = parser.parse_args()
-    if arguments.request and arguments.status:
-        parser.error("choose --status or --request")
     try:
-        request = {"op": "status"} if arguments.status else (
-            read_json(arguments.request) if arguments.request else json.load(sys.stdin))
-        print(json.dumps(transact(arguments.task, request), ensure_ascii=False))
+        if arguments.host_sessions:
+            inventory = json.load(sys.stdin) if arguments.host_sessions == "-" else read_json(Path(arguments.host_sessions))
+            result = worker_cleanup(transact(arguments.task, {"op": "status"}), inventory)
+        else:
+            request = {"op": "status"} if arguments.status else (
+                read_json(arguments.request) if arguments.request else json.load(sys.stdin))
+            result = transact(arguments.task, request)
+        print(json.dumps(result, ensure_ascii=False))
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
         print(json.dumps({"error": str(exc), "committed": False}, ensure_ascii=False), file=sys.stderr)
         return 2

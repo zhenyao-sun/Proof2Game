@@ -19,6 +19,11 @@ and record them against the current revision one at a time. Retry a request reje
 a concurrent revision after checking the action is still pending. A superseded token, changed
 script or different host session never counts as a result.
 
+To reconcile host slots, run `python3 scripts/state.py --task TASK --host-sessions -` and send the
+fresh host inventory JSON on stdin. This read-only check lists running workers eligible to retire.
+It compares precise session identities and keeps active assignments, pending source waits and
+continuable Fixer sessions. Check and stop eligible sessions through the host's control tool.
+
 ## Initialization, dispatch, and completion
 
 | Operation | Additional fields |

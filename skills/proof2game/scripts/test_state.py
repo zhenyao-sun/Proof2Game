@@ -160,6 +160,28 @@ class Ledger(unittest.TestCase):
         self.assertEqual(result["superseded"][0]["products"]["paper"]["status"], "blocked")
         self.assertEqual(state.read_json(certificate)["route_review"], "invalidated")
 
+    def test_worker_cleanup_finds_only_completed_ledger_workers_still_running(self):
+        self.init("guided")
+        self.change("advance")
+        opening = self.bind(self.action(component="setting"))
+        self.result(opening, "pass")
+        running = self.action(component="setting")["identity"]["session"]
+        statement = self.bind(self.action(component="main"))
+        completed = statement["identity"]["session"]
+        self.result(statement, "nonpass", issue="synthetic issue", location="statement")
+        inventory = {"agents": [
+            {"agent_name": name, "agent_status": "running"} for name in
+            (running, completed, "fixture-main", "unrelated-worker")
+        ]}
+        status = state.transact(self.task, {"op": "status"})
+        plan = state.worker_cleanup(status, inventory)
+        self.assertEqual(plan, {"revision": status["state"]["revision"], "running": 4, "retire": [completed]})
+        inventory["agents"][1]["agent_status"] = {"completed": "finished"}
+        self.assertEqual(state.worker_cleanup(status, inventory)["retire"], [])
+        self.assertEqual(state.transact(self.task, {"op": "status"}), status)
+        with self.assertRaisesRegex(state.Rejected, "current ledger"):
+            state.worker_cleanup({**status, "pending_write": True}, inventory)
+
     def test_advancing_gate_keeps_continuing_reviewer_slot(self):
         self.init()
         self.change("advance")
