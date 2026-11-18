@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import game_developer
 import intake
+import review_dispatch
 import state
 from test_intake import make_pdf, source_data
 
@@ -190,6 +191,29 @@ class Ledger(unittest.TestCase):
             fresh = self.action(component="main")
             self.assertNotEqual(fresh["token"], queued["token"])
             self.assertIsNone(fresh["identity"])
+
+    def test_receipt_requires_the_live_packet_and_bound_host_session(self):
+        self.init()
+        self.change("advance")
+        action = self.bind(self.action(component="main"))
+        token, session = action["token"], action["identity"]["session"]
+        dispatch = review_dispatch.prepare(self.task, token)
+        receipt = {key: action[key] for key in ("token", "snapshot_digest", "component", "gate")}
+        receipt.update(packet_sha256=dispatch["sha256"], verdict="pass", evidence="synthetic receipt")
+        self.addCleanup(shutil.rmtree, Path(dispatch["path"]).parent)
+        for field in ("token", "snapshot_digest", "component", "gate", "packet_sha256"):
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "current detached review packet"):
+                review_dispatch.accept_receipt(self.task, token, session, {**receipt, field: "old"})
+        with self.assertRaisesRegex(ValueError, "bound Reviewer session"):
+            review_dispatch.accept_receipt(self.task, token, "different-worker", receipt)
+        self.assertEqual(state.transact(self.task, {"op": "status"})["state"], self.data["state"])
+
+        self.data = review_dispatch.accept_receipt(self.task, token, session, receipt)
+        self.assertEqual(self.action(component="main")["gate"], "self_contained")
+        history = self.data["state"]["history"]
+        self.assertEqual(history[-1]["result"]["packet_sha256"], dispatch["sha256"])
+        with self.assertRaisesRegex(ValueError, "no current assignment"):
+            review_dispatch.accept_receipt(self.task, token, session, receipt)
 
     def test_worker_cleanup_finds_only_completed_ledger_workers_still_running(self):
         self.init("guided")

@@ -213,8 +213,12 @@ def worker_prompt(packet, path, packet_sha256):
     return "\n".join(lines)
 
 
+def packet_bytes(packet):
+    return (json.dumps(packet, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+
 def detach(main, packet):
-    encoded = (json.dumps(packet, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    encoded = packet_bytes(packet)
     packet_sha256 = hashlib.sha256(encoded).hexdigest()
     scratch = Path(tempfile.gettempdir()).resolve()
     require(not scratch.is_relative_to(main.parent.resolve()), "detached Reviewer scratch must be outside the script directory")
@@ -224,18 +228,22 @@ def detach(main, packet):
     return {"path": str(path), "sha256": packet_sha256, "message": worker_prompt(packet, path, packet_sha256)}
 
 
-def prepare(task, token):
-    task = intake.resolve_task_path(task)
+def current_review(task, token):
     status = state.transact(task, {"op": "status"})
     require(not status["stale"], "live script and ledger differ")
     action = next((item for item in status["actions"] if item["token"] == token), None)
     require(action is not None, "no current assignment matches this review token")
-    main = task / "main.tex"
     cutoff = status["state"]["target"].get("cutoff")
-    packet = build_packet(main, action, cutoff=cutoff)
-    result = detach(main, packet)
+    packet = build_packet(task / "main.tex", action, cutoff=cutoff)
+    return status["state"]["revision"], action, packet
+
+
+def prepare(task, token):
+    task = intake.resolve_task_path(task)
+    revision, action, packet = current_review(task, token)
+    result = detach(task / "main.tex", packet)
     result.update(
-        revision=status["state"]["revision"],
+        revision=revision,
         token=packet["token"],
         snapshot_digest=packet["snapshot_digest"],
         operation="continue" if action["identity"] else "fresh",
@@ -247,13 +255,38 @@ def prepare(task, token):
     return result
 
 
+def accept_receipt(task, token, session, receipt):
+    require(isinstance(receipt, dict), "expected one Reviewer receipt object")
+    task = intake.resolve_task_path(task)
+    revision, action, packet = current_review(task, token)
+    require(action["identity"] and session == action["identity"]["session"],
+            "receipt must come from the bound Reviewer session")
+    binding = {key: packet[key] for key in ("token", "snapshot_digest", "component", "gate")}
+    binding["packet_sha256"] = hashlib.sha256(packet_bytes(packet)).hexdigest()
+    require(all(receipt.get(key) == value for key, value in binding.items()),
+            "receipt does not match the current detached review packet")
+    fields = ("verdict", "evidence", "issue", "location", "sources", "source", "source_version", "required")
+    request = {key: receipt[key] for key in fields if key in receipt}
+    return state.transact(task, {**request, **binding, "op": "result",
+                                "expected_revision": revision, "session": session})
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", required=True, type=Path)
     parser.add_argument("--token", required=True)
+    parser.add_argument("--receipt", help="Record the supplied receipt file, or - for stdin.")
+    parser.add_argument("--session", help="Host session observed returning the receipt.")
     arguments = parser.parse_args()
+    if bool(arguments.receipt) != bool(arguments.session):
+        parser.error("--receipt and --session must be used together")
     try:
-        result = prepare(arguments.task, arguments.token)
+        if arguments.receipt:
+            receipt = (json.load(sys.stdin) if arguments.receipt == "-"
+                       else json.loads(Path(arguments.receipt).read_text(encoding="utf-8")))
+            result = accept_receipt(arguments.task, arguments.token, arguments.session, receipt)
+        else:
+            result = prepare(arguments.task, arguments.token)
     except (KeyError, ValueError, TypeError, OSError) as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
         return 2
