@@ -30,7 +30,7 @@ if args==['login','status']:
         print('Error loading configuration: config.toml: invalid type',file=sys.stderr);sys.exit(1)
     print('Logged in');sys.exit(0)
 assert args[0]=='exec' and '--ignore-user-config' in args and '--ephemeral' in args
-assert args[args.index('--model')+1]=='gpt-6.1-sol'
+assert args[args.index('--model')+1]=='gpt-6.2-sol'
 assert args[args.index('-c')+1]=='model_reasoning_effort="medium"'
 assert args[args.index('--sandbox')+1]=='read-only'
 prompt=sys.stdin.read()
@@ -98,7 +98,7 @@ class GameRuntimeTests(unittest.TestCase):
         (self.root/'snapshot/main.tex').write_text('Snapshot manuscript content')
         self.game = {
             'schema': 1, 'id': 'test-game', 'title': 'Paper',
-            'snapshot_digest': 'bound-snapshot', 'model': 'gpt-6.1-sol', 'reasoning_effort': 'medium',
+            'snapshot_digest': 'bound-snapshot', 'model': 'gpt-6.2-sol', 'reasoning_effort': 'medium',
             'snapshot_files': {'snapshot/main.tex': hashlib.sha256((self.root/'snapshot/main.tex').read_bytes()).hexdigest()},
             'manuscript': {'main': 'snapshot/main.tex', 'files': ['snapshot/main.tex']},
             'levels': [

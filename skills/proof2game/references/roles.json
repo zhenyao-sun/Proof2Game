@@ -1,14 +1,14 @@
 {
-  "coordinator": {"model": "gpt-6.1-sol", "reasoning_effort": "medium"},
+  "coordinator": {"model": "gpt-6.2-sol", "reasoning_effort": "medium"},
   "reviewer": {"model": "gpt-6-luna", "reasoning_effort": "high"},
   "batcher": {"model": "gpt-6-luna", "reasoning_effort": "high"},
-  "fixer": {"model": "gpt-6.1-sol", "reasoning_effort": "high"},
-  "explorer": {"model": "gpt-6-astra", "reasoning_effort": "high"},
-  "simplification": {"model": "gpt-6.1-sol", "reasoning_effort": "ultra"},
-  "public_route": {"model": "gpt-6.1-sol", "reasoning_effort": "ultra"},
-  "refactor": {"model": "gpt-6-astra", "reasoning_effort": "high"},
-  "game_developer": {"model": "gpt-6.1-sol", "reasoning_effort": "medium"},
-  "writer": {"model": "gpt-6.1-sol", "reasoning_effort": "ultra"},
-  "translator": {"model": "gpt-6.1-sol", "reasoning_effort": "medium"},
-  "tutor": {"model": "gpt-6.1-sol", "reasoning_effort": "medium"}
+  "fixer": {"model": "gpt-6.2-sol", "reasoning_effort": "high"},
+  "explorer": {"model": "gpt-6.2-astra", "reasoning_effort": "high"},
+  "simplification": {"model": "gpt-6.2-sol", "reasoning_effort": "ultra"},
+  "public_route": {"model": "gpt-6.2-sol", "reasoning_effort": "ultra"},
+  "refactor": {"model": "gpt-6.2-astra", "reasoning_effort": "high"},
+  "game_developer": {"model": "gpt-6.2-sol", "reasoning_effort": "medium"},
+  "writer": {"model": "gpt-6.2-sol", "reasoning_effort": "ultra"},
+  "translator": {"model": "gpt-6.2-sol", "reasoning_effort": "medium"},
+  "tutor": {"model": "gpt-6.2-sol", "reasoning_effort": "medium"}
 }

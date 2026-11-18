@@ -434,7 +434,7 @@ def validate_translation(original, translated, main_name):
 
 
 def make_game(main, approval=None, source_bindings=None, references_dir=None,
-              verify_numbering=True, translation=None, model='gpt-6.1-sol', reasoning='medium'):
+              verify_numbering=True, translation=None, model='gpt-6.2-sol', reasoning='medium'):
     clean, full, checkpoint, state_bytes, record = eligibility(main, approval)
     main = Path(main).resolve()
     files = resource_closure(main, full)
@@ -646,7 +646,7 @@ def export_pages(output, game, content, script, verify_delivery):
 
 
 def export(main, output, approval=None, source_bindings=None, references_dir=None, translation=None,
-           model='gpt-6.1-sol', reasoning='medium', *, paper=None):
+           model='gpt-6.2-sol', reasoning='medium', *, paper=None):
     output = Path(output).resolve()
     if output.suffix.lower() == '.zip':
         raise Rejected('Output must be a new directory for the hosted game.')
@@ -696,7 +696,7 @@ def main():
     p.add_argument('--approval', help='Delivery certificate (default: approval.json beside the verified script).')
     p.add_argument('--references', help='The project references/ directory.')
     p.add_argument('--source-bindings', help='JSON records for the exact selected citation versions and page locations.')
-    p.add_argument('--tutor-model', default='gpt-6.1-sol', help='The player tutor model.')
+    p.add_argument('--tutor-model', default='gpt-6.2-sol', help='The player tutor model.')
     p.add_argument('--tutor-reasoning', default='medium', choices=('low', 'medium', 'high', 'xhigh', 'max', 'ultra'))
     p.add_argument('--translation', help='Complete Chinese translation JSON from the mathematics translator.')
     action = p.add_mutually_exclusive_group()

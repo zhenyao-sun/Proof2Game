@@ -34,7 +34,7 @@ class Ledger(unittest.TestCase):
         (self.task / "target.json").write_bytes(state.json_bytes(target))
         self.data = state.transact(self.task, {
             "op": "init", "entry": entry, "tool_release": "fixture-release",
-            "coordinator": {"session": "fixture-main", "model": "gpt-6.1-sol", "effort": "medium",
+            "coordinator": {"session": "fixture-main", "model": "gpt-6.2-sol", "effort": "medium",
                             "evidence": "synthetic coordinator fixture"},
             **fields,
         })

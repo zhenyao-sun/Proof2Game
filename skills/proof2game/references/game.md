@@ -44,7 +44,7 @@ reviewed snapshot. Correct a translation-only defect in the game translation.
 
    Omit `--paper-metadata` for an unpublished project. Omit `--source-bindings`
    when there are no external citations. The default tutor is
-   `gpt-6.1-sol / medium`. Use the role configuration for any tutor override.
+   `gpt-6.2-sol / medium`. Use the role configuration for any tutor override.
 
 ## Publish the website
 
