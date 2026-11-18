@@ -98,7 +98,12 @@ def catalog(project, work=None):
         if not path.resolve().is_relative_to(base.resolve()):
             continue
         row = json.loads(path.read_text(encoding="utf-8"))
-        if row.get("schema") != 1 or row.get("id") != path.parent.name:
+        if isinstance(row, dict) and row.get("kind") == "original_external_source" and "work_key" not in row:
+            # Mathematician stores its own receipt here. The original PDF is
+            # still discoverable through intake's PDF inventory.
+            continue
+        if (not isinstance(row, dict) or row.get("schema") != 1
+                or row.get("id") != path.parent.name or not isinstance(row.get("work_key"), str)):
             raise ValueError(f"Unrecognized reference record: {path}")
         if work is None or row["work_key"] == work:
             results.append(row)

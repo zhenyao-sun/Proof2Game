@@ -118,6 +118,23 @@ class IntakeTest(unittest.TestCase):
         self.assertEqual(intake.arxiv_link("https://arxiv.org/pdf/2501.01234v2.pdf"),
                          {"arxiv_id": "2501.01234", "requested_version": "v2"})
         self.assertEqual(intake.arxiv_link("https://arxiv.org/abs/math/0301234")["arxiv_id"], "math/0301234")
+
+    def test_reference_inventory_accepts_mathematician_receipts_alongside_registered_sources(self):
+        legacy = self.project / "references" / "legacy-source"
+        legacy.mkdir(parents=True)
+        pdf = legacy / "original.pdf"
+        make_pdf(pdf)
+        receipt = legacy / "source.json"
+        original_receipt = b'{"kind":"original_external_source","id":"legacy-source"}'
+        receipt.write_bytes(original_receipt)
+        registered = intake.register_reference(self.project, {**source_data(), "pdf": str(pdf)})
+        inventory = intake.list_references(self.project)
+        self.assertEqual([row["id"] for row in inventory["references"]], [registered["id"]])
+        self.assertIn("references/legacy-source/original.pdf", inventory["pdfs"])
+        self.assertEqual(receipt.read_bytes(), original_receipt)
+        receipt.write_text('{"schema":1,"id":"legacy-source"}')
+        with self.assertRaisesRegex(ValueError, "Unrecognized reference record"):
+            intake.list_references(self.project)
         self.assertEqual(intake.arxiv_link("https://arxiv.org/html/2601.01234v1")["requested_version"], "v1")
         with self.assertRaisesRegex(ValueError, "exact requested"):
             intake.public_target({
