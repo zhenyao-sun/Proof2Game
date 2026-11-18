@@ -27,3 +27,20 @@ jobs:
           printf '%s\n' /Library/TeX/texbin >> "$GITHUB_PATH"
       - run: python3 -m unittest discover -s skills/proof2game/scripts
       - run: node --test skills/proof2game/scripts/*.cjs
+
+  linux-authoring:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install authoring tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils latexmk texlive-latex-extra texlive-bibtex-extra
+      - name: Validate Linux authoring
+        env:
+          PYTHONPATH: skills/proof2game/scripts
+        run: |
+          python3 -m unittest test_release test_intake test_manuscript test_review_dispatch test_state test_game_export test_writer
