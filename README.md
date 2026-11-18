@@ -8,7 +8,7 @@ Give Proof2Game a paper, a draft, or your math notes. A team of Codex agents rev
 
 ## Quick start
 
-**Copy the entire block into ChatGPT Desktop or Codex on your Mac.**
+**Copy the entire block into ChatGPT Work in your browser, or into ChatGPT Desktop or Codex on your Mac.**
 
 ```text
 Set up and run Proof2Game from this repository.
@@ -67,7 +67,7 @@ One Codex session coordinates the work. Each specialist takes a different part o
       <p align="center"><img src="docs/agents/game-developer.webp" width="144" alt="An otter assembling tiles for a game map"></p>
       <strong>Game Developer</strong><br>
       <em>“Try following that argument on a map.”</em><br>
-      Builds an unlockable, bilingual game from the reviewed script and bundles the cited PDFs.
+      Builds an unlockable, bilingual game from the reviewed script and links to the cited sources.
     </td>
   </tr>
   <tr>
@@ -104,18 +104,28 @@ from the approved bilingual snapshot.
 
 ## Manual setup
 
-Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players can run an exported game with Node.js 20 or later. The PDF navigation check uses `pdftotext` or `pypdf`.
+Author in the Linux workspace of ChatGPT Work, or use macOS with ChatGPT Desktop or Codex. Guided verification requires terminal access, a real Codex Goal, and independent agent sessions. In Work, attach the manuscript or provide an accessible workspace project path. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players can run an exported game with Node.js 20 or later. The PDF navigation check uses `pdftotext` or `pypdf`.
 
 If you already have a verified release checkout, use it and let Proof2Game check for updates. For a fresh setup, run:
 
 ```sh
-proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
+proof2game_version=v0.1.29
+case "$(uname -s)" in
+  Darwin) proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases" ;;
+  Linux)
+    case "${XDG_DATA_HOME:-}" in
+      /*) proof2game_releases="$XDG_DATA_HOME/proof2game/releases" ;;
+      *) proof2game_releases="$HOME/.local/share/proof2game/releases" ;;
+    esac
+    ;;
+esac
+proof2game_checkout="$proof2game_releases/$proof2game_version"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.1.19 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.19"
-python3 "$proof2game_releases/v0.1.19/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch "$proof2game_version" https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_checkout"
+python3 "$proof2game_checkout/skills/proof2game/scripts/release.py" verify
 ```
 
-Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)
+Linux authoring requires a release that includes Work support. If the pinned release predates that support, use macOS for that release. Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)
 
 ## License
 
