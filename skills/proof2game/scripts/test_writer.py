@@ -1,4 +1,6 @@
 """Focused Writer regressions using local synthetic math and real TeX builds."""
+from contextlib import redirect_stdout
+from io import StringIO
 import json
 from pathlib import Path
 import shutil
@@ -7,6 +9,7 @@ import unittest
 
 import manuscript
 import writer
+import writer_revision
 
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
@@ -103,6 +106,95 @@ class WriterTests(unittest.TestCase):
             "references": "Synthetic test evidence, references checked with stable TeX labels.",
             **extra,
         }
+
+    def test_paper_inspect_lists_only_sources_cited_in_the_snapshot(self):
+        (self.snapshot / "proof.tex").write_text(r"Use \cite{alpha,beta}. % \cite{comment}")
+        main = self.main.read_text().replace(r"\section{Main Results}", r"\cite{intro}\section{Main Results}")
+        self.main.write_text(main.replace(r"\end{document}", r"""
+\begin{bibdiv}\begin{biblist}
+\bib{unused}{article}{title={A reference to \cite{unused-source}}}
+\end{biblist}\end{bibdiv}\end{document}"""))
+        clean, _ = manuscript.parse(self.main)
+        self.write(self.approval_path, self.approval | {"snapshot_digest": clean["snapshot_digest"]})
+        with redirect_stdout(StringIO()) as output:
+            self.assertEqual(writer.main(["inspect", "--kind", "paper", "--main", str(self.main)]), 0)
+        self.assertEqual(json.loads(output.getvalue())["cited_keys"], ["alpha", "beta", "intro"])
+
+    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "TeX tools unavailable")
+    def test_revision_uses_checked_clean_paper_and_actual_comparison_content(self):
+        import pymupdf
+
+        def checked_bundle(name, body):
+            bundle = self.task / name
+            tex = self.draft_document("paper", body)
+            read_inputs = lambda: writer.applicable_inputs("paper", self.main)
+            candidate = writer.compile_delivery("paper", tex, bundle, "pdflatex", read_inputs)
+            self.write(self.checks_path, self.self_check(candidate, fidelity="Synthetic comparison fixture.",
+                       targets={key: {"statement": "p. 1", "proof": "p. 1"} for key in self.snap["targets"]}))
+            writer.finish_delivery("paper", bundle, self.checks_path, read_inputs)
+            return bundle
+
+        def words_and_marks(path):
+            with pymupdf.open(path) as doc:
+                words, marked = [], []
+                for page in doc:
+                    boxes = [annot.rect for annot in page.annots()]
+                    for x0, y0, x1, y1, word, *_ in page.get_text("words"):
+                        words.append(word)
+                        if any(((x0 + x1) / 2, (y0 + y1) / 2) in box for box in boxes):
+                            marked.append(word)
+                return words, marked
+
+        previous = checked_bundle("previous", r"Shared obsolete lemma.\newpage Second page.")
+        current = checked_bundle("current", r"Shared improved lemma.\newpage Second page.")
+        snapshot_files = writer.source_files(self.snapshot)
+        old_pdf = (previous / "paper.pdf").read_bytes()
+        clean_pdf = (current / "paper.pdf").read_bytes()
+        expected_words, clean_marks = words_and_marks(current / "paper.pdf")
+        self.assertEqual(clean_marks, [])
+        marked = writer_revision.compare(self.main, previous, current)
+        self.assertEqual(words_and_marks(marked), (expected_words, ["improved"]))
+        self.assertEqual(writer_revision.compare(self.main, previous, current), marked)
+
+        # A collaborator already made the same edit and applied color to it.
+        external = self.task / "collaborator.pdf"
+        with pymupdf.open(marked) as document:
+            document.save(external)
+        another = self.task / "another"
+        shutil.copytree(current, another, ignore=shutil.ignore_patterns("comparison"))
+        selected = writer_revision.compare(self.main, previous, another, external)
+        self.assertEqual(words_and_marks(selected), (expected_words, []))
+        self.assertEqual((previous / "paper.pdf").read_bytes(), old_pdf)
+        self.assertEqual((current / "paper.pdf").read_bytes(), clean_pdf)
+        self.assertEqual(writer.source_files(self.snapshot), snapshot_files)
+        with self.assertRaisesRegex(writer.Rejected, "different inputs"):
+            writer_revision.compare(self.main, previous, another)
+
+        # The next round starts from the most recent clean delivery.
+        following = checked_bundle("following", r"improved lemma.\newpage Second page.")
+        removed = writer_revision.compare(self.main, current, following)
+        self.assertNotIn("Shared", words_and_marks(removed)[0])
+        self.assertEqual(words_and_marks(removed)[1], [])
+
+        # The designated source file stays bound even when its colored TeX
+        # is compared through a checked plain-text rendition.
+        converted = self.task / "converted"
+        shutil.copytree(current, converted, ignore=shutil.ignore_patterns("comparison"))
+        original = self.task / "edited.tex"
+        original.write_text(r"Shared \textcolor{red}{improved} lemma.\newpage Second page.")
+        rendition = self.task / "visible.txt"
+        rendition.write_text(" ".join(expected_words))
+        marked_view = writer_revision.compare(self.main, previous, converted, original, rendition)
+        self.assertEqual(words_and_marks(marked_view), (expected_words, []))
+        original.write_text("Later external version.")
+        with self.assertRaisesRegex(writer.Rejected, "different inputs"):
+            writer_revision.compare(self.main, previous, converted, original, rendition)
+        selected.write_bytes(b"damaged")
+        with self.assertRaisesRegex(writer.Rejected, "Invalid compiled PDF"):
+            writer_revision.compare(self.main, previous, another, external)
+        self.public_input()
+        with self.assertRaisesRegex(writer.Rejected, "unpublished"):
+            writer_revision.compare(self.main, previous, current)
 
     def test_requires_current_filtered_approval(self):
         self.assertEqual(writer.applicable_inputs("paper", self.main)["targets"], ["plus-zero", "zero-plus"])

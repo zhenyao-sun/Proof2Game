@@ -102,6 +102,10 @@ from the approved bilingual snapshot.
 
 - [Local smoothing for the Euclidean wave equation](https://zhenyao-sun.github.io/Proof2Game-OpenAI-Local-Smoothing/) — based on the OpenAI manuscript dated October 25, 2026.
 
+## Revise an unpublished paper
+
+After Writer delivers a paper, ask Proof2Game to revise it and share your feedback. For example, “Start from your last paper, use my collaborator’s comments, and mark the changes against their attached draft.” Writer delivers the clean paper and its LaTeX sources, plus a highlighted PDF. The default comparison is the previous official Writer paper. [Writer instructions](skills/proof2game/references/writer.md#revise-a-delivered-paper)
+
 ## Manual setup
 
 Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. Players can run an exported game with Node.js 20 or later. The PDF navigation check uses `pdftotext` or `pypdf`.

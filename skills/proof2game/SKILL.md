@@ -1,6 +1,6 @@
 ---
 name: proof2game
-description: Turn a supplied mathematics manuscript, draft, note, or arXiv link into a verified game script and a locally playable bilingual learning game. Use for Proof2Game guided setup, automated game-script verification, manual refactor, or paper ingestion. For unpublished work, guided setup also produces a complete English paper. Public-paper projects keep the selected version and its proof route. Requires macOS and Codex.
+description: Turn a supplied mathematics manuscript, draft, note, or arXiv link into a verified game script and a locally playable bilingual learning game. Use for Proof2Game guided setup, automated game-script verification, manual refactor, paper ingestion, or revising a delivered unpublished paper from feedback. For unpublished work, guided setup also produces a complete English paper. Public-paper projects keep the selected version and its proof route. Requires macOS and Codex.
 ---
 
 # Proof2Game
@@ -17,6 +17,7 @@ Identify the authorized action using the routes below. Use guided setup when the
 | --- | --- |
 | Guided setup | Read [intake.md](references/intake.md). Use information already supplied, ask for the project folder and manuscript only when missing, and accept LaTeX, Markdown, PDF, or an arXiv link. If the user has no draft, explain that Proof2Game needs an existing manuscript or math note. Determine whether this is the user's unpublished work or a public-literature project if unclear. Save the exact input/version, create a separate two-section English [game script](references/manuscript.md), and automatically start [verification](references/verification.md). Follow through to the applicable checked deliveries. |
 | Automated script verification | Read [verification.md](references/verification.md). Resume or start verification of the identified existing game script. Finish the Goal when the active dependency cone, proof obligations, and project-specific final route review pass on the same revision. |
+| Revise a delivered unpublished manuscript (`revising`) | Follow [Writer revision](references/writer.md#revise-a-delivered-paper). Start from the last official Writer manuscript, interpret feedback, and deliver the clean revision, source, and a copy marked against the chosen baseline. The user decides whether to launch separate script verification. |
 | `refactor` | Read the manual-refactor section of [verification.md](references/verification.md). Establish the actual blocker and agreed scope, implement the agreed action, and stop at the safe refactor boundary with its receipt. |
 | `paper_ingest` | Read the reference-only intake section of [intake.md](references/intake.md). Find and preserve the appropriate original reference PDF in the current project's `references/`. Report the saved PDF path and exact version. |
 
