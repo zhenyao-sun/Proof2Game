@@ -3,6 +3,8 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from subprocess import CompletedProcess
+from unittest.mock import patch
 
 import manuscript
 
@@ -153,6 +155,15 @@ class ManuscriptTest(unittest.TestCase):
         self.assertTrue(result.is_file())
         with self.assertRaisesRegex(manuscript.Invalid, 'new or empty'):
             manuscript.materialize_snapshot(self.main, destination)
+
+    def test_reports_tex_startup_failure_without_latex_error_marker(self):
+        message = "I can't find the format file `pdflatex.fmt'!"
+        failed_run = CompletedProcess(['pdflatex'], 1, stdout=message, stderr='')
+        with patch.object(manuscript.shutil, 'which', return_value='/usr/bin/pdflatex'):
+            with patch.object(manuscript.subprocess, 'run', return_value=failed_run):
+                with self.assertRaises(manuscript.Invalid) as error:
+                    manuscript.verify_numbering(self.main)
+        self.assertIn(message, str(error.exception))
 
     @unittest.skipUnless(shutil.which('pdflatex'), 'requires local TeX')
     def test_rendered_navigation_after_filtering(self):
