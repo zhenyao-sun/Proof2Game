@@ -17,6 +17,8 @@ import intake
 from intake import resolve_task_path
 import manuscript
 
+REVIEW_LIMIT = 10
+
 GATES = {
     "statement": ("expression", "self_contained", "mathematics", "sources", "reuse"),
     "proof": ("expression", "decomposition", "self_contained", "mathematics", "sources", "reuse"),
@@ -200,7 +202,7 @@ def add_reviews(state):
     running = sum(not action["waiting"] for action in reviewers)
     dispatched = {action["component"] for action in reviewers}
     for component, review in current["reviews"].items():
-        if running == 10:
+        if running >= REVIEW_LIMIT:
             break
         if component not in dispatched and review["verdict"] is None:
             review_action(state, component, review)
@@ -404,8 +406,13 @@ def resolve_source(task, state, request):
         resolution.update(reference_id=reference["id"], reference_version=reference["version"],
                           reference_sha256=reference["sha256"])
     if action["role"] == "reviewer":
-        require(sum(row["role"] == "reviewer" and not row["waiting"] for row in state["actions"].values()) < 10,
-                "all Reviewer slots are active; resume this source when a slot opens")
+        assigned = [row for row in state["actions"].values()
+                    if row["role"] == "reviewer" and not row["waiting"]]
+        if len(assigned) >= REVIEW_LIMIT:
+            queued = next((row for row in reversed(assigned) if not row["identity"]), None)
+            require(queued is not None, "all Reviewer slots are bound; resume this source when a slot opens")
+            del state["actions"][queued["token"]]
+            record(state, "review-dispatch-deferred", action=queued, resumed=action["token"])
         reopen_review(state)
     action["waiting"] = None
     action["source_resolution"] = resolution

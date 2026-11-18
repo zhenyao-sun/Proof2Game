@@ -160,6 +160,37 @@ class Ledger(unittest.TestCase):
         self.assertEqual(result["superseded"][0]["products"]["paper"]["status"], "blocked")
         self.assertEqual(state.read_json(certificate)["route_review"], "invalidated")
 
+    def test_ready_source_resumes_a_reviewer_ahead_of_unbound_work(self):
+        self.init()
+        with patch.object(state, "REVIEW_LIMIT", 1):
+            self.change("advance")
+            for _ in range(4):
+                self.result(self.action(component="setting"), "pass")
+            self.result(self.action(component="setting"), "waiting-source", required=True,
+                        source="needed-study", source_version="v2", location="Required interface")
+            waiting = self.action(component="setting")
+            queued = self.action(component="main")
+            self.assertIsNone(queued["identity"])
+            pdf = self.project / "fixture.pdf"
+            make_pdf(pdf)
+            reference = intake.register_reference(self.project, {
+                **source_data(public_date="2022-01-01", version="v2"),
+                "work_key": "needed-study", "pdf": str(pdf),
+            })
+            self.change("source-resolve", token=waiting["token"], snapshot_digest=waiting["snapshot_digest"],
+                        status="available", reference_id=reference["id"], evidence="synthetic source receipt")
+            resumed = self.action(component="setting")
+            self.assertEqual(resumed["token"], waiting["token"])
+            self.assertEqual(resumed["identity"], waiting["identity"])
+            self.assertFalse(self.actions(component="main"))
+            self.result(resumed, "pass", sources=[{
+                "id": reference["id"], "sha256": reference["sha256"], "locators": {"Theorem A": [1]},
+            }])
+            self.result(self.action(component="setting"), "pass")
+            fresh = self.action(component="main")
+            self.assertNotEqual(fresh["token"], queued["token"])
+            self.assertIsNone(fresh["identity"])
+
     def test_worker_cleanup_finds_only_completed_ledger_workers_still_running(self):
         self.init("guided")
         self.change("advance")

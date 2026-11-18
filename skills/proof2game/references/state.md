@@ -66,7 +66,9 @@ replacement includes checkable `evidence`.
   `evidence`. For `available`, provide the ingested reference ID. Its work key and any specified version must match the wait.
   If the user explicitly chooses another eligible edition of the same work, include
   `version_override: {version, user_confirmation}` with the exact registered version and the user's decision.
-  Both versions are recorded and the same Reviewer continues from the waiting gate.
+  Both versions are recorded and the same Reviewer continues from the waiting gate. If queued
+  unbound work fills the ledger, the resumed Reviewer takes one unbound slot and the deferred
+  component returns to the queue. Refresh assignments before launching a new worker.
   A pass after a required wait must cite the resolved reference ID and original SHA-256 with physical pages.
   An `unavailable` response leaves a Reviewer or Fixer source wait in place. An explicit optional waiver
   can resume the gate and is reusable while the same work remains optional.
