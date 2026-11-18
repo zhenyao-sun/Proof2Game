@@ -12,7 +12,13 @@ import tempfile
 
 UPSTREAM = "https://github.com/zhenyao-sun/Proof2Game.git"
 LEGACY_UPSTREAM = "https://github.com/zhenyao-sun/MathGrove.git"
-CACHE = Path.home() / "Library/Application Support/Proof2Game/releases"
+if sys.platform == "darwin":
+    CACHE = Path.home() / "Library/Application Support/Proof2Game/releases"
+else:
+    data_home = Path(os.environ.get("XDG_DATA_HOME", ""))
+    if not data_home.is_absolute():
+        data_home = Path.home() / ".local/share"
+    CACHE = data_home / "proof2game/releases"
 TAG = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 OID = re.compile(r"[0-9a-f]{40}\Z")
 OFFLINE_ERRORS = (
@@ -165,8 +171,8 @@ def main():
     update.add_argument("--commit", required=True)
     args = parser.parse_args()
     try:
-        if sys.platform != "darwin":
-            raise ReleaseError("Proof2Game requires macOS")
+        if sys.platform not in ("darwin", "linux"):
+            raise ReleaseError("Proof2Game authoring requires macOS or Linux")
         if args.command == "apply":
             if not OID.fullmatch(args.commit):
                 raise ReleaseError("Invalid approved commit")
