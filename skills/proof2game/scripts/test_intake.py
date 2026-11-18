@@ -216,6 +216,14 @@ class IntakeTest(unittest.TestCase):
         ref = intake.register_reference(self.project, {**source_data("2024-12"), "pdf": str(original)})
         key = {"kind": "reference", "id": ref["id"]}
         self.assertEqual(ref["pending_pages"], [1, 2])
+        request = {"work_key": ref["work_key"], "task_id": target["id"], "preferred_version": ref["id"]}
+        self.assertEqual(intake.choose_source(self.project, {**request, "for_use": False})["state"], "ready")
+        self.assertEqual(intake.choose_source(self.project, request)["state"], "check_result")
+        bound = {"id": ref["id"], "sha256": ref["sha256"],
+                 "cited_locations_physical_pages": {"Equation": [2]}}
+        sources = intake.verify_citations(self.project, {"task_id": target["id"], "sources": [bound]})["sources"]
+        self.assertEqual(sources[0]["cited_locations_physical_pages"], {"Equation": [2]})
+        self.assertFalse(sources[0]["complete"])
         rendered = [intake.render_page(self.project, {**key, "page": n}) for n in (1, 2)]
         self.assertNotEqual(rendered[0]["image_sha256"], rendered[1]["image_sha256"])
         self.assertEqual(Path(rendered[0]["image_path"]).read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
@@ -239,6 +247,10 @@ class IntakeTest(unittest.TestCase):
                  "cited_locations_physical_pages": {"Equation": [2]}}
         binding = intake.verify_citations(self.project, {"task_id": target["id"], "sources": [bound]})
         self.assertEqual(binding["sources"][0]["cited_locations_physical_pages"], {"Equation": [2]})
+        Path(completed["directory"], completed["sidecar_path"]).unlink()
+        with self.assertRaisesRegex(ValueError, "Completed transcription"):
+            intake.finish_ocr(self.project, key)
+        self.assertEqual(intake.verify_citations(self.project, {"task_id": target["id"], "sources": [bound]}), binding)
         too_early = self.target(public_date="2024-01-01")
         with self.assertRaisesRegex(ValueError, "published after"):
             intake.verify_citations(self.project, {"task_id": too_early["id"], "sources": [bound]})

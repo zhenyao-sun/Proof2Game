@@ -319,21 +319,10 @@ class Ledger(unittest.TestCase):
         make_pdf(pdf)
 
         def register(work_key, version):
-            record = intake.register_reference(self.project, {
+            return intake.register_reference(self.project, {
                 **source_data(public_date="2022-01-01", version=version),
                 "id": f"{work_key}-{version}", "work_key": work_key, "pdf": str(pdf),
             })
-            page = {"kind": "reference", "id": record["id"]}
-            for number in (1, 2):
-                target = {**page, "page": number}
-                image = intake.render_page(self.project, target)
-                intake.record_page(self.project, {
-                    **target, "image_sha256": image["image_sha256"], "reviewer": "synthetic fixture",
-                    "method": "codex_pdf_image_ocr", "markdown": "Synthetic arithmetic page.",
-                    "uncertainties": [],
-                })
-            return intake.finish_ocr(self.project, page)
-
         def resolve(reference):
             self.change("source-resolve", token=waiting["token"], snapshot_digest=waiting["snapshot_digest"],
                         status="available", reference_id=reference["id"], evidence="synthetic source receipt")
@@ -375,7 +364,7 @@ class Ledger(unittest.TestCase):
         waiting = self.action(component="main")
         self.result(self.action(role="batcher"), "complete", issue_ids=[])
         self.assertEqual(self.data["state"]["phase"], "fix")
-        chosen = {"complete": True, "public_date": "2022-01-01", "work_key": "needed-study",
+        chosen = {"complete": False, "public_date": "2022-01-01", "work_key": "needed-study",
                   "id": "needed-study-author", "version": "author-v1", "sha256": "1" * 64}
         approval = {"version": "author-v1", "user_confirmation": "Synthetic user chose author-v1."}
 
@@ -391,7 +380,6 @@ class Ledger(unittest.TestCase):
             (chosen, {"version_override": {**approval, "version": "author-v2"}}, "selected source version"),
             ({**chosen, "work_key": "other"}, {"version_override": approval}, "requested source work key"),
             ({**chosen, "public_date": "2024-01-01"}, {"version_override": approval}, "eligible version"),
-            ({**chosen, "complete": False}, {"version_override": approval}, "completed OCR"),
         ):
             with self.subTest(error=error), self.assertRaisesRegex(state.Rejected, error):
                 resolve(reference, **selection)

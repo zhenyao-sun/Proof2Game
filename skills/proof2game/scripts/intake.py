@@ -340,13 +340,13 @@ def record_path(project, kind, name):
     raise ValueError("kind must be target or reference")
 
 
-def checked_record(project, kind, name):
+def checked_record(project, kind, name, *, check_reference_ocr=False):
     path = record_path(project, kind, name)
     value = read_json(path)
     original = inside(project, path.parent / value.get("original_path", value.get("pdf_path")))
     if not original.is_file() or digest(original) != value["sha256"]:
         raise ValueError(f"Original missing or changed; restore the exact preserved bytes: {original}")
-    if value.get("sidecar_sha256") and value["complete"]:
+    if (kind == "target" or check_reference_ocr) and value.get("sidecar_sha256") and value["complete"]:
         sidecar = inside(project, path.parent / value["sidecar_path"])
         if not sidecar.is_file() or digest(sidecar) != value["sidecar_sha256"]:
             raise ValueError(f"Completed transcription missing or changed; reverify before use: {sidecar}")
@@ -366,7 +366,7 @@ def public_record(path, value):
 
 def validated_page(project, request):
     kind, name = request.get("kind"), request.get("id")
-    value = checked_record(project, kind, name)
+    value = checked_record(project, kind, name, check_reference_ocr=True)
     path = record_path(project, kind, name)
     n = request.get("page")
     if type(n) is not int or not 1 <= n <= value.get("page_count", 0):
@@ -431,7 +431,7 @@ def record_page(project, request):
 
 def finish_ocr(project, request):
     kind, name = request.get("kind"), request.get("id")
-    value = checked_record(project, kind, name)
+    value = checked_record(project, kind, name, check_reference_ocr=True)
     record = record_path(project, kind, name)
     if "page_count" not in value:
         raise ValueError("OCR applies only to PDF manuscripts or PDF references.")
@@ -492,8 +492,6 @@ def verify_citations(project, request):
         if cutoff and not published_by(value["public_date"], cutoff):
             raise ValueError(f"{ref_id} was published after the target version cutoff ({cutoff}) "
                              "or its recorded date does not establish eligibility.")
-        if not value["complete"]:
-            raise ValueError(f"{ref_id} is missing a completed OCR transcription.")
         if row.get("sha256") != value["sha256"]:
             raise ValueError(f"{ref_id} citation evidence must bind the original's SHA-256.")
         checked = checked_locations(row, value["page_count"])
