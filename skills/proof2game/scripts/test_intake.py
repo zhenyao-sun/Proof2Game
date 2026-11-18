@@ -1,7 +1,10 @@
 import fcntl
 import hashlib
+import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -48,6 +51,21 @@ class IntakeTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.project = Path(self.temp.name).resolve()
         self.addCleanup(self.temp.cleanup)
+
+    def test_cli_preserves_original_bytes_on_authoring_host(self):
+        source = self.project / "notes.md"
+        original = "# 数学笔记\r\n".encode("utf-8")
+        source.write_bytes(original)
+        command = [sys.executable, str(Path(intake.__file__)), str(self.project)]
+        subprocess.run([*command, "init-git"], capture_output=True, check=True)
+        result = subprocess.run(
+            [*command, "init-target", "-"],
+            input=json.dumps({"input": str(source), "project_type": "unpublished"}),
+            capture_output=True, text=True, check=True,
+        )
+        receipt = json.loads(result.stdout)
+        self.assertEqual((Path(receipt["directory"]) / "original.md").read_bytes(), original)
+        self.assertEqual(source.read_bytes(), original)
 
     def target(self, public_date="2025-01-15", version="v2"):
         path = self.project / "note.md"
