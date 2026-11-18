@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 
@@ -57,7 +56,7 @@ class GameExportTests(unittest.TestCase):
         with self.assertRaisesRegex(game.Rejected, 'route'):
             game.eligibility(self.main)
 
-    @unittest.skipUnless(sys.platform == 'darwin' and shutil.which('pdflatex'), 'Requires macOS with TeX')
+    @unittest.skipUnless(shutil.which('pdflatex'), 'Requires local TeX')
     def test_public_site_preserves_script_attribution_and_cited_locations(self):
         main_text = self.main.read_text()
         record_tex = r'\bib{fixture}{article}{author={Ada, Example},title={A synthetic note},date={2026}}'
