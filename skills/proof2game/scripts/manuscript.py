@@ -736,8 +736,11 @@ def verify_numbering(main):
             except subprocess.TimeoutExpired as exc:
                 raise Invalid('Game script compilation timed out.') from exc
             if run.returncode:
-                errors = [line for line in run.stdout.splitlines() if line.startswith('!')]
-                raise Invalid('Game script did not compile: ' + '\n'.join(errors[-4:]))
+                output = [line for line in (run.stderr + '\n' + run.stdout).splitlines()
+                          if line.strip()]
+                errors = [line for line in output if line.startswith('!')] or output
+                detail = '\n'.join(errors[-4:]) or f'{Path(engine).name} exited with status {run.returncode}'
+                raise Invalid('Game script did not compile: ' + detail)
         if unknown_references.search(run.stdout):
             raise Invalid('The compiled PDF has an unresolved reference or citation.')
         aux = compiled.with_suffix('.aux').read_text(encoding='utf-8')
