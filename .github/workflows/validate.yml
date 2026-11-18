@@ -25,6 +25,7 @@ jobs:
           sudo /Library/TeX/texbin/tlmgr update --self
           sudo /Library/TeX/texbin/tlmgr install amsrefs geometry latexmk mathtools
           printf '%s\n' /Library/TeX/texbin >> "$GITHUB_PATH"
+      - run: python3 -m pip install "PyMuPDF>=1.24.11,<2"
       - run: python3 -m unittest discover -s skills/proof2game/scripts
       - run: node --test skills/proof2game/scripts/*.cjs
 
@@ -39,6 +40,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y poppler-utils latexmk texlive-latex-extra texlive-bibtex-extra
+      - run: python3 -m pip install "PyMuPDF>=1.24.11,<2"
       - name: Validate Linux authoring
         env:
           PYTHONPATH: skills/proof2game/scripts

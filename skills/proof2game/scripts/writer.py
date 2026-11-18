@@ -360,6 +360,14 @@ def main(argv=None):
     try:
         if args.action == "inspect":
             result = read_inputs()
+            if args.kind == "paper":
+                import manuscript
+
+                clean, full, (prefix, body, _, _), resources = manuscript.read_assembly(args.main)
+                require(clean["snapshot_digest"] == result["snapshot_digest"], "Snapshot changed during inspection.")
+                result["cited_keys"] = sorted(manuscript.retained_citation_keys(
+                    prefix, body, full["components"], resources
+                ))
         else:
             require(args.bundle is not None, f"{args.action} requires --bundle.")
             if args.action == "compile":

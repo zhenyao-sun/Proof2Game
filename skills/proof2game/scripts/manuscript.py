@@ -553,6 +553,17 @@ def prune_bibliography(body, keep):
     return ''.join(kept)
 
 
+def retained_citation_keys(prefix, body, components, resources):
+    # Citations belong to active components, retained prose or renderer support.
+    # Citation commands inside bibliography entries must not preserve those entries.
+    bibliography = re.search(r'\\begin\s*\{bibdiv\}', uncomment(body))
+    narrative = body[:bibliography.start()] if bibliography else body
+    kept_sources = [prefix, narrative, *(c['text'] for c in components)]
+    kept_sources.extend(data.decode('utf-8') for name, data in resources.items()
+                        if Path(name).suffix.lower() in ('.tex', '.sty', '.cls'))
+    return set().union(*(cited_keys(text) for text in kept_sources))
+
+
 def materialize_snapshot(source_main, destination):
     """Write the current dependency cone and its resources to an empty destination."""
     source_main = Path(source_main).resolve(strict=True)
@@ -566,14 +577,7 @@ def materialize_snapshot(source_main, destination):
         raise Invalid('A game or manuscript snapshot requires at least one active target.')
     active = [c for c in full['components'] if c['id'] in current['cone']]
     selected = filtered_body(body, events, full['components'], current['cone'])
-    # Citations belong to active components, retained prose or renderer support.
-    # Citation commands inside bibliography entries must not preserve those entries.
-    bibliography = re.search(r'\\begin\s*\{bibdiv\}', uncomment(selected))
-    narrative = selected[:bibliography.start()] if bibliography else selected
-    kept_sources = [prefix, narrative, *(c['text'] for c in active)]
-    kept_sources.extend(data.decode('utf-8') for name, data in resources.items()
-                        if Path(name).suffix.lower() in ('.tex', '.sty', '.cls'))
-    citations = set().union(*(cited_keys(text) for text in kept_sources))
+    citations = retained_citation_keys(prefix, selected, active, resources)
     assembled = prefix + prune_bibliography(selected, citations) + suffix
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.proof2game-snapshot-', dir=destination.parent) as scratch:
