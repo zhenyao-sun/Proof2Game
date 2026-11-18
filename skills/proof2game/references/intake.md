@@ -1,6 +1,6 @@
 # Manuscript and source intake
 
-Use this reference for guided startup, for a missing source during validation, or when the user requests `paper_ingest`. The command examples use `$SKILL` for the loaded Proof2Game skill directory and `$PROJECT` for the user's existing mathematics project folder. They require macOS, Python 3.11 or later, Git, and Poppler (`pdfinfo` and `pdftoppm`) for PDF input. Paths in requests are passed as JSON strings. The final argument can be `-` to read the request from standard input.
+Use this reference for guided startup, for a missing source during validation, or when the user requests `paper_ingest`. The command examples use `$SKILL` for the loaded Proof2Game skill directory and `$PROJECT` for the user's existing mathematics project folder. They require macOS or Linux, Python 3.11 or later, Git, and Poppler (`pdfinfo` and `pdftoppm`) for PDF input. Paths in requests are passed as JSON strings. The final argument can be `-` to read the request from standard input.
 
 ## Select the mathematics project and exact original
 
