@@ -195,6 +195,8 @@ def run_latex(source, main, build, engine):
 
 
 def check_local_resources(source, build, main):
+    source = source.resolve()
+    build = build.resolve()
     system_roots = []
     for variable in ("TEXMFROOT", "TEXMFDIST", "TEXMFSYSCONFIG", "TEXMFSYSVAR"):
         value = subprocess.run(

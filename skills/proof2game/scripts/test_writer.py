@@ -70,6 +70,10 @@ class WriterTests(unittest.TestCase):
         build = self.task / "build"
         for path in (distribution, configuration, build):
             path.mkdir()
+        project_alias = self.task / "project-alias"
+        project_alias.symlink_to(self.task.resolve(), target_is_directory=True)
+        source_alias = project_alias / "draft"
+        build_alias = project_alias / "build"
         variables = {"TEXMFROOT": distribution, "TEXMFSYSCONFIG": configuration}
         recorder = build / "main.fls"
         recorder.write_text(f"INPUT {configuration / 'texmf.cnf'}\nINPUT ./main.tex\n")
@@ -79,11 +83,11 @@ class WriterTests(unittest.TestCase):
             return CompletedProcess(command, 0, stdout=str(variables.get(variable, "")))
 
         with patch.object(writer.subprocess, "run", side_effect=kpsewhich):
-            writer.check_local_resources(self.draft, build, "main.tex")
+            writer.check_local_resources(source_alias, build_alias, "main.tex")
             with recorder.open("a") as stream:
                 stream.write(f"INPUT {self.task / 'unbundled-asset.tex'}\n")
             with self.assertRaisesRegex(writer.Rejected, "unbundled-asset"):
-                writer.check_local_resources(self.draft, build, "main.tex")
+                writer.check_local_resources(source_alias, build_alias, "main.tex")
 
     def public_input(self):
         target = self.task / "target.json"
