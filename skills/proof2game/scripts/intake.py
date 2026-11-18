@@ -619,8 +619,8 @@ def main():
     parser.add_argument("input", nargs="?")
     args = parser.parse_args()
     try:
-        if sys.platform != "darwin":
-            raise ValueError("Proof2Game's authoring environment is macOS with ChatGPT Desktop/Codex.")
+        if sys.platform not in ("darwin", "linux"):
+            raise ValueError("Proof2Game manuscript intake requires macOS or Linux.")
         project = args.project.expanduser().resolve(strict=True)
         if not project.is_dir():
             raise ValueError("The project location must be an existing folder.")
