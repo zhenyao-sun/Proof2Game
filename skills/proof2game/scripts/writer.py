@@ -195,17 +195,21 @@ def run_latex(source, main, build, engine):
 
 
 def check_local_resources(source, build, main):
-    path = subprocess.run(
-        ["kpsewhich", "-var-value=TEXMFROOT"], check=True, capture_output=True, text=True
-    ).stdout.strip()
-    require(path and Path(path).is_absolute(), "Cannot locate the system TeX distribution.")
-    system = Path(path).resolve(strict=True)
-    require(system != Path("/") and system.is_dir(), "Cannot identify a bounded system TeX installation.")
+    system_roots = []
+    for variable in ("TEXMFROOT", "TEXMFDIST", "TEXMFSYSCONFIG", "TEXMFSYSVAR"):
+        value = subprocess.run(
+            ["kpsewhich", f"-var-value={variable}"], check=True, capture_output=True, text=True
+        ).stdout.strip()
+        root = Path(value)
+        if root.is_absolute() and root.is_dir() and root.resolve() != Path("/"):
+            system_roots.append(root.resolve())
+        elif variable == "TEXMFROOT":
+            raise Rejected("Cannot identify a bounded system TeX installation.")
     recorder = build / Path(main).with_suffix(".fls")
     for line in recorder.read_text(encoding="utf-8", errors="replace").splitlines():
         if line.startswith("INPUT "):
             path = (source / line[6:]).resolve()
-            require(any(path.is_relative_to(root) for root in (source, build, system)),
+            require(any(path.is_relative_to(root) for root in (source, build, *system_roots)),
                     f"Copy the dependencies of the Writer source locally. External input: {path}")
 
 
