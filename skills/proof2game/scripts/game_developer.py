@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export a verified game script as a bilingual macOS game."""
+"""Export a verified game script as a bilingual GitHub Pages site."""
 import argparse
 from datetime import date
 import hashlib
@@ -9,7 +9,6 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 from urllib.parse import quote, unquote, urlsplit
 
@@ -648,8 +647,6 @@ def export_pages(output, game, content, script, verify_delivery):
 
 def export(main, output, approval=None, source_bindings=None, references_dir=None, translation=None,
            model='gpt-6.1-sol', reasoning='medium', *, paper=None):
-    if sys.platform != 'darwin':
-        raise Rejected('Proof2Game generation is supported on macOS.')
     output = Path(output).resolve()
     if output.suffix.lower() == '.zip':
         raise Rejected('Output must be a new directory for the hosted game.')
