@@ -15,6 +15,10 @@ from urllib.parse import quote, unquote, urlsplit
 
 import manuscript
 from sources import published_by
+from state import default_models
+
+
+TUTOR_MODEL, TUTOR_REASONING = default_models()["tutor"]
 
 
 class Rejected(ValueError):
@@ -435,7 +439,7 @@ def validate_translation(original, translated, main_name):
 
 
 def make_game(main, approval=None, source_bindings=None, references_dir=None,
-              verify_numbering=True, translation=None, model='gpt-6.1-sol', reasoning='medium'):
+              verify_numbering=True, translation=None, model=TUTOR_MODEL, reasoning=TUTOR_REASONING):
     clean, full, checkpoint, state_bytes, record = eligibility(main, approval)
     main = Path(main).resolve()
     files = resource_closure(main, full)
@@ -647,7 +651,7 @@ def export_pages(output, game, content, script, verify_delivery):
 
 
 def export(main, output, approval=None, source_bindings=None, references_dir=None, translation=None,
-           model='gpt-6.1-sol', reasoning='medium', *, paper=None):
+           model=TUTOR_MODEL, reasoning=TUTOR_REASONING, *, paper=None):
     if sys.platform != 'darwin':
         raise Rejected('Proof2Game generation is supported on macOS.')
     output = Path(output).resolve()
@@ -699,8 +703,8 @@ def main():
     p.add_argument('--approval', help='Delivery certificate (default: approval.json beside the verified script).')
     p.add_argument('--references', help='The project references/ directory.')
     p.add_argument('--source-bindings', help='JSON records for the exact selected citation versions and page locations.')
-    p.add_argument('--tutor-model', default='gpt-6.1-sol', help='The player tutor model.')
-    p.add_argument('--tutor-reasoning', default='medium', choices=('low', 'medium', 'high', 'xhigh', 'max', 'ultra'))
+    p.add_argument('--tutor-model', default=TUTOR_MODEL, help='The player tutor model.')
+    p.add_argument('--tutor-reasoning', default=TUTOR_REASONING, choices=('low', 'medium', 'high', 'xhigh', 'max', 'ultra'))
     p.add_argument('--translation', help='Complete Chinese translation JSON from the mathematics translator.')
     action = p.add_mutually_exclusive_group()
     p.add_argument('--pages', action='store_true', help=argparse.SUPPRESS)

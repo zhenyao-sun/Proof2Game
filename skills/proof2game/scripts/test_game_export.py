@@ -101,6 +101,7 @@ class GameExportTests(unittest.TestCase):
         page_result = game.export(self.main, site, source_bindings=bindings, translation=translation, paper=paper)
         self.assertEqual(page_result['approval_snapshot_digest'], record['snapshot_digest'])
         public_game = json.loads((site / 'game.json').read_bytes())
+        self.assertEqual((public_game['model'], public_game['reasoning_effort']), ('gpt-6.1-terra', 'medium'))
         self.assertEqual(public_game['paper'], {k: v for k, v in paper.items() if k != 'sha256'})
         self.assertEqual([level['id'] for level in public_game['levels']], record['components'])
         self.assertEqual(public_game['chinese']['levels']['main']['title'], '正性')

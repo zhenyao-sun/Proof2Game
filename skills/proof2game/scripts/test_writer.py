@@ -98,7 +98,7 @@ class WriterTests(unittest.TestCase):
         return {
             **{key: candidate[key] for key in ("input_digest", "source_digest", "pdf_sha256")},
             "worker_session": "synthetic-test-session",
-            "model": "gpt-6.1-sol", "effort": "ultra",
+            "model": "gpt-6.2-sol", "effort": "ultra",
             "render": "Synthetic test evidence, PDF page 1.",
             "references": "Synthetic test evidence, references checked with stable TeX labels.",
             **extra,
