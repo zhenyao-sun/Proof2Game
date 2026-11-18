@@ -2,8 +2,10 @@
 import json
 from pathlib import Path
 import shutil
+from subprocess import CompletedProcess
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 import manuscript
 import writer
@@ -61,6 +63,27 @@ class WriterTests(unittest.TestCase):
 
     def write(self, path, record):
         path.write_text(json.dumps(record), encoding="utf-8")
+
+    def test_split_system_tex_roots_do_not_permit_external_draft_assets(self):
+        distribution = self.task / "tex-distribution"
+        configuration = self.task / "tex-configuration"
+        build = self.task / "build"
+        for path in (distribution, configuration, build):
+            path.mkdir()
+        variables = {"TEXMFROOT": distribution, "TEXMFSYSCONFIG": configuration}
+        recorder = build / "main.fls"
+        recorder.write_text(f"INPUT {configuration / 'texmf.cnf'}\nINPUT ./main.tex\n")
+
+        def kpsewhich(command, **kwargs):
+            variable = command[1].split("=", 1)[1]
+            return CompletedProcess(command, 0, stdout=str(variables.get(variable, "")))
+
+        with patch.object(writer.subprocess, "run", side_effect=kpsewhich):
+            writer.check_local_resources(self.draft, build, "main.tex")
+            with recorder.open("a") as stream:
+                stream.write(f"INPUT {self.task / 'unbundled-asset.tex'}\n")
+            with self.assertRaisesRegex(writer.Rejected, "unbundled-asset"):
+                writer.check_local_resources(self.draft, build, "main.tex")
 
     def public_input(self):
         target = self.task / "target.json"
