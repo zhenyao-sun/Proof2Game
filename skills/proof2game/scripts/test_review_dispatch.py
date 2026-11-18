@@ -3,6 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -251,6 +252,32 @@ See \cite{fixture}, Proposition 1.
         rejected = subprocess.run([*command, "0"], capture_output=True, text=True)
         self.assertNotEqual(rejected.returncode, 0)
         self.assertIn("review packet SHA-256 mismatch", rejected.stderr)
+
+    def test_prompt_formats_a_receipt_from_the_verified_detached_packet(self):
+        action = self.action("main", "sources")
+        packet = review_dispatch.build_packet(self.main, action, cutoff=CUTOFF)
+        with patch.object(review_dispatch.tempfile, "gettempdir", return_value=str(self.scratch)):
+            dispatched = review_dispatch.detach(self.main, packet)
+        command = shlex.split(dispatched["message"].rsplit("\npython3 -c ", 1)[1])
+        command = [sys.executable, "-c", *command]
+        verdict = {"verdict": "pass", "evidence": "Synthetic evidence α.", "sources": []}
+        completed = subprocess.run(command, input=json.dumps(verdict),
+                                   check=True, capture_output=True, text=True)
+        binding = {key: action[key] for key in ("token", "snapshot_digest", "component", "gate")}
+        self.assertEqual(json.loads(completed.stdout),
+                         {**verdict, **binding, "packet_sha256": dispatched["sha256"]})
+        for invalid in ([], {**verdict, "token": "wrong"}, {**verdict, "session": "unverified"}):
+            result = subprocess.run(command, input=json.dumps(invalid),
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(result.stdout)
+        path = Path(dispatched["path"])
+        path.chmod(0o600)
+        path.write_bytes(path.read_bytes() + b" ")
+        result = subprocess.run(command, input=json.dumps(verdict),
+                                capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("review packet SHA-256 mismatch", result.stderr)
 
 
 if __name__ == "__main__":

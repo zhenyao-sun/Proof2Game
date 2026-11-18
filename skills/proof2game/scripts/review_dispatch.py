@@ -80,12 +80,15 @@ BY_COMPONENT = {
     ),
 }
 
-# Verify the original JSON bytes and present decoded TeX to the reviewer.
-READ_CHUNK = r"""import hashlib, json, pathlib, sys
+# These commands require only the detached packet and Python's standard library.
+VERIFY_PACKET = r"""import hashlib, json, pathlib, sys
 data = pathlib.Path(sys.argv[1]).read_bytes()
 if hashlib.sha256(data).hexdigest() != sys.argv[2]:
     raise SystemExit('review packet SHA-256 mismatch')
+packet = json.loads(data)
+"""
 
+READ_CHUNK = VERIFY_PACKET + r"""
 def fields(value, names=()):
     if isinstance(value, dict) and value:
         for key, child in value.items():
@@ -99,12 +102,21 @@ def fields(value, names=()):
         yield f'[{label}]\n{body}'
 
 start = int(sys.argv[3])
-text = '\n\n'.join(fields(json.loads(data)))
+text = '\n\n'.join(fields(packet))
 if not 0 <= start < len(text):
     raise SystemExit('invalid review packet offset')
 end = min(start + 4000, len(text))
 print(f'packet characters [{start},{end}) of {len(text)}')
 print(text[start:end], end='')
+"""
+
+FORMAT_RECEIPT = VERIFY_PACKET + r"""
+binding = {key: packet[key] for key in ('token', 'snapshot_digest', 'component', 'gate')}
+binding['packet_sha256'] = sys.argv[2]
+verdict = json.load(sys.stdin)
+if not isinstance(verdict, dict) or (binding.keys() | {'session'}) & verdict.keys():
+    raise SystemExit('provide one verdict object without packet bindings or session')
+print(json.dumps({**binding, **verdict}, ensure_ascii=False))
 """
 
 
@@ -183,16 +195,20 @@ def worker_prompt(packet, path, packet_sha256):
             "Identify the missing external work and its use in evidence."
         )
     command = shlex.join(["python3", "-c", READ_CHUNK, str(path), packet_sha256, "0"])
+    format_receipt = shlex.join(["python3", "-c", FORMAT_RECEIPT, str(path), packet_sha256])
     lines.extend([
         "Run the next command to read the decoded packet fields. Repeat with the last argument set to each "
         "returned chunk's end until complete. "
         "If packet verification fails or required packet input is missing from delivery, tell the coordinator separately "
         "and withhold a verdict.",
         command,
-        "Return one JSON object with token, snapshot_digest, component, gate, packet_sha256, verdict, and a "
-        "nonempty English evidence string. Use pass for no substantive defect or nonpass for a defect. "
+        "Write one JSON object containing verdict, a nonempty English evidence string, and any gate-specific fields. "
+        "Use pass for no substantive defect or nonpass for a defect. "
         "For nonpass, include issue and location as separate nonempty top-level strings. "
+        "Pass this object on stdin to the next command and return its JSON output. The command verifies the packet "
+        "and adds the token, snapshot_digest, component, gate and packet_sha256. "
         "The coordinator binds the actual host session before recording the result.",
+        format_receipt,
     ])
     return "\n".join(lines)
 
