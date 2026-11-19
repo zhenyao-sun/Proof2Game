@@ -14,7 +14,8 @@ const ENGLISH = 'English';
 const CHINESE = '中文';
 // Keep the version 1 save marker so either release can read a same-snapshot save.
 const SAVE_FORMAT = 'mathgrove-save';
-const hash = value => value; // Equality token only; file integrity uses Web Crypto below.
+const hash = value => value; // In-memory prompt equality only.
+const actionDigest=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),byte=>byte.toString(16).padStart(2,'0')).join('');
 const fail = (message, status=400, code) => {
   const error=new Error(message);
   error.status=status;error.publicCode=code;
@@ -429,7 +430,7 @@ function payload(){
 async function act(request){
   if(typeof request!=='object'||request===null)fail('Invalid action.');
   
-  const signature=hash(JSON.stringify({...request,expected_revision:undefined,request_id:undefined}));
+  const signature=await actionDigest(JSON.stringify({...request,expected_revision:undefined,request_id:undefined}));
   if(request.request_id!==undefined){
     if(typeof request.request_id!=='string'||request.request_id.length>100)fail('Invalid request identifier.');
     const previous=progress.recent_actions.find(item=>item.id===request.request_id);

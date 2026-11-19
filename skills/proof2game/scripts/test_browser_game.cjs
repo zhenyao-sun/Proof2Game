@@ -78,3 +78,12 @@ test('diagrams render and survive saves without Node globals',async()=>{
   const restored=await setup({storage:f.storage});assert.equal((await restored.engine.request('/api/game')).progress.levels.result.messages[0].image.alt,'Synthetic blue circle');
  }finally{globalThis.Buffer=prior;}
 });
+
+test('repeated save imports use bounded, content-free action receipts',async()=>{
+ const f=await setup();await f.act('understand_all');
+ for(let count=0;count<5;count++){
+  const exported=await f.engine.request('/api/save/export');await f.act('save_import',{save:exported});
+  const current=await f.engine.request('/api/save/export');
+  assert.equal(current.progress.recent_actions.length,1);assert.match(current.progress.recent_actions[0].signature,/^[a-f0-9]{64}$/);
+ }
+});
