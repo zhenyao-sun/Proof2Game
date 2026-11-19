@@ -92,14 +92,18 @@ class WriterTests(unittest.TestCase):
     def draft_document(self, kind, body):
         name = f"writer-{kind}.tex"
         tex = self.draft / "main.tex"
+        template = (ASSETS / name).read_text(encoding="utf-8").replace(r"\PaperTitle", "Two additive identities")
         tex.write_text(
-            (ASSETS / name).read_text(encoding="utf-8").replace(r"\end{document}", body + "\n" + r"\end{document}"),
+            template.replace(r"\end{document}", body + "\n" + r"\end{document}"),
             encoding="utf-8",
         )
         return tex
 
     def self_check(self, candidate, **extra):
         bindings = ("input_digest", "source_digest", "pdf_sha256")
+        if candidate["schema"] == 4:
+            extra = {"paper_title": "Two additive identities", "title_render": "Above the first paragraph on p. 1.",
+                     "proof_endings": "Synthetic fixture: inspected the proof locations given below.", **extra}
         if candidate["schema"] == 3:
             bindings = ("input_digest", "artifact_sha256")
             extra = {
@@ -293,10 +297,14 @@ class WriterTests(unittest.TestCase):
         with self.assertRaisesRegex(writer.Rejected, "bytes differ"):
             writer.verify_delivery("referee", self.bundle, read_inputs)
 
-    def test_latex_rejects_work_identity_declarations(self):
-        with self.assertRaisesRegex(writer.Rejected, "Omit work title"):
-            writer.check_paper_identity({"main.tex": rb"\title{An authorless paper}"})
-        writer.check_paper_identity({"main.tex": rb"% \author{This is only a comment}"})
+    def test_latex_accepts_standard_and_custom_titles_and_omits_author_declarations(self):
+        for source in (rb"\title{An authorless paper}\maketitle", rb"\begin{titlepage}Title\end{titlepage}",
+                       rb"\section*{A paper title}", rb"\hypersetup{pdftitle={A title}}",
+                       rb"\author{}\hypersetup{pdfauthor={}}", rb"% \author{This is only a comment}"):
+            writer.check_paper_identity({"main.tex": source})
+        for source in (rb"\author{Example}", rb"\hypersetup{pdfauthor={Example}}"):
+            with self.subTest(source=source), self.assertRaisesRegex(writer.Rejected, "Omit author"):
+                writer.check_paper_identity({"meta.tex": source})
 
     @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "MacTeX tools unavailable")
     def test_paper_build_and_resume_verify_every_target_and_exact_bytes(self):
@@ -305,8 +313,10 @@ class WriterTests(unittest.TestCase):
 \section{Introduction}
 \input{results}
 \section{Proofs}
-The additive identity is the definition of \eqref{e:zero}.
-Commutativity gives the other equality.
+\begin{proof} Apply the definition in \eqref{e:zero}. This proves the first identity.\end{proof}
+\begin{proof} By commutativity,
+\begin{align*}0+x &=x+0 \\ &= x.\qedhere\end{align*}
+\end{proof}
 """)
         (self.draft / "results.tex").write_text(
             r"""\begin{theorem} For every real $x$ one has
@@ -318,6 +328,17 @@ Commutativity gives the other equality.
         candidate = writer.compile_delivery("paper", tex, self.bundle, "pdflatex", read_inputs)
         self.assertIn("results.tex", candidate["source_files"])
         self.assertTrue((self.bundle / "paper.pdf").read_bytes().startswith(b"%PDF-"))
+        # Confirm the default amsart title and both proof-ending styles on the actual page.
+        import pymupdf
+        with pymupdf.open(self.bundle / "paper.pdf") as paper:
+            words = paper[0].get_text("words")
+            page_text = " ".join(word[4] for word in words).casefold()
+            self.assertLess(page_text.index("two additive identities"), page_text.index("introduction"))
+            markers = [word for word in words if word[4] == "□"]
+            self.assertEqual(len(markers), 2)
+            for marker, final_word in zip(markers, ("identity.", "x.")):
+                self.assertTrue(any(word[4] == final_word and abs(word[1] - marker[1]) < 4
+                                    for word in words))
         checks = self.self_check(
             candidate, fidelity="Both statements and the defining property appear on page 1.",
             targets={"plus-zero": {"statement": "Theorem 1.1", "proof": "Section 2 paragraph 1"}},
@@ -326,6 +347,9 @@ Commutativity gives the other equality.
         with self.assertRaisesRegex(writer.Rejected, "every current target"):
             writer.finish_delivery("paper", self.bundle, self.checks_path, read_inputs)
         checks["targets"]["zero-plus"] = {"statement": "Theorem 1.2", "proof": "Section 2 paragraph 1, final sentence"}
+        for field in ("paper_title", "title_render", "proof_endings"):
+            with self.subTest(missing=field), self.assertRaisesRegex(writer.Rejected, field):
+                writer.check_evidence({k: v for k, v in checks.items() if k != field}, read_inputs(), candidate)
         self.write(self.checks_path, checks)
         finished = writer.finish_delivery("paper", self.bundle, self.checks_path, read_inputs)
         self.assertEqual(finished, writer.verify_delivery("paper", self.bundle, read_inputs))
@@ -422,29 +446,51 @@ Commutativity gives the other equality.
         displaced = "The paper is interesting. Two major issues undermine the proof."
         self.assertFalse(referee_markdown.is_opening(displaced, displaced))
 
-    def test_legacy_checked_referee_pdfs_verify(self):
+    def legacy_pdf_candidate(self, kind, schema, inputs):
         from test_intake import make_pdf
 
+        bundle = self.task / f"historical-{kind}-v{schema}"
+        source = bundle / "source"
+        source.mkdir(parents=True)
+        (source / "main.tex").write_text(r"\documentclass{article}\begin{document}Historical draft.\end{document}")
+        pdf = bundle / f"{kind}.pdf"
+        make_pdf(pdf)
+        manifest = {k: writer.digest(v) for k, v in writer.source_files(source).items()}
+        candidate = {"schema": schema, "kind": kind, "snapshot_digest": inputs["snapshot_digest"],
+                     "input_digest": writer.record_digest(inputs), "source_files": manifest,
+                     "source_digest": writer.record_digest(manifest), "entrypoint": "main.tex",
+                     "pdf": pdf.name, "pdf_sha256": writer.digest(pdf.read_bytes())}
+        if schema == 2:
+            candidate["humanizer"] = writer.HUMANIZER
+        return bundle, candidate
+
+    def test_sealed_titleless_papers_remain_verifiable(self):
+        inputs = writer.applicable_inputs("paper", self.main)
+        for schema in (1, 2):
+            with self.subTest(schema=schema):
+                bundle, candidate = self.legacy_pdf_candidate("paper", schema, inputs)
+                checks = self.self_check(candidate, fidelity="Synthetic historical proof checked.",
+                                         targets={t: {"statement": "p. 1", "proof": "p. 1"} for t in inputs["targets"]})
+                if schema == 1:
+                    checks.pop("humanizer")
+                self.write(bundle / "candidate.json", candidate)
+                self.write(self.checks_path, checks)
+                with self.assertRaisesRegex(writer.Rejected, "unfinished legacy"):
+                    writer.finish_delivery("paper", bundle, self.checks_path, lambda: inputs)
+                self.write(bundle / "receipt.json", candidate | {"checks": checks})
+                self.assertEqual(writer.verify_delivery("paper", bundle, lambda: inputs)["checks"], checks)
+
+    def test_legacy_checked_referee_pdfs_verify(self):
         target, _ = self.public_input()
         inputs = writer.applicable_inputs("referee", self.main, target)
         for schema in (1, 2):
             with self.subTest(schema=schema):
-                bundle = self.task / f"sealed-v{schema}"
-                source = bundle / "source"
-                source.mkdir(parents=True)
-                (source / "main.tex").write_text(r"\documentclass{article}\begin{document}Report.\end{document}")
-                make_pdf(bundle / "referee.pdf")
-                manifest = {k: writer.digest(v) for k, v in writer.source_files(source).items()}
-                candidate = {"schema": schema, "kind": "referee", "snapshot_digest": inputs["snapshot_digest"],
-                             "input_digest": writer.record_digest(inputs), "source_files": manifest,
-                             "source_digest": writer.record_digest(manifest), "entrypoint": "main.tex",
-                             "pdf": "referee.pdf", "pdf_sha256": writer.digest((bundle / "referee.pdf").read_bytes())}
+                bundle, candidate = self.legacy_pdf_candidate("referee", schema, inputs)
                 checks = self.self_check(candidate, scope="Original compared.", findings={"F1": {
                     "original_location": "p. 1", "evidence": "p. 1", "affected_conclusion": "p. 1"}})
                 if schema == 1:
                     checks.pop("humanizer")
                 else:
-                    candidate["humanizer"] = writer.HUMANIZER
                     checks.update(diagnosis_only="Diagnosis checked.", issues={"major": [
                         {"location": "eq. 1", "quotation": "positive", "problem": "Negative reals."}], "minor": []})
                 self.write(bundle / "candidate.json", candidate)

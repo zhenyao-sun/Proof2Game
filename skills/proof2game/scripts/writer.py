@@ -169,11 +169,11 @@ def source_files(directory):
 def check_paper_identity(files):
     import manuscript
 
-    forbidden = re.compile(r"\\(?:title|author|maketitle)\b|\\begin\s*\{titlepage\}|\bpdf(?:title|author)\s*=")
+    forbidden = re.compile(r"\\author\b(?!\s*\{\s*\})|\bpdfauthor\s*=(?!\s*\{\s*\})")
     for name, data in files.items():
         if Path(name).suffix in {".tex", ".sty", ".cls", ".ltx"}:
             require(not forbidden.search(manuscript.uncomment(data.decode("utf-8"))),
-                    f"Omit work title and author declarations from {name}.")
+                    f"Omit author declarations from the authorless paper in {name}.")
 
 
 def run_latex(source, main, build, engine):
@@ -256,7 +256,7 @@ def compile_delivery(kind, tex, bundle, engine, read_inputs):
     (staging / name).write_bytes(pdf)
     manifest = {file: digest(data) for file, data in files.items()}
     candidate = {
-        "schema": 2, "kind": kind, "snapshot_digest": inputs["snapshot_digest"],
+        "schema": 4, "kind": kind, "snapshot_digest": inputs["snapshot_digest"],
         "humanizer": guide["id"],
         "input_digest": record_digest(inputs), "source_digest": record_digest(manifest),
         "source_files": manifest, "entrypoint": tex.name, "pdf": name,
@@ -298,7 +298,8 @@ def prepare_report(markdown, bundle, read_inputs):
 def current_candidate(kind, bundle, inputs):
     candidate = read_record(bundle / "candidate.json")
     schema = candidate.get("schema")
-    require(schema in (1, 2, 3) and candidate.get("kind") == kind
+    require((schema in (1, 2, 4) if kind == "paper" else schema in (1, 2, 3))
+            and candidate.get("kind") == kind
             and candidate.get("snapshot_digest") == inputs["snapshot_digest"]
             and candidate.get("input_digest") == record_digest(inputs),
             "Candidate belongs to a different delivery or input version.")
@@ -333,6 +334,8 @@ def check_evidence(checks, inputs, candidate):
         require_text(checks, ("humanizer",), "Humanizer editing and fidelity check")
     if candidate["kind"] == "paper":
         require_text(checks, ("fidelity",), "Writer self-check")
+        if candidate["schema"] == 4:
+            require_text(checks, ("paper_title", "title_render", "proof_endings"), "rendered paper layout check")
         covered = checks.get("targets")
         require(isinstance(covered, dict) and set(covered) == set(inputs["targets"]),
                 "Locate the full statement and proof of every current target in the PDF.")
@@ -388,7 +391,7 @@ def check_evidence(checks, inputs, candidate):
 def finish_delivery(kind, bundle, checks, read_inputs):
     inputs = read_inputs()
     candidate = current_candidate(kind, bundle, inputs)
-    current_schema = 3 if kind == "referee" else 2
+    current_schema = 3 if kind == "referee" else 4
     require(candidate["schema"] == current_schema or (bundle / "receipt.json").is_file(),
             "Prepare the unfinished legacy draft in a fresh bundle under the current Writer instructions.")
     evidence = read_record(checks)
@@ -442,8 +445,8 @@ def main(argv=None):
         if args.action == "inspect":
             result = read_inputs()
             result["writing_guide"] = writing_guide()
-            if args.kind == "referee":
-                result["template"] = str(Path(__file__).resolve().parents[1] / "assets/writer-referee.md")
+            template = "writer-paper.tex" if args.kind == "paper" else "writer-referee.md"
+            result["template"] = str(Path(__file__).resolve().parents[1] / "assets" / template)
             if args.kind == "paper":
                 import manuscript
 

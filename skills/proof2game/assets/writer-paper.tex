@@ -17,11 +17,19 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
+% Replace \PaperTitle with the paper's title or define it in a local source.
+% Leave the author byline empty.
+\title{\PaperTitle}
+
 \begin{document}
-% An optional abstract can use the unnumbered heading \section*{Abstract}.
+% If using an abstract, put the abstract environment before \maketitle.
+\maketitle
 % In the introduction, develop the problem and method, state all target
 % results precisely, then discuss related literature.
 % Write the full proofs in the main text or appendices. Use \eqref for formulas.
+% For a proof ending in prose, close the proof immediately after its last sentence.
+% For a final display, place \qedhere on the final equation row where appropriate.
+% Check the square on the rendered last line, including numbers and line breaks.
 % Text, appendices, and TeX resources can use local \input files.
 % When citing sources, put verified \bib entries in bibdiv/biblist in this file.
 \end{document}
