@@ -30,6 +30,8 @@ You can attach a LaTeX file, Markdown notes, or a PDF, or paste an arXiv link. A
 
 Proof2Game keeps your original and builds a separate English game script. Independent Codex reviewers check the argument and the cited results. For public papers, a separate reviewer checks the route against the exact edition you supplied. For unpublished work, the team explores whether the proof can be made simpler.
 
+The referee report contains a Summary, an Assessment, Major Issues and Minor Issues. Each issue locates and quotes the original passage and explains the problem and its impact. The authors decide how to address it. You can request a fresh report from the same approved manuscript. Writer uses the bundled [Humanizer v4.0.0](skills/proof2game/references/humanizer/SKILL.md) when drafting, revising and checking its prose.
+
 ## What it's like to play
 
 - **Follow the proof map.** Statements, lemmas, and proofs become levels. Unlock the next part as you go.
@@ -113,8 +115,8 @@ If you already have a verified release checkout, use it and let Proof2Game check
 ```sh
 proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.1.31 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.31"
-python3 "$proof2game_releases/v0.1.31/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch v0.1.36 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.36"
+python3 "$proof2game_releases/v0.1.36/skills/proof2game/scripts/release.py" verify
 ```
 
 Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)
@@ -122,3 +124,5 @@ Load the skill at the `entrypoint` returned by the verifier. You can run the ful
 ## License
 
 Proof2Game is released under the [MIT License](LICENSE). The bundled KaTeX code uses the [MIT License](skills/proof2game/assets/game-runtime/vendor/LICENSE-KaTeX.txt), and its fonts use the [SIL Open Font License](skills/proof2game/assets/game-runtime/vendor/fonts/OFL.txt).
+
+Writer includes the full instructions from [Humanizer v4.0.0](https://github.com/blader/humanizer/tree/b48c832f0f809c1b5658edbb838c2521b72f2413), distributed with its [MIT license](skills/proof2game/references/humanizer/LICENSE).

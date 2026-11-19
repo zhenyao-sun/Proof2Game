@@ -5,13 +5,19 @@
 \numberwithin{equation}{section}
 \usepackage[hidelinks]{hyperref}
 \usepackage{amsrefs}
+\pagestyle{plain}
+\newcommand{\reportissue}[3]{\item \textit{#1}\par\begin{quote}#2\end{quote}#3\par}
 
 \begin{document}
-\section*{Referee report}
-% Identify the exact original and its public date. Write to the authors.
-% Discuss its mathematical contribution and scope. Locate constructive
-% proof-clarity and minor wording, notation and exposition comments in the
-% original. Give checkable evidence and affected conclusions for any verified
-% error. Keep all delivery and comparison details internal. Include no
-% editorial disposition.
+\begin{center}\textbf{Referee report}\end{center}
+% Identify the title, edition, date and review scope.
+\section*{Summary}
+% State the question, assumptions, results and proof ideas.
+\section*{Assessment}
+% Give a reasoned judgment of the contribution and its limitations.
+\section*{Major Issues}
+% Use an enumerate list of \reportissue{original location}{verbatim quotation}{problem and impact}.
+% If this section has no issues, say so explicitly.
+\section*{Minor Issues}
+% Use the same issue format or state explicitly that there are no minor issues.
 \end{document}

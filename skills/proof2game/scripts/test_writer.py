@@ -104,8 +104,19 @@ class WriterTests(unittest.TestCase):
             "model": "gpt-6.2-sol", "effort": "ultra",
             "render": "Synthetic test evidence, PDF page 1.",
             "references": "Synthetic test evidence, references checked with stable TeX labels.",
+            "humanizer": "Synthetic comparison: removed repeated wording and retained the identity's quantifier.",
             **extra,
         }
+
+    def referee_document(self, summary, assessment, major, minor):
+        tex = self.draft_document("referee", "")
+        draft = tex.read_text()
+        for heading, body in zip(("Summary", "Assessment", "Major Issues", "Minor Issues"),
+                                 (summary, assessment, major, minor)):
+            marker = r"\section*{" + heading + "}"
+            draft = draft.replace(marker, marker + "\n" + body)
+        tex.write_text(draft)
+        return tex
 
     def test_paper_inspect_lists_only_sources_cited_in_the_snapshot(self):
         (self.snapshot / "proof.tex").write_text(r"Use \cite{alpha,beta}. % \cite{comment}")
@@ -118,7 +129,11 @@ class WriterTests(unittest.TestCase):
         self.write(self.approval_path, self.approval | {"snapshot_digest": clean["snapshot_digest"]})
         with redirect_stdout(StringIO()) as output:
             self.assertEqual(writer.main(["inspect", "--kind", "paper", "--main", str(self.main)]), 0)
-        self.assertEqual(json.loads(output.getvalue())["cited_keys"], ["alpha", "beta", "intro"])
+        inspected = json.loads(output.getvalue())
+        self.assertEqual(inspected["cited_keys"], ["alpha", "beta", "intro"])
+        guide = inspected["writing_guide"]
+        self.assertEqual(guide["id"], "blader/humanizer@v4.0.0")
+        self.assertEqual(writer.digest(Path(guide["path"]).read_bytes()), guide["sha256"])
 
     @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "TeX tools unavailable")
     def test_revision_uses_checked_clean_paper_and_actual_comparison_content(self):
@@ -234,16 +249,15 @@ class WriterTests(unittest.TestCase):
         report.rename(report.with_name("unrelated-notes.md"))
         read_inputs = lambda: writer.applicable_inputs("referee", self.main, target)
         self.assertEqual(read_inputs()["report_findings"], [])
-        tex = self.draft_document("referee", r"""
-\paragraph{Scope.} Original version v2 (2024-01-02).
-\paragraph{Assessment.} The two additive identities are unchanged. The game's proof of the
-left identity makes the use of commutativity explicit.
-""")
+        tex = self.referee_document("Version v2 gives the two additive identities.",
+                                    "The use of commutativity makes the second argument easy to follow.",
+                                    "No major issues.", "No minor issues.")
         candidate = writer.compile_delivery("referee", tex, self.bundle, "pdflatex", read_inputs)
         comparison = {"plus-zero": {"original": "line 1, first identity", "script": "target.tex and proof.tex",
                                     "report": "p. 1, Assessment"}}
         checks = self.self_check(candidate, scope="Both results were compared with the original.",
-                                 comparison=comparison, findings={})
+                                 comparison=comparison, findings={}, issues={"major": [], "minor": []},
+                                 diagnosis_only="Both lists explicitly record that there are no issues.")
         self.write(self.checks_path, checks)
         with self.assertRaisesRegex(writer.Rejected, "Compare every approved target"):
             writer.finish_delivery("referee", self.bundle, self.checks_path, read_inputs)
@@ -252,6 +266,15 @@ left identity makes the use of commutativity explicit.
         self.write(self.checks_path, checks)
         finished = writer.finish_delivery("referee", self.bundle, self.checks_path, read_inputs)
         self.assertEqual(finished, writer.verify_delivery("referee", self.bundle, read_inputs))
+        # A previously finished pre-Humanizer report can still be read on its own terms.
+        legacy = self.task / "legacy"
+        shutil.copytree(self.bundle, legacy)
+        old_candidate = dict(candidate, schema=1)
+        old_candidate.pop("humanizer")
+        old_checks = {k: v for k, v in checks.items() if k not in {"humanizer", "issues", "diagnosis_only"}}
+        self.write(legacy / "candidate.json", old_candidate)
+        self.write(legacy / "receipt.json", old_candidate | {"checks": old_checks})
+        self.assertEqual(writer.verify_delivery("referee", legacy, read_inputs)["schema"], 1)
         script = self.snapshot / "other-proof.tex"
         unchanged = script.read_bytes()
         script.write_text("Changed proof.", encoding="utf-8")
@@ -315,21 +338,33 @@ Commutativity gives the other equality.
                 "user_confirmation": "Synthetic user confirmation of the final target withdrawal.",
             },
         }
+        authorization["report_findings"][0]["confirmed_revision"] = {
+            "new_conclusion": "A strictly smaller set of reals meets the property.",
+            "user_confirmation": "Verified revision in synthetic private approval.",
+        }
         self.write(withdrawal, authorization)
         read_inputs = lambda: writer.applicable_inputs("referee", target=target, withdrawal=withdrawal)
-        tex = self.draft_document("referee", r"""
-\paragraph{Version.} v2 (2024-01-02).
-\paragraph{Finding.} The assertion (p. 1, equation (1)) that every real number is positive fails at $x=-1$.
-\paragraph{Outcome.} The target statement was withdrawn.
-""")
+        tex = self.referee_document("Version v2 makes a claim about positive real numbers.",
+                                    "Equation (1) fails under its stated hypotheses.",
+                                    r"\begin{enumerate}\reportissue{p. 1, equation (1)}{every real is positive}"
+                                    r"{The real number $-1$ is negative.}\end{enumerate}", "No minor issues.")
         candidate = writer.compile_delivery("referee", tex, self.bundle, "pdflatex", read_inputs)
         self.assertIsNone(candidate["snapshot_digest"])
         checks = self.self_check(
             candidate, scope="Only the original conclusion and counterexample are discussed.",
             findings={"F1": {"original_location": "page 1, Finding", "evidence": "page 1, Finding",
                              "affected_conclusion": "page 1, Finding"}},
-            withdrawal="page 1, Outcome",
+            withdrawal="page 1, Major Issues, item 1",
+            diagnosis_only="The report contains the failing real number and leaves the verified repair private.",
+            issues={"major": [{"location": "p. 1, equation (1)", "quotation": "every real is positive",
+                               "problem": "The assertion fails at -1."}], "minor": []},
         )
+        for missing in ("humanizer", "diagnosis_only", "issues"):
+            with self.subTest(missing=missing), self.assertRaises(writer.Rejected):
+                writer.check_evidence({k: v for k, v in checks.items() if k != missing}, read_inputs(), candidate)
+        for invalid in ({"major": [], "minor": []}, {"major": [{"location": "p. 1"}], "minor": []}):
+            with self.subTest(invalid=invalid), self.assertRaises(writer.Rejected):
+                writer.check_evidence(checks | {"issues": invalid}, read_inputs(), candidate)
         self.write(self.checks_path, checks)
         writer.finish_delivery("referee", self.bundle, self.checks_path, read_inputs)
         self.assertEqual(writer.verify_delivery("referee", self.bundle, read_inputs)["kind"], "referee")
@@ -348,6 +383,18 @@ Commutativity gives the other equality.
         with self.assertRaisesRegex(writer.Rejected, "cross-references"):
             writer.compile_delivery("paper", tex, self.bundle, "pdflatex", read_inputs)
         self.assertFalse(self.bundle.exists())
+
+    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "TeX tools unavailable")
+    def test_visible_referee_sections_have_text_and_follow_the_required_order(self):
+        target, _ = self.public_input()
+        read_inputs = lambda: writer.applicable_inputs("referee", self.main, target)
+        tex = self.referee_document("First.", "", "A major issue.", "No minor issues.")
+        with self.assertRaisesRegex(writer.Rejected, "Empty referee section: assessment"):
+            writer.compile_delivery("referee", tex, self.bundle, "pdflatex", read_inputs)
+        tex = self.referee_document("First.", "Second.", "Third.", "Fourth.")
+        tex.write_text(tex.read_text().replace(r"\section*{Summary}", r"\section*{Minor Issues}"))
+        with self.assertRaisesRegex(writer.Rejected, "in order"):
+            writer.compile_delivery("referee", tex, self.bundle, "pdflatex", read_inputs)
 
 
 if __name__ == "__main__":

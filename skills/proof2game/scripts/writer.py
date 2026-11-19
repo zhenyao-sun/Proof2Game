@@ -14,6 +14,11 @@ import sys
 import tempfile
 
 
+HUMANIZER = "blader/humanizer@v4.0.0"
+HUMANIZER_SHA256 = "804a119e924ac30295b298213e0b71b3e38b2667b8ef4fb7b69e9246369b9045"
+REFEREE_SECTIONS = ("summary", "assessment", "major issues", "minor issues")
+
+
 class Rejected(ValueError):
     """Raised when Writer cannot use an input or deliver an artifact."""
 
@@ -48,6 +53,32 @@ def require_text(record, keys, purpose):
     for key in keys:
         require(isinstance(record.get(key), str) and record[key].strip(),
                 f"Missing {purpose} field {key}.")
+
+
+def writing_guide():
+    path = Path(__file__).resolve().parents[1] / "references/humanizer/SKILL.md"
+    require(digest(path.read_bytes()) == HUMANIZER_SHA256, "Bundled Humanizer differs from the pinned release.")
+    return {"id": HUMANIZER, "path": str(path), "sha256": HUMANIZER_SHA256}
+
+
+def check_referee_sections(pdf):
+    import manuscript
+
+    sections = []
+    has_text = False
+    for line in manuscript.pdf_text(pdf).splitlines():
+        title = " ".join(line.lower().split())
+        title = re.sub(r"^(?:\d+|[ivx]+)[.)]?\s+", "", title)
+        if title in REFEREE_SECTIONS:
+            if sections:
+                require(has_text, f"Empty referee section: {sections[-1]}.")
+            sections.append(title)
+            has_text = False
+        elif any(character.isalpha() for character in line):
+            has_text = True
+    require(tuple(sections) == REFEREE_SECTIONS,
+            "The rendered referee report must have Summary, Assessment, Major Issues and Minor Issues in order.")
+    require(has_text, "Empty referee section: minor issues.")
 
 
 def approved_snapshot(main):
@@ -217,6 +248,7 @@ def pdf_bytes(path):
 
 def compile_delivery(kind, tex, bundle, engine, read_inputs):
     inputs = read_inputs()
+    guide = writing_guide()
     tex = Path(tex).resolve(strict=True)
     bundle = Path(bundle).resolve()
     require(tex.suffix == ".tex" and tex.is_file(), "Point --tex to the complete draft entrypoint.")
@@ -238,6 +270,8 @@ def compile_delivery(kind, tex, bundle, engine, read_inputs):
     build = staging / "render"
     compiled = run_latex(source, tex.name, build, engine)
     check_local_resources(source, build, tex.name)
+    if kind == "referee":
+        check_referee_sections(compiled)
     require(source_files(source) == files, "Compilation modified the delivered source tree.")
     require(read_inputs() == inputs, "Approved Writer inputs changed during compilation.")
     name = f"{kind}.pdf"
@@ -245,7 +279,8 @@ def compile_delivery(kind, tex, bundle, engine, read_inputs):
     (staging / name).write_bytes(pdf)
     manifest = {file: digest(data) for file, data in files.items()}
     candidate = {
-        "schema": 1, "kind": kind, "snapshot_digest": inputs["snapshot_digest"],
+        "schema": 2, "kind": kind, "snapshot_digest": inputs["snapshot_digest"],
+        "humanizer": guide["id"],
         "input_digest": record_digest(inputs), "source_digest": record_digest(manifest),
         "source_files": manifest, "entrypoint": tex.name, "pdf": name,
         "pdf_sha256": digest(pdf), "engine": engine,
@@ -257,11 +292,13 @@ def compile_delivery(kind, tex, bundle, engine, read_inputs):
 
 def current_candidate(kind, bundle, inputs):
     candidate = read_record(bundle / "candidate.json")
-    require(candidate.get("schema") == 1 and candidate.get("kind") == kind
+    require(candidate.get("schema") in (1, 2) and candidate.get("kind") == kind
             and candidate.get("snapshot_digest") == inputs["snapshot_digest"]
             and candidate.get("input_digest") == record_digest(inputs)
             and candidate.get("pdf") == f"{kind}.pdf",
             "Candidate belongs to a different delivery or input version.")
+    if candidate["schema"] == 2:
+        require(candidate.get("humanizer") == HUMANIZER, "Candidate writing guide differs from the selected version.")
     files = source_files(bundle / "source")
     manifest = {file: digest(data) for file, data in files.items()}
     require(candidate.get("entrypoint") in manifest and candidate.get("source_files") == manifest
@@ -276,6 +313,8 @@ def check_evidence(checks, inputs, candidate):
     require_text(checks, ("worker_session", "model", "effort", "render", "references"), "Writer self-check")
     for key in ("input_digest", "source_digest", "pdf_sha256"):
         require(checks.get(key) == candidate[key], f"Writer self-check does not match {key}.")
+    if candidate["schema"] == 2:
+        require_text(checks, ("humanizer",), "Humanizer editing and fidelity check")
     if candidate["kind"] == "paper":
         require_text(checks, ("fidelity",), "Writer self-check")
         covered = checks.get("targets")
@@ -285,6 +324,17 @@ def check_evidence(checks, inputs, candidate):
             require_text(locations, ("statement", "proof"), f"target {target}")
     else:
         require_text(checks, ("scope",), "referee scope check")
+        if candidate["schema"] == 2:
+            require_text(checks, ("diagnosis_only",), "referee diagnosis check")
+            issues = checks.get("issues")
+            require(isinstance(issues, dict) and set(issues) == {"major", "minor"},
+                    "Check both referee issue lists against the rendered report.")
+            for severity, items in issues.items():
+                require(isinstance(items, list), f"Expected a list of {severity} issues.")
+                for index, item in enumerate(items, 1):
+                    require_text(item, ("location", "quotation", "problem"), f"{severity} issue {index}")
+            require(not inputs["report_findings"] or any(issues.values()),
+                    "The issue lists must cover the confirmed original findings.")
         if inputs.get("referee_comparison"):
             compared = checks.get("comparison")
             require(isinstance(compared, dict) and set(compared) == set(inputs["targets"]),
@@ -296,7 +346,7 @@ def check_evidence(checks, inputs, candidate):
                 "Locate every approved finding in the rendered referee report.")
         for finding in inputs["report_findings"]:
             fields = ["original_location", "evidence", "affected_conclusion"]
-            if "confirmed_revision" in finding:
+            if candidate["schema"] == 1 and "confirmed_revision" in finding:
                 fields.append("confirmed_revision")
             require_text(covered[finding["id"]], fields, f'finding {finding["id"]}')
         if inputs["withdrawal"]:
@@ -306,6 +356,8 @@ def check_evidence(checks, inputs, candidate):
 def finish_delivery(kind, bundle, checks, read_inputs):
     inputs = read_inputs()
     candidate = current_candidate(kind, bundle, inputs)
+    require(candidate["schema"] == 2 or (bundle / "receipt.json").is_file(),
+            "Recompile the unfinished legacy draft in a fresh bundle under the current Writer instructions.")
     evidence = read_record(checks)
     check_evidence(evidence, inputs, candidate)
     receipt = candidate | {"checks": evidence}
@@ -354,6 +406,7 @@ def main(argv=None):
     try:
         if args.action == "inspect":
             result = read_inputs()
+            result["writing_guide"] = writing_guide()
             if args.kind == "paper":
                 import manuscript
 

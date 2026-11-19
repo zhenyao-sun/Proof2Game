@@ -2,6 +2,8 @@
 
 Writer handles the first guided delivery and user-requested revisions of delivered unpublished papers. Use the configured Writer model and effort (defaults `gpt-6.2-sol / ultra`). Give the worker its role, its output workspace, and the input paths for its delivery. The coordinator keeps the script and verification state read-only for Writer. Writer compares its output with accepted source material and self-checks the compiled PDF. Mathematical review and deliberate searches for errors belong to the verification workflow.
 
+For a paper, a referee report or a revision, read the full bundled [Humanizer v4.0.0 instructions](humanizer/SKILL.md) before drafting. Use its embedded mode throughout drafting, editing and self-check. Apply every instruction that fits the task. Resolve each conflict in favor of the Proof2Game user requirements and apply the rest. For example, trim repetition while preserving the required headings, exact quotations, notation, hypotheses, citations, proof route and degree of certainty. Compare the revised passages with their sources. The author-facing document contains the finished prose.
+
 ## Choose the delivery
 
 - **Unpublished project with active targets.** Write a complete English paper from the same filtered approved snapshot used by the game. Cover every active target in Main Results. Hand the user the checked compiled PDF and the independent LaTeX source directory with all necessary resources.
@@ -51,21 +53,16 @@ target journal. The PDF discusses the original manuscript only. Do not refer
 to a game, script, companion draft, or internal review process. Omit any
 editorial disposition such as accept, reject, minor revision or major revision.
 
-Internally compare each active target and its argument with the original.
-Use the completed reviews as evidence. When no mathematical error has been
-confirmed, still assess the significance and scope of the results. Include
-concrete suggestions that help readers understand or check the proof, and
-include warranted minor comments on wording, notation and exposition. Give
-precise original section, statement, equation or page locators for specific
-comments. Do not manufacture suggestions or claim certification of the
-whole paper. Use [writer-referee.tex](../assets/writer-referee.tex).
+Internally compare each active target and its argument with the original. Cover every approved finding, including a finding on a discarded dependency. Draft the report using [writer-referee.tex](../assets/writer-referee.tex). Give the original edition and the scope reviewed. Use these four body sections in order.
 
-For each approved finding, including one from a discarded dependency, give
-the original location, checkable evidence, and affected original conclusion.
-If a corrected target was independently verified, present the correction as a
-suggested change to the original statement. Keep full replacement proofs
-internal. For a final target withdrawal, explain the original conclusion and
-the evidence showing the claim must be withdrawn.
+1. **Summary**. Describe the question, hypotheses, main results and proof ideas objectively. Attribute claims about what is new to the manuscript where appropriate.
+2. **Assessment**. Give the referee's judgment of the contribution, with concrete reasons. Explain how any substantive difficulty affects that judgment and refer to its numbered item below.
+3. **Major Issues**. Number the issues that materially affect correctness, proof, scope or contribution, with the most consequential first.
+4. **Minor Issues**. Number localized issues of exposition, notation, references or typography. In either issues section, state explicitly when there is nothing to report.
+
+In both lists each item gives, in order, the location in the original, the shortest sufficient verbatim quotation, and the problem. Include the original page and, where available, the theorem, equation or paragraph. Check quoted symbols, conditions and text against the original rendering. Explain precisely what the evidence establishes and which inference or conclusion it affects. Report a proof gap by naming the unsupported step. Give a verified counterexample and the range it actually excludes. For a local notation inconsistency, locate it and quote it. Leave proposed assumptions, repairs, revised constants or statements, alternative proofs, symbol mappings and replacement wording to the authors. This boundary applies throughout the report, including the Assessment. With a confirmed final withdrawal, describe the original claim and the evidence bearing on it.
+
+For a requested new report on an existing approval, use the preserved original and the same sealed snapshot (or final-withdrawal authorization), and write to a fresh versioned bundle. The prior delivery and the mathematical review remain available.
 
 The approved snapshot binds the preserved original by `original_sha256` and records `referee_comparison: true`. When findings exist, use the bound project `report.md` as supporting evidence and check its `report_sha256`. The `report_findings` list is empty when no hard finding was confirmed; otherwise each record has nonempty `id`, `location`, `original_conclusion`, `evidence` and `verification`, and optional `confirmed_revision` with `new_conclusion` and `user_confirmation`. The snapshot-free final-withdrawal authorization has `schema: 1`, `kind: "referee"`, `project_type: "public"`, `reason: "last-target-withdrawn"`, `snapshot_digest: null`, the fixed `cutoff`, the findings bindings, and `withdrawal` with `targets`, `counterexample`, `evidence` and `user_confirmation`.
 
@@ -89,10 +86,11 @@ python3 "$skill/scripts/writer.py" compile "${inputs[@]}" --tex "$draft/main.tex
 
 Keep draft TeX and local compile resources in a dedicated source directory. Put build output in a separate new bundle directory. Use MacTeX's `latexmk` and `kpsewhich` from the configured execution environment. The compile step copies local sources, compiles them using the selected engine, checks the dependency recorder for external inputs, rejects unresolved or unstable references, then emits a candidate record and actual PDF. Keep this evidence with the build.
 
-Open the compiled PDF locally. Check document text, cross-references, citation targets, page and equation numbering, and math renderings in context. Verify the PDF against the draft and record actual observations in a JSON self-check using the candidate's `input_digest`, `source_digest` and `pdf_sha256`. Include `worker_session`, `model`, `effort`, `render` and `references`.
+Open the compiled PDF locally. Check document text, cross-references, citation targets, page and equation numbering, and math renderings in context. Verify the PDF against the draft and record actual observations in a JSON self-check using the candidate's `input_digest`, `source_digest` and `pdf_sha256`. Include `worker_session`, `model`, `effort`, `render` and `references`. In `humanizer`, describe a concrete editing decision and how you checked mathematical fidelity or handled a conflict with the writing guide. Keep this note in the private receipt.
 
 - For a paper, check statement and proof fidelity against the snapshot. Add `fidelity` and `targets`, an object keyed by every target label with its `statement` and `proof` PDF locations.
-- For a referee report, check its wording, mathematics, source locators and claims against the exact original, the script when available, and all verified findings. Add `scope` and `findings`, an object keyed by every approved finding ID with `original_location`, `evidence` and `affected_conclusion` PDF locations. Use an empty object when there are no findings. Include a `confirmed_revision` location for each finding with a confirmed revision and a `withdrawal` location for final withdrawal. When the approval has `referee_comparison: true`, also add `comparison`, an object keyed by every active target with nonempty `original`, `script` and `report` locators. A shared assessment in the report can cover several targets.
+- For a referee report, add `scope` and `findings`, an object keyed by every approved finding ID with `original_location`, `evidence` and `affected_conclusion` PDF locations. Use an empty object when there are no findings. Include a `withdrawal` location for final withdrawal. Any verified repair in the approval is private. With `referee_comparison: true`, add `comparison`, keyed by each active target with `original`, `script` and `report` locators. A shared assessment can cover several targets.
+- Check the two issue lists against the PDF. Record `issues` as an object with `major` and `minor` arrays in report order. For each numbered issue record its `location`, `quotation` and `problem`: identify the passage checked in the original, the words or formula reproduced, and the evidence and impact described in the report. An empty list corresponds to an explicit statement in its section. In `diagnosis_only`, record how you checked that the report stops at the diagnosis, including in the overall assessment.
 
 Correct writing or transcription errors and compile a fresh candidate if needed.
 

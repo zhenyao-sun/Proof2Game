@@ -162,6 +162,8 @@ task-relative `artifact` and its actual `sha256`; Writer receipts are revalidate
 Record actual user delivery after check. The guide ends only once all applicable
 products are delivered. Independent output problems block only the affected product.
 
+For a user-requested replacement referee report on the same approval, finish and verify the new Writer bundle, then hand over its PDF. Record a `deliverable` for `kind: referee` with `status: replacement-delivered`, the usual snapshot, artifact, sha256 and verification evidence, the previous report's `previous_sha256`, and a `message_receipt` for the new handoff. This replaces the referee entry in one transaction and records its predecessor in history. Use a fresh bundle. The same operation works after the guided task has finished.
+
 For incidental substantial math concerns that affect multiple outputs, the
 `incident` operation takes `kind` (`script` or `counterexample`), the exact current
 `snapshot_digest`, affected `components` when known, and specific `evidence`.

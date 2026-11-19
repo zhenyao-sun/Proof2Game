@@ -1052,7 +1052,11 @@ def checked_artifact_digest(kind, artifact, approval_path, approval):
 
 
 def deliverable(task, state, request):
-    require(state["phase"] == "delivery", "no active delivery approval")
+    status = request.get("status")
+    kind = request.get("kind")
+    replacement = status == "replacement-delivered" and kind == "referee"
+    require(state["phase"] == "delivery" or (replacement and state["phase"] == "complete"),
+            "no active delivery approval")
     delivery = state["delivery"]
     require("snapshot_digest" in request and request["snapshot_digest"] == delivery["snapshot_digest"],
             "artifact must be bound to the active delivery snapshot")
@@ -1061,15 +1065,19 @@ def deliverable(task, state, request):
     if delivery["approval"].get("report_findings"):
         require(delivery["approval"]["report_sha256"] == report_digest(task, state["findings"]),
                 "hard finding documentation changed during delivery")
-    status = request.get("status")
-    kind = request.get("kind")
     require(kind in delivery["products"], "this product is outside the active delivery")
     product = delivery["products"][kind]
     if status in ("blocked", "pending"):
         require(product["status"] in ("blocked", "pending"), "a checked artifact cannot go backward without an incident")
         product.update(status=status, evidence=evidence(request.get("evidence")))
-    elif status == "checked":
-        require(product["status"] in ("pending", "blocked"), "product check was already recorded")
+    elif status == "checked" or replacement:
+        if replacement:
+            require(product["status"] == "delivered" and request.get("previous_sha256") == product["sha256"],
+                    "identify the currently delivered referee report being replaced")
+            require(confined(task, request["artifact"]).parent != confined(task, product["artifact"]).parent,
+                    "keep the previous report and build the replacement in a separate bundle")
+        else:
+            require(product["status"] in ("pending", "blocked"), "product check was already recorded")
         artifact = confined(task, request["artifact"])
         expected = evidence(request.get("sha256"))
         actual = (verify_game_artifact(artifact, approval_path, delivery["approval"]) if kind == "game"
@@ -1083,7 +1091,13 @@ def deliverable(task, state, request):
             receipt = writer.verify_delivery(kind, artifact.parent,
                                              lambda: writer.applicable_inputs(kind, main, target, withdrawal))
             require(receipt["pdf"] == artifact.name, "checked artifact differs from the Writer's actual compiled PDF")
-        product.update(status=status, artifact=request["artifact"], sha256=expected,
+            if replacement:
+                require(receipt["schema"] == 2, "regenerate the replacement with the current Writer")
+                message = evidence(request.get("message_receipt"))
+                record(state, "referee-replaced", previous=copy.deepcopy(product),
+                       snapshot_digest=delivery["snapshot_digest"])
+                product["message_receipt"] = message
+        product.update(status="delivered" if replacement else status, artifact=request["artifact"], sha256=expected,
                        evidence=evidence(request.get("evidence")))
     elif status == "delivered":
         require(product["status"] == "checked", "check the artifact before delivering it")
