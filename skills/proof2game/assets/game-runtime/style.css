@@ -99,3 +99,6 @@
 
 .save-toast{max-width:1300px;margin:10px auto 0;padding:0 5%;font-size:12px;color:var(--green)}
 .save-inline-status{font-size:10px;color:var(--green)}
+
+/* Keep source attribution aligned with the map content at every width. */
+.paper-credit{margin:20px 0 0;color:var(--muted);font-size:12px;line-height:1.7;overflow-wrap:anywhere}
