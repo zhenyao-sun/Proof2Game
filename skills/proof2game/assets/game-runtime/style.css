@@ -101,4 +101,7 @@
 .save-inline-status{font-size:10px;color:var(--green)}
 
 /* Keep source attribution aligned with the map content at every width. */
-.paper-credit{margin:20px 0 0;color:var(--muted);font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.paper-credit{margin:28px 0 0;overflow-wrap:anywhere}
+.paper-title{margin:0;font:500 clamp(26px,3vw,40px)/1.3 var(--serif);color:var(--ink);max-width:34ch}
+.paper-byline{margin:12px 0 0;color:var(--muted);font-size:14px;line-height:1.7}
+@media(max-width:760px){.paper-credit{margin-top:22px}.paper-byline{font-size:12px}}

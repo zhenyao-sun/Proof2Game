@@ -15,6 +15,10 @@ try{
   document.getElementById('close-ai').addEventListener('click',()=>dialog.close());
   dialog.addEventListener('close',()=>{input.value='';document.getElementById('ai-error').textContent='';});
   const result=await window.proof2gameBrowser.request('/api/game');
-  if(result.game.paper){const credit=document.getElementById('paper-credit');credit.hidden=false;credit.textContent=result.game.paper.title+' — '+result.game.paper.authors.join(', ')+' · '+result.game.paper.version;}
+  if(result.game.paper){
+    document.getElementById('paper-title').textContent=result.game.paper.title;
+    document.getElementById('paper-byline').textContent=result.game.paper.authors.join(', ')+' · '+result.game.paper.version;
+    document.getElementById('paper-credit').hidden=false;
+  }
   await import('./app.js');
 }catch(error){const target=document.getElementById('global-error');target.hidden=false;target.textContent=error.message;}
