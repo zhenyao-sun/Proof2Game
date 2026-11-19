@@ -163,10 +163,10 @@ class Ledger(unittest.TestCase):
     def test_completed_task_replaces_only_the_verified_referee_report(self):
         approval = {"snapshot_digest": "synthetic-snapshot"}
         (self.task / "approval.json").write_bytes(state.json_bytes(approval))
-        for name in ("original-report", "new-report"):
+        for name, filename in (("original-report", "referee.pdf"), ("new-report", "referee.md")):
             bundle = self.task / name
             bundle.mkdir()
-            (bundle / "referee.pdf").write_text(name)
+            (bundle / filename).write_text(name)
         previous = {"status": "delivered", "artifact": "original-report/referee.pdf",
                     "sha256": state.file_digest(self.task / "original-report/referee.pdf")}
         products = {"game": {"status": "delivered"}, "referee": previous.copy()}
@@ -174,18 +174,18 @@ class Ledger(unittest.TestCase):
                   "delivery": {"approval": approval, "approval_path": "approval.json",
                                "snapshot_digest": approval["snapshot_digest"], "products": products}}
         request = {"status": "replacement-delivered", "kind": "referee", "snapshot_digest": approval["snapshot_digest"],
-                   "previous_sha256": previous["sha256"], "artifact": "new-report/referee.pdf",
-                   "sha256": state.file_digest(self.task / "new-report/referee.pdf"),
+                   "previous_sha256": previous["sha256"], "artifact": "new-report/referee.md",
+                   "sha256": state.file_digest(self.task / "new-report/referee.md"),
                    "message_receipt": "Synthetic handoff", "evidence": "Synthetic receipt"}
         with self.assertRaisesRegex(state.Rejected, "currently delivered"):
             state.deliverable(self.task, ledger, request | {"previous_sha256": "stale"})
         with self.assertRaisesRegex(state.Rejected, "separate bundle"):
             state.deliverable(self.task, ledger, request | {"artifact": previous["artifact"]})
-        with patch("writer.verify_delivery", return_value={"pdf": "referee.pdf", "schema": 1}):
+        with patch("writer.verify_delivery", return_value={"pdf": "referee.pdf", "schema": 2}):
             with self.assertRaisesRegex(state.Rejected, "current Writer"):
                 state.deliverable(self.task, ledger, request)
         self.assertEqual(products["referee"], previous)
-        with patch("writer.verify_delivery", return_value={"pdf": "referee.pdf", "schema": 2}):
+        with patch("writer.verify_delivery", return_value={"artifact": "referee.md", "schema": 3}):
             state.deliverable(self.task, ledger, request)
         self.assertEqual(ledger["phase"], "complete")
         self.assertEqual(ledger["goal_complete"], "previous handoff")

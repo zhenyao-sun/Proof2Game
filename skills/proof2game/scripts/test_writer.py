@@ -1,4 +1,4 @@
-"""Focused Writer regressions using local synthetic math and real TeX builds."""
+"""Focused Writer regressions using synthetic math, real TeX builds and Markdown rendering."""
 from contextlib import redirect_stdout
 from io import StringIO
 import json
@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 import manuscript
+import referee_markdown
 import writer
 import writer_revision
 
@@ -98,8 +99,19 @@ class WriterTests(unittest.TestCase):
         return tex
 
     def self_check(self, candidate, **extra):
+        bindings = ("input_digest", "source_digest", "pdf_sha256")
+        if candidate["schema"] == 3:
+            bindings = ("input_digest", "artifact_sha256")
+            extra = {
+                "openings": {key: paragraph.partition(". ")[0].rstrip(".") + "."
+                             for key, paragraph in candidate["opening_paragraphs"].items()},
+                "opening_judgment": "Read the contribution and the mathematical appraisal independently.",
+                "italics": "Compared the original excerpts with the Markdown preview.",
+                **extra,
+            }
+            extra["openings"]["major_count"] = candidate["issue_counts"]["major"]
         return {
-            **{key: candidate[key] for key in ("input_digest", "source_digest", "pdf_sha256")},
+            **{key: candidate[key] for key in bindings},
             "worker_session": "synthetic-test-session",
             "model": "gpt-6.2-sol", "effort": "ultra",
             "render": "Synthetic test evidence, PDF page 1.",
@@ -109,14 +121,10 @@ class WriterTests(unittest.TestCase):
         }
 
     def referee_document(self, summary, assessment, major, minor):
-        tex = self.draft_document("referee", "")
-        draft = tex.read_text()
-        for heading, body in zip(("Summary", "Assessment", "Major Issues", "Minor Issues"),
-                                 (summary, assessment, major, minor)):
-            marker = r"\section*{" + heading + "}"
-            draft = draft.replace(marker, marker + "\n" + body)
-        tex.write_text(draft)
-        return tex
+        path = self.draft / "referee.md"
+        sections = zip(referee_markdown.SECTIONS, (summary, assessment, major, minor))
+        path.write_text("# Referee report\n\n" + "\n\n".join(f"## {h}\n\n{body}" for h, body in sections))
+        return path
 
     def test_paper_inspect_lists_only_sources_cited_in_the_snapshot(self):
         (self.snapshot / "proof.tex").write_text(r"Use \cite{alpha,beta}. % \cite{comment}")
@@ -235,8 +243,7 @@ class WriterTests(unittest.TestCase):
         with self.assertRaisesRegex(writer.Rejected, "differs"):
             writer.applicable_inputs("referee", self.main, target)
 
-    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "MacTeX tools unavailable")
-    def test_public_comparison_without_findings_compiles_and_binds_both_inputs(self):
+    def test_public_comparison_without_findings_binds_both_inputs_and_the_markdown(self):
         target, report = self.public_input()
         original = self.task / "original.tex"
         original.write_text("The two additive identities are x+0=x and 0+x=x.", encoding="utf-8")
@@ -249,10 +256,15 @@ class WriterTests(unittest.TestCase):
         report.rename(report.with_name("unrelated-notes.md"))
         read_inputs = lambda: writer.applicable_inputs("referee", self.main, target)
         self.assertEqual(read_inputs()["report_findings"], [])
-        tex = self.referee_document("Version v2 gives the two additive identities.",
+        md = self.referee_document("Version v2 gives the two additive identities.",
                                     "The use of commutativity makes the second argument easy to follow.",
                                     "No major issues.", "No minor issues.")
-        candidate = writer.compile_delivery("referee", tex, self.bundle, "pdflatex", read_inputs)
+        with redirect_stdout(StringIO()) as output:
+            result = writer.main(["prepare", "--kind", "referee", "--main", str(self.main), "--target", str(target),
+                                  "--markdown", str(md), "--bundle", str(self.bundle)])
+        self.assertEqual(result, 0)
+        candidate = json.loads(output.getvalue())
+        self.assertEqual((self.bundle / "referee.md").read_bytes(), md.read_bytes())
         comparison = {"plus-zero": {"original": "line 1, first identity", "script": "target.tex and proof.tex",
                                     "report": "p. 1, Assessment"}}
         checks = self.self_check(candidate, scope="Both results were compared with the original.",
@@ -266,15 +278,11 @@ class WriterTests(unittest.TestCase):
         self.write(self.checks_path, checks)
         finished = writer.finish_delivery("referee", self.bundle, self.checks_path, read_inputs)
         self.assertEqual(finished, writer.verify_delivery("referee", self.bundle, read_inputs))
-        # A previously finished pre-Humanizer report can still be read on its own terms.
-        legacy = self.task / "legacy"
-        shutil.copytree(self.bundle, legacy)
-        old_candidate = dict(candidate, schema=1)
-        old_candidate.pop("humanizer")
-        old_checks = {k: v for k, v in checks.items() if k not in {"humanizer", "issues", "diagnosis_only"}}
-        self.write(legacy / "candidate.json", old_candidate)
-        self.write(legacy / "receipt.json", old_candidate | {"checks": old_checks})
-        self.assertEqual(writer.verify_delivery("referee", legacy, read_inputs)["schema"], 1)
+        self.assertEqual(finished, writer.finish_delivery("referee", self.bundle, self.checks_path, read_inputs))
+        (self.bundle / "referee.md").write_bytes(md.read_bytes() + b"\nChanged.")
+        with self.assertRaisesRegex(writer.Rejected, "Markdown file has changed"):
+            writer.verify_delivery("referee", self.bundle, read_inputs)
+        (self.bundle / "referee.md").write_bytes(md.read_bytes())
         script = self.snapshot / "other-proof.tex"
         unchanged = script.read_bytes()
         script.write_text("Changed proof.", encoding="utf-8")
@@ -326,7 +334,6 @@ Commutativity gives the other equality.
         with self.assertRaisesRegex(writer.Rejected, "sources have changed"):
             writer.verify_delivery("paper", self.bundle, read_inputs)
 
-    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "MacTeX tools unavailable")
     def test_public_last_target_withdrawal_uses_preserved_evidence_without_snapshot(self):
         target, _ = self.public_input()
         withdrawal = self.task / "withdrawal.json"
@@ -344,11 +351,11 @@ Commutativity gives the other equality.
         }
         self.write(withdrawal, authorization)
         read_inputs = lambda: writer.applicable_inputs("referee", target=target, withdrawal=withdrawal)
-        tex = self.referee_document("Version v2 makes a claim about positive real numbers.",
-                                    "Equation (1) fails under its stated hypotheses.",
-                                    r"\begin{enumerate}\reportissue{p. 1, equation (1)}{every real is positive}"
-                                    r"{The real number $-1$ is negative.}\end{enumerate}", "No minor issues.")
-        candidate = writer.compile_delivery("referee", tex, self.bundle, "pdflatex", read_inputs)
+        md = self.referee_document("Version v2 makes a claim about positive real numbers.",
+                                   "One major issue invalidates the claim in equation (1).",
+                                   "1. Page 1, equation (1).\n\n   > *Every real is positive.*\n\n"
+                                   "   The real number $-1$ is negative.", "No minor issues.")
+        candidate = writer.prepare_report(md, self.bundle, read_inputs)
         self.assertIsNone(candidate["snapshot_digest"])
         checks = self.self_check(
             candidate, scope="Only the original conclusion and counterexample are discussed.",
@@ -359,12 +366,15 @@ Commutativity gives the other equality.
             issues={"major": [{"location": "p. 1, equation (1)", "quotation": "every real is positive",
                                "problem": "The assertion fails at -1."}], "minor": []},
         )
-        for missing in ("humanizer", "diagnosis_only", "issues"):
+        for missing in ("humanizer", "diagnosis_only", "issues", "openings", "opening_judgment", "italics"):
             with self.subTest(missing=missing), self.assertRaises(writer.Rejected):
                 writer.check_evidence({k: v for k, v in checks.items() if k != missing}, read_inputs(), candidate)
         for invalid in ({"major": [], "minor": []}, {"major": [{"location": "p. 1"}], "minor": []}):
             with self.subTest(invalid=invalid), self.assertRaises(writer.Rejected):
                 writer.check_evidence(checks | {"issues": invalid}, read_inputs(), candidate)
+        for conflict in ({"major_count": 2}, {"summary": "The paper gives a result."}):
+            with self.subTest(conflict=conflict), self.assertRaises(writer.Rejected):
+                writer.check_evidence(checks | {"openings": checks["openings"] | conflict}, read_inputs(), candidate)
         self.write(self.checks_path, checks)
         writer.finish_delivery("referee", self.bundle, self.checks_path, read_inputs)
         self.assertEqual(writer.verify_delivery("referee", self.bundle, read_inputs)["kind"], "referee")
@@ -384,17 +394,62 @@ Commutativity gives the other equality.
             writer.compile_delivery("paper", tex, self.bundle, "pdflatex", read_inputs)
         self.assertFalse(self.bundle.exists())
 
-    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "TeX tools unavailable")
     def test_visible_referee_sections_have_text_and_follow_the_required_order(self):
         target, _ = self.public_input()
         read_inputs = lambda: writer.applicable_inputs("referee", self.main, target)
-        tex = self.referee_document("First.", "", "A major issue.", "No minor issues.")
-        with self.assertRaisesRegex(writer.Rejected, "Empty referee section: assessment"):
-            writer.compile_delivery("referee", tex, self.bundle, "pdflatex", read_inputs)
-        tex = self.referee_document("First.", "Second.", "Third.", "Fourth.")
-        tex.write_text(tex.read_text().replace(r"\section*{Summary}", r"\section*{Minor Issues}"))
-        with self.assertRaisesRegex(writer.Rejected, "in order"):
-            writer.compile_delivery("referee", tex, self.bundle, "pdflatex", read_inputs)
+        md = self.referee_document("First.", "", "A major issue.", "No minor issues.")
+        with self.assertRaisesRegex(ValueError, "Empty referee section: Assessment"):
+            writer.prepare_report(md, self.bundle, read_inputs)
+        md = self.referee_document("First.", "Second.", "Third.", "Fourth.")
+        md.write_text(md.read_text().replace("## Summary", "## First"))
+        with self.assertRaisesRegex(ValueError, "in order"):
+            writer.prepare_report(md, self.bundle, read_inputs)
+
+    def test_quote_styling_in_lists_and_elsewhere_in_the_report(self):
+        for quote in ('"a naked quotation"', '“*partly* italic”', '> $x = 0$', '> *The equality* $x=0$.'):
+            with self.subTest(quote=quote), self.assertRaisesRegex(ValueError, "Italicize"):
+                md = self.referee_document("The passage reads\n\n" + quote, "Assessment.", "None.", "None.")
+                referee_markdown.inspect(md.read_bytes())
+        md = self.referee_document('The paper uses *“a short phrase”*.', 'One major issue affects the result.',
+                                   '1. Equation (1).\n\n   > *$x=0$*\n\n   A counterexample exists.', 'None.')
+        self.assertEqual(referee_markdown.inspect(md.read_bytes())["issue_counts"], {"major": 1, "minor": 0})
+        for sentence, expected in (("Two major issues invalidate the first claim.", 1),
+                                   ("The proof has an interesting structure.", 2)):
+            self.assertFalse(referee_markdown.count_matches(sentence, expected))
+        self.assertTrue(referee_markdown.count_matches("Twenty-one major issues undermine the estimate.", 21))
+        self.assertTrue(referee_markdown.is_opening("Eq. (1) states the claim. Further details follow.",
+                                                    "Eq. (1) states the claim."))
+        displaced = "The paper is interesting. Two major issues undermine the proof."
+        self.assertFalse(referee_markdown.is_opening(displaced, displaced))
+
+    def test_legacy_checked_referee_pdfs_verify(self):
+        from test_intake import make_pdf
+
+        target, _ = self.public_input()
+        inputs = writer.applicable_inputs("referee", self.main, target)
+        for schema in (1, 2):
+            with self.subTest(schema=schema):
+                bundle = self.task / f"sealed-v{schema}"
+                source = bundle / "source"
+                source.mkdir(parents=True)
+                (source / "main.tex").write_text(r"\documentclass{article}\begin{document}Report.\end{document}")
+                make_pdf(bundle / "referee.pdf")
+                manifest = {k: writer.digest(v) for k, v in writer.source_files(source).items()}
+                candidate = {"schema": schema, "kind": "referee", "snapshot_digest": inputs["snapshot_digest"],
+                             "input_digest": writer.record_digest(inputs), "source_files": manifest,
+                             "source_digest": writer.record_digest(manifest), "entrypoint": "main.tex",
+                             "pdf": "referee.pdf", "pdf_sha256": writer.digest((bundle / "referee.pdf").read_bytes())}
+                checks = self.self_check(candidate, scope="Original compared.", findings={"F1": {
+                    "original_location": "p. 1", "evidence": "p. 1", "affected_conclusion": "p. 1"}})
+                if schema == 1:
+                    checks.pop("humanizer")
+                else:
+                    candidate["humanizer"] = writer.HUMANIZER
+                    checks.update(diagnosis_only="Diagnosis checked.", issues={"major": [
+                        {"location": "eq. 1", "quotation": "positive", "problem": "Negative reals."}], "minor": []})
+                self.write(bundle / "candidate.json", candidate)
+                self.write(bundle / "receipt.json", candidate | {"checks": checks})
+                self.assertEqual(writer.verify_delivery("referee", bundle, lambda: inputs)["schema"], schema)
 
 
 if __name__ == "__main__":

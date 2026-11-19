@@ -16,7 +16,6 @@ import tempfile
 
 HUMANIZER = "blader/humanizer@v4.0.0"
 HUMANIZER_SHA256 = "804a119e924ac30295b298213e0b71b3e38b2667b8ef4fb7b69e9246369b9045"
-REFEREE_SECTIONS = ("summary", "assessment", "major issues", "minor issues")
 
 
 class Rejected(ValueError):
@@ -59,26 +58,6 @@ def writing_guide():
     path = Path(__file__).resolve().parents[1] / "references/humanizer/SKILL.md"
     require(digest(path.read_bytes()) == HUMANIZER_SHA256, "Bundled Humanizer differs from the pinned release.")
     return {"id": HUMANIZER, "path": str(path), "sha256": HUMANIZER_SHA256}
-
-
-def check_referee_sections(pdf):
-    import manuscript
-
-    sections = []
-    has_text = False
-    for line in manuscript.pdf_text(pdf).splitlines():
-        title = " ".join(line.lower().split())
-        title = re.sub(r"^(?:\d+|[ivx]+)[.)]?\s+", "", title)
-        if title in REFEREE_SECTIONS:
-            if sections:
-                require(has_text, f"Empty referee section: {sections[-1]}.")
-            sections.append(title)
-            has_text = False
-        elif any(character.isalpha() for character in line):
-            has_text = True
-    require(tuple(sections) == REFEREE_SECTIONS,
-            "The rendered referee report must have Summary, Assessment, Major Issues and Minor Issues in order.")
-    require(has_text, "Empty referee section: minor issues.")
 
 
 def approved_snapshot(main):
@@ -247,6 +226,7 @@ def pdf_bytes(path):
 
 
 def compile_delivery(kind, tex, bundle, engine, read_inputs):
+    require(kind == "paper", "For a referee report use prepare with --markdown.")
     inputs = read_inputs()
     guide = writing_guide()
     tex = Path(tex).resolve(strict=True)
@@ -259,8 +239,7 @@ def compile_delivery(kind, tex, bundle, engine, read_inputs):
             "Choose a new delivery bundle beside, or outside, the draft source directory.")
 
     files = source_files(tex.parent)
-    if kind == "paper":
-        check_paper_identity(files)
+    check_paper_identity(files)
     staging = Path(tempfile.mkdtemp(prefix=f".{kind}-build-", dir=bundle.parent))
     source = staging / "source"
     for name, data in files.items():
@@ -270,8 +249,6 @@ def compile_delivery(kind, tex, bundle, engine, read_inputs):
     build = staging / "render"
     compiled = run_latex(source, tex.name, build, engine)
     check_local_resources(source, build, tex.name)
-    if kind == "referee":
-        check_referee_sections(compiled)
     require(source_files(source) == files, "Compilation modified the delivered source tree.")
     require(read_inputs() == inputs, "Approved Writer inputs changed during compilation.")
     name = f"{kind}.pdf"
@@ -290,15 +267,53 @@ def compile_delivery(kind, tex, bundle, engine, read_inputs):
     return candidate
 
 
+def prepare_report(markdown, bundle, read_inputs):
+    import referee_markdown
+
+    inputs = read_inputs()
+    require(inputs["kind"] == "referee", "Markdown preparation is for a referee report.")
+    guide = writing_guide()
+    markdown = Path(markdown).resolve(strict=True)
+    bundle = Path(bundle).resolve()
+    require(markdown.suffix.lower() == ".md" and markdown.is_file(), "Supply the complete UTF-8 Markdown report.")
+    require(not bundle.exists() and bundle.parent.is_dir(), "Choose a new versioned Writer bundle.")
+    data = markdown.read_bytes()
+    outline = referee_markdown.inspect(data)
+    candidate = {
+        "schema": 3, "kind": "referee", "snapshot_digest": inputs["snapshot_digest"],
+        "humanizer": guide["id"], "input_digest": record_digest(inputs),
+        "artifact": "referee.md", "artifact_sha256": digest(data), **outline,
+    }
+    with tempfile.TemporaryDirectory(prefix=".referee-stage-", dir=bundle.parent) as tmp:
+        staging = Path(tmp) / "bundle"
+        staging.mkdir()
+        (staging / candidate["artifact"]).write_bytes(data)
+        write_record(staging / "candidate.json", candidate)
+        require(read_inputs() == inputs and markdown.read_bytes() == data,
+                "The approved inputs or the Markdown report changed during preparation.")
+        staging.rename(bundle)
+    return candidate
+
+
 def current_candidate(kind, bundle, inputs):
     candidate = read_record(bundle / "candidate.json")
-    require(candidate.get("schema") in (1, 2) and candidate.get("kind") == kind
+    schema = candidate.get("schema")
+    require(schema in (1, 2, 3) and candidate.get("kind") == kind
             and candidate.get("snapshot_digest") == inputs["snapshot_digest"]
-            and candidate.get("input_digest") == record_digest(inputs)
-            and candidate.get("pdf") == f"{kind}.pdf",
+            and candidate.get("input_digest") == record_digest(inputs),
             "Candidate belongs to a different delivery or input version.")
-    if candidate["schema"] == 2:
+    if schema >= 2:
         require(candidate.get("humanizer") == HUMANIZER, "Candidate writing guide differs from the selected version.")
+    if schema == 3:
+        import referee_markdown
+
+        require(kind == "referee" and candidate.get("artifact") == "referee.md", "Unexpected Markdown artifact.")
+        data = (bundle / "referee.md").read_bytes()
+        require(digest(data) == candidate.get("artifact_sha256"), "The checked Markdown file has changed.")
+        outline = referee_markdown.inspect(data)
+        require(all(candidate.get(key) == value for key, value in outline.items()), "Report outline differs.")
+        return candidate
+    require(candidate.get("pdf") == f"{kind}.pdf", "Wrong PDF in the Writer candidate.")
     files = source_files(bundle / "source")
     manifest = {file: digest(data) for file, data in files.items()}
     require(candidate.get("entrypoint") in manifest and candidate.get("source_files") == manifest
@@ -311,9 +326,10 @@ def current_candidate(kind, bundle, inputs):
 
 def check_evidence(checks, inputs, candidate):
     require_text(checks, ("worker_session", "model", "effort", "render", "references"), "Writer self-check")
-    for key in ("input_digest", "source_digest", "pdf_sha256"):
+    bindings = ("input_digest", "artifact_sha256") if candidate["schema"] == 3 else ("input_digest", "source_digest", "pdf_sha256")
+    for key in bindings:
         require(checks.get(key) == candidate[key], f"Writer self-check does not match {key}.")
-    if candidate["schema"] == 2:
+    if candidate["schema"] >= 2:
         require_text(checks, ("humanizer",), "Humanizer editing and fidelity check")
     if candidate["kind"] == "paper":
         require_text(checks, ("fidelity",), "Writer self-check")
@@ -324,7 +340,7 @@ def check_evidence(checks, inputs, candidate):
             require_text(locations, ("statement", "proof"), f"target {target}")
     else:
         require_text(checks, ("scope",), "referee scope check")
-        if candidate["schema"] == 2:
+        if candidate["schema"] >= 2:
             require_text(checks, ("diagnosis_only",), "referee diagnosis check")
             issues = checks.get("issues")
             require(isinstance(issues, dict) and set(issues) == {"major", "minor"},
@@ -335,6 +351,22 @@ def check_evidence(checks, inputs, candidate):
                     require_text(item, ("location", "quotation", "problem"), f"{severity} issue {index}")
             require(not inputs["report_findings"] or any(issues.values()),
                     "The issue lists must cover the confirmed original findings.")
+            if candidate["schema"] == 3:
+                import referee_markdown
+
+                require(candidate["issue_counts"] == {key: len(items) for key, items in issues.items()},
+                        "Self-check issue counts differ from the numbered Markdown issues.")
+                openings = checks.get("openings")
+                require_text(openings, ("summary", "assessment"), "referee opening sentences")
+                for section, paragraph in candidate["opening_paragraphs"].items():
+                    require(referee_markdown.is_opening(paragraph, openings[section]),
+                            f"Quote the actual opening sentence of the {section}.")
+                count = candidate["issue_counts"]["major"]
+                require(type(openings.get("major_count")) is int and openings["major_count"] == count,
+                        "The major-issue count in the opening review differs from the report.")
+                require(referee_markdown.count_matches(openings["assessment"], count),
+                        "State the actual number of major issues in the first assessment sentence.")
+                require_text(checks, ("opening_judgment", "italics"), "referee lead and quotation review")
         if inputs.get("referee_comparison"):
             compared = checks.get("comparison")
             require(isinstance(compared, dict) and set(compared) == set(inputs["targets"]),
@@ -343,7 +375,7 @@ def check_evidence(checks, inputs, candidate):
                 require_text(locations, ("original", "script", "report"), f"comparison for target {target}")
         covered = checks.get("findings")
         require(isinstance(covered, dict) and set(covered) == {finding["id"] for finding in inputs["report_findings"]},
-                "Locate every approved finding in the rendered referee report.")
+                "Locate every approved finding in the referee report.")
         for finding in inputs["report_findings"]:
             fields = ["original_location", "evidence", "affected_conclusion"]
             if candidate["schema"] == 1 and "confirmed_revision" in finding:
@@ -356,8 +388,9 @@ def check_evidence(checks, inputs, candidate):
 def finish_delivery(kind, bundle, checks, read_inputs):
     inputs = read_inputs()
     candidate = current_candidate(kind, bundle, inputs)
-    require(candidate["schema"] == 2 or (bundle / "receipt.json").is_file(),
-            "Recompile the unfinished legacy draft in a fresh bundle under the current Writer instructions.")
+    current_schema = 3 if kind == "referee" else 2
+    require(candidate["schema"] == current_schema or (bundle / "receipt.json").is_file(),
+            "Prepare the unfinished legacy draft in a fresh bundle under the current Writer instructions.")
     evidence = read_record(checks)
     check_evidence(evidence, inputs, candidate)
     receipt = candidate | {"checks": evidence}
@@ -388,13 +421,15 @@ def verify_delivery(kind, bundle, read_inputs):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("inspect", "compile", "finish", "verify"))
+    parser.add_argument("action", choices=("inspect", "compile", "prepare", "finish", "verify"))
     parser.add_argument("--kind", required=True, choices=("paper", "referee"))
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--main", type=Path, help="Filtered main.tex beside its approval.json")
     mode.add_argument("--withdrawal", type=Path, help="Authorized public final-target withdrawal")
     parser.add_argument("--target", type=Path, help="Original target.json for a referee report")
-    parser.add_argument("--tex", type=Path, help="Draft TeX entrypoint in a dedicated source directory")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--tex", type=Path, help="Draft paper TeX entrypoint in a dedicated source directory")
+    source.add_argument("--markdown", type=Path, help="Standalone Markdown referee report")
     parser.add_argument("--bundle", type=Path, help="Writer's versioned build directory")
     parser.add_argument("--engine", choices=("pdflatex", "lualatex", "xelatex"), default="pdflatex")
     parser.add_argument("--checks", type=Path, help="Actual Writer self-check evidence JSON")
@@ -407,6 +442,8 @@ def main(argv=None):
         if args.action == "inspect":
             result = read_inputs()
             result["writing_guide"] = writing_guide()
+            if args.kind == "referee":
+                result["template"] = str(Path(__file__).resolve().parents[1] / "assets/writer-referee.md")
             if args.kind == "paper":
                 import manuscript
 
@@ -417,7 +454,10 @@ def main(argv=None):
                 ))
         else:
             require(args.bundle is not None, f"{args.action} requires --bundle.")
-            if args.action == "compile":
+            if args.action == "prepare":
+                require(args.kind == "referee" and args.markdown, "prepare requires --kind referee and --markdown.")
+                result = prepare_report(args.markdown, args.bundle, read_inputs)
+            elif args.action == "compile":
                 require(args.tex is not None, "compile requires --tex.")
                 result = compile_delivery(args.kind, args.tex, args.bundle, args.engine, read_inputs)
             elif args.action == "finish":

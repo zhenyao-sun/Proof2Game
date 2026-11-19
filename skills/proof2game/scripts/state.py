@@ -1090,9 +1090,11 @@ def deliverable(task, state, request):
             target = task / "target.json" if kind == "referee" else None
             receipt = writer.verify_delivery(kind, artifact.parent,
                                              lambda: writer.applicable_inputs(kind, main, target, withdrawal))
-            require(receipt["pdf"] == artifact.name, "checked artifact differs from the Writer's actual compiled PDF")
+            if kind == "referee":
+                require(receipt["schema"] == 3, "prepare the Markdown referee report with the current Writer")
+            require(receipt.get("artifact", receipt.get("pdf")) == artifact.name,
+                    "checked artifact differs from the Writer's verified file")
             if replacement:
-                require(receipt["schema"] == 2, "regenerate the replacement with the current Writer")
                 message = evidence(request.get("message_receipt"))
                 record(state, "referee-replaced", previous=copy.deepcopy(product),
                        snapshot_digest=delivery["snapshot_digest"])
