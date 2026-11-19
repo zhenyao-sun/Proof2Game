@@ -436,6 +436,32 @@ def validate_translation(original, translated, main_name):
     return dict(level_titles=level_titles, files=files)
 
 
+def set_tree_parents(levels, components):
+    """Connect each proof to its directly introduced statements in the map."""
+    by_id = {level['id']: level for level in levels}
+    local_settings = {}
+    for component in components:
+        level = by_id[component['id']]
+        if component['section'] == 1:
+            settings = component['ambient']
+            level['parent'] = settings[-1] if settings else None
+            if level['type'] == 'convention':
+                level['owner'] = None
+            else:
+                for setting in settings:
+                    if by_id[setting]['owner'] is None:
+                        by_id[setting]['owner'] = level['id']
+        else:
+            statement_id = component['node']
+            if level['type'] == 'convention':
+                level['owner'] = level['parent'] = statement_id
+                local_settings[statement_id] = level['id']
+            elif level['type'] == 'proof':
+                level['parent'] = local_settings.get(statement_id, statement_id)
+            else:
+                level['parent'] = by_id[statement_id]['paired']
+
+
 def make_game(main, approval=None, source_bindings=None, references_dir=None,
               verify_numbering=True, translation=None, model=TUTOR_MODEL, reasoning=TUTOR_REASONING):
     clean, full, checkpoint, state_bytes, record = eligibility(main, approval)
@@ -445,55 +471,29 @@ def make_game(main, approval=None, source_bindings=None, references_dir=None,
     byid = {c['id']: c for c in full['components']}
     levels = []
     for c in full['components']:
-        if c['type'] == 'proof':
-            parent, target = c['paired'], byid[c['paired']]
-        else:
-            parent, target = c.get('node'), c
+        target = byid[c['paired']] if c['type'] == 'proof' else c
         context_text = '\n'.join(byid[x]['text'] for x in c['ambient'])
-        levels.append(dict(id=c['id'], type=c['type'], title=target['title'] or '',
+        levels.append(dict(id=c['id'], type=c['type'],
+            title='Convention' if c['type'] == 'convention' else target['title'] or '',
             kind=target['kind'] if c['type'] != 'convention' else 'Convention',
-            paired=c['paired'], parent=parent, order=len(levels), manuscript_order=c['order'],
+            paired=c['paired'], order=len(levels), manuscript_order=c['order'],
             location=c['location'], structural_path=c['location'], section_title=c['heading'],
             source_file='snapshot/' + c['path'], text=c['text'], component_tex=c['text'],
             statement=target['text'],
             images=referenced_images(c['text'] + '\n' + target['text'] + '\n' + context_text, files),
             context=[dict(id=x, text=byid[x]['text']) for x in c['ambient']]))
-    level_byid = {level['id']: level for level in levels}
-    # Attach each canonical convention to the entrance of its existing scope.
-    for c in full['components']:
-        if c['type'] != 'convention':
-            continue
-        level = level_byid[c['id']]
-        if c['section'] == 1:
-            roots = [other for other in full['components'] if other['section'] == 1
-                     and other['type'] == 'statement' and c['id'] in other['ambient']]
-            shared = [byid[x] for x in c['ambient'] if byid[x]['type'] == 'convention'
-                      and byid[x]['location'] == '1']
-            level['parent'] = shared[-1]['id'] if shared else None
-            level['owner'] = roots[0]['id'] if roots else None
-            for other in roots:
-                settings = [x for x in other['ambient'] if byid[x]['section'] == 1]
-                if settings and settings[-1] == c['id']:
-                    level_byid[other['id']]['parent'] = c['id']
-        else:
-            owner_id = c['node']
-            owner = level_byid[owner_id]
-            level['owner'], level['parent'] = owner_id, owner['parent']
-            owner['parent'] = c['id']
-        level['title'] = c['heading']
-    for level in levels:
-        if level['type'] == 'convention':
-            level['title'] = 'Convention'
+    set_tree_parents(levels, full['components'])
     numbers = verified_numbers(main, files, full) if verify_numbering else None
     internal = reference_metadata(full, levels, numbers) if numbers is not None else {}
     if numbers is not None:
-        for c in full['components']:
+        for level in levels:
+            c = byid[level['id']]
             if c['type'] == 'convention' and c['section'] != 1:
                 target = byid[c['node']]
                 heading = f'Proof of {target["kind"]} {numbers["ms:" + target["id"]]}'
                 if target['title']:
                     heading += ' · ' + target['title']
-                level_byid[c['id']]['section_title'] = heading
+                level['section_title'] = heading
     # A second parse/check catches concurrent source/checkpoint/resource changes.
     final = manuscript.parse(main)[0]
     if final != clean or checkpoint.read_bytes() != state_bytes:
@@ -607,7 +607,7 @@ def site_digest(inventory):
 
 def browser_assets():
     runtime = Path(__file__).resolve().parents[1] / 'assets/game-runtime'
-    names = ['app.js', 'style.css', 'guide-diagram.mjs', 'browser-entry.mjs', 'browser-engine.mjs']
+    names = ['app.js', 'style.css', 'guide-diagram.mjs', 'level-tree.mjs', 'browser-entry.mjs', 'browser-engine.mjs']
     assets = {name: (runtime / name).read_bytes() for name in names}
     assets['index.html'] = (runtime / 'browser.html').read_bytes()
     release = (Path(__file__).resolve().parents[3] / 'VERSION').read_text(encoding='ascii').strip()
@@ -707,7 +707,7 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     release_license = script.parents[3] / 'LICENSE'
     if not release_license.is_file():
         raise Rejected('The Proof2Game release license is missing from the installation.')
-    required = ('browser-engine.mjs', 'browser-entry.mjs', 'guide-diagram.mjs', 'browser.html', 'app.js', 'style.css', 'vendor/katex.min.js',
+    required = ('browser-engine.mjs', 'browser-entry.mjs', 'guide-diagram.mjs', 'level-tree.mjs', 'browser.html', 'app.js', 'style.css', 'vendor/katex.min.js',
                 'vendor/katex.min.css', 'vendor/auto-render.min.js', 'vendor/LICENSE-KaTeX.txt',
                 'vendor/fonts/OFL.txt')
     if not all((runtime / name).is_file() for name in required):

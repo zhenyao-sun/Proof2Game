@@ -57,6 +57,72 @@ class GameExportTests(unittest.TestCase):
         with self.assertRaisesRegex(game.Rejected, 'route'):
             game.eligibility(self.main)
 
+    def test_proofs_branch_to_declared_children_in_manuscript_play_order(self):
+        components = self.script / 'components'
+        for name in ('outer-setting', 'inner-setting', 'upper-bound', 'upper-bound-proof'):
+            (components / (name + '.tex')).write_text('All values are real.\n')
+        source = self.main.read_text()
+        prefix, _, proofs = source.partition(r'\section{Detailed Proofs}')
+        _, bibliography, suffix = proofs.partition(r'\begin{bibdiv}')
+        self.main.write_text(prefix + r'''\section{Detailed Proofs}
+\MSnode{main}{1}
+\MScomponent{outer-setting}{convention}{components/outer-setting.tex}{}{}{}
+\MScomponent{lower-bound}{statement}{components/lower-bound.tex}{lower-bound-proof}{Lemma}{A nonnegative square}
+\MScomponent{upper-bound}{statement}{components/upper-bound.tex}{upper-bound-proof}{Lemma}{}
+\MScomponent{main-proof}{proof}{components/main-proof.tex}{main}{}{}
+\MSnode{lower-bound}{}
+\MScomponent{inner-setting}{convention}{components/inner-setting.tex}{}{}{}
+\MScomponent{lower-bound-proof}{proof}{components/lower-bound-proof.tex}{lower-bound}{}{}
+\MSendnode
+\MSnode{upper-bound}{}
+\MScomponent{upper-bound-proof}{proof}{components/upper-bound-proof.tex}{upper-bound}{}{}
+\MSendnode
+\MSendnode
+''' + bibliography + suffix)
+        main_proof = components / 'main-proof.tex'
+        main_proof.write_text(main_proof.read_text() + r'Use also Lemma~\ref{ms:upper-bound}.')
+        record, _ = self.approve()
+        levels = game.make_game(self.main, verify_numbering=False)[0]['levels']
+        self.assertEqual([level['id'] for level in levels], record['components'])
+        self.assertEqual([(level['id'], level['parent']) for level in levels], [
+            ('setting', None), ('main', 'setting'), ('outer-setting', 'main'),
+            ('lower-bound', 'main-proof'), ('upper-bound', 'main-proof'),
+            ('main-proof', 'outer-setting'), ('inner-setting', 'lower-bound'),
+            ('lower-bound-proof', 'inner-setting'), ('upper-bound-proof', 'upper-bound'),
+        ])
+        self.assertEqual({level['id']: level['owner'] for level in levels if 'owner' in level}, {
+            'setting': 'main', 'outer-setting': 'main', 'inner-setting': 'lower-bound',
+        })
+
+    def test_main_results_share_their_cumulative_settings(self):
+        source = self.main.read_text()
+        components = self.script / 'components'
+        for index, name in enumerate(('second', 'third'), 2):
+            setting = name + '-setting'
+            proof = name + '-proof'
+            for component in (setting, name, proof):
+                (components / (component + '.tex')).write_text('All values are real.\n')
+            source = source.replace(r'\section{Detailed Proofs}', '\n'.join([
+                rf'\subsection{{{name}}}',
+                rf'\MScomponent{{{setting}}}{{convention}}{{components/{setting}.tex}}{{}}{{}}{{}}',
+                rf'\MScomponent{{{name}}}{{statement}}{{components/{name}.tex}}{{{proof}}}{{Theorem}}{{}}',
+                r'\section{Detailed Proofs}',
+            ]))
+            source = source.replace(r'\begin{bibdiv}', '\n'.join([
+                rf'\MSnode{{{name}}}{{{index}}}',
+                rf'\MScomponent{{{proof}}}{{proof}}{{components/{proof}.tex}}{{{name}}}{{}}{{}}',
+                r'\MSendnode', r'\begin{bibdiv}',
+            ]))
+        self.main.write_text(source)
+        self.approve()
+        levels = game.make_game(self.main, verify_numbering=False)[0]['levels']
+        self.assertEqual([(level['id'], level['parent']) for level in levels[:6]], [
+            ('setting', None), ('main', 'setting'), ('second-setting', 'setting'),
+            ('second', 'second-setting'), ('third-setting', 'second-setting'), ('third', 'third-setting'),
+        ])
+        self.assertEqual([level['owner'] for level in levels if level['type'] == 'convention'],
+                         ['main', 'second', 'third'])
+
     @unittest.skipUnless(sys.platform == 'darwin' and shutil.which('pdflatex'), 'Requires macOS with TeX')
     def test_public_site_preserves_script_attribution_and_cited_locations(self):
         main_text = self.main.read_text()

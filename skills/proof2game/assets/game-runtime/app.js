@@ -421,7 +421,6 @@
     const available = new Set(queue.filter(level => done.has(level.id)).map(level => level.id));
     if (next) available.add(next.id);
     const visible = new Set(available);
-    queue.forEach(level => { if (level.type === 'statement' && visible.has(level.id) && level.paired) visible.add(level.paired); });
     // Prefer server-provided visibility; fallback is presentation only.
     if (state.level_status && typeof state.level_status === 'object') {
       available.clear(); visible.clear();
@@ -430,6 +429,17 @@
         if (['locked','open','complete'].includes(status)) visible.add(level.id);
         if (['open','complete'].includes(status)) available.add(level.id);
       });
+    } else {
+      const byId = new Map(queue.map(level => [level.id,level]));
+      for (const id of available) {
+        const level = byId.get(id);
+        if (level.type === 'statement' && level.paired) visible.add(level.paired);
+      }
+      // Iterating the growing set follows each visible branch back to its root.
+      for (const id of visible) {
+        const parent = byId.get(id)?.parent;
+        if (byId.has(parent)) visible.add(parent);
+      }
     }
     // Never trust these display sets as authority: every action is server-validated.
     return {done,next,available,visible};

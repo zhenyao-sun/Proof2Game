@@ -16,7 +16,7 @@ import threading
 import time
 
 RUNTIME = Path(__file__).resolve().parents[1] / 'assets/game-runtime/server.mjs'
-DIAGRAM = RUNTIME.with_name('guide-diagram.mjs')
+RUNTIME_MODULES = ('guide-diagram.mjs', 'level-tree.mjs')
 
 FAKE_CLI = r'''#!/usr/bin/env python3
 import json, os, pathlib, sys, time
@@ -90,7 +90,8 @@ class GameRuntimeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix='proof2game-test-')
         self.root = Path(self.temp.name)
         shutil.copyfile(RUNTIME, self.root/'server.mjs')
-        shutil.copyfile(DIAGRAM, self.root/DIAGRAM.name)
+        for name in RUNTIME_MODULES:
+            shutil.copyfile(RUNTIME.with_name(name), self.root/name)
         (self.root/'index.html').write_text('<html>game</html>')
         (self.root/'app.js').write_text('')
         (self.root/'style.css').write_text('')
@@ -766,7 +767,7 @@ class GameRuntimeTests(unittest.TestCase):
         original_root = self.root
         self.root = original_root/'clean-install'
         self.root.mkdir()
-        for name in ('server.mjs', DIAGRAM.name, 'index.html', 'app.js', 'style.css', 'game.json'):
+        for name in ('server.mjs', *RUNTIME_MODULES, 'index.html', 'app.js', 'style.css', 'game.json'):
             shutil.copyfile(original_root/name, self.root/name)
         shutil.copytree(original_root/'snapshot', self.root/'snapshot')
         shutil.copyfile(original_root/'fake-codex', self.root/'fake-codex')

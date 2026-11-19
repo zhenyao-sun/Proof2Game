@@ -14,7 +14,7 @@ const answer=(extra={})=>({message:'A short explanation.',diagram:null,step_goal
 async function setup(options={}){
  const {createBrowserGame}=await import(moduleURL);const storage=options.storage||new MemoryStorage();const calls=[];
  const fetcher=options.fetcher||async function(url,options){calls.push({url,options});const result=answer();if(JSON.parse(options.body).messages[0].content[0].text.startsWith('Respond to')){delete result.phase;delete result.step_goal;}return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(result)}}]})};};
- const engine=createBrowserGame(fixtureGame(),[{file:'snapshot/main.tex',text:'Synthetic source'}],{storage,fetcher,onMissingKey:options.onMissingKey});
+ const engine=createBrowserGame(options.game||fixtureGame(),[{file:'snapshot/main.tex',text:'Synthetic source'}],{storage,fetcher,onMissingKey:options.onMissingKey});
  async function act(action,extras={}){const value=await engine.request('/api/game');return engine.request('/api/action',{action,level_id:'result',mode:'guide',expected_revision:value.progress.revision,request_id:crypto.randomUUID(),...extras});}
  return {engine,storage,calls,act};
 }
@@ -39,6 +39,74 @@ test('completion order, undo and snapshot validation survive browser saves',asyn
  assert.deepEqual((await f.engine.request('/api/game')).progress.completed,[]);
  const value=await f.engine.request('/api/save/export');value.progress.game_id='wrong';await assert.rejects(f.act('save_import',{save:value}),/snapshot/);
  assert.deepEqual((await f.engine.request('/api/game')).progress.completed,[]);
+});
+
+test('a proof branches to its direct subresults while old saves keep manuscript order', async () => {
+  const value = fixtureGame();
+  delete value.chinese;
+  const convention = (id, scope, owner, parent) => ({id, type:'convention', structural_path:scope, owner, parent, text:id});
+  const statement = (id, parent) => ({id, type:'statement', paired:id+'-proof', parent, text:id});
+  const proof = id => ({id:id+'-proof', type:'proof', paired:id, parent:id, text:id});
+  value.levels = [
+    convention('global', '1', 'root', null),
+    statement('root', 'local'),
+    convention('local', '2.1', 'root', 'global'),
+    statement('left', 'left-setting'),
+    statement('right', 'root'),
+    proof('root'),
+    convention('left-setting', '2.1.1', 'left', 'root'),
+    proof('left'), proof('right'),
+  ];
+  const before = structuredClone(value);
+  const expectedParents = [null, 'global', 'root', 'root-proof', 'root-proof', 'local', 'left', 'left-setting', 'right'];
+  const game = await setup({game:value});
+  const initial = await game.engine.request('/api/game');
+  assert.deepEqual(initial.game.levels.map(level => level.parent), expectedParents);
+  assert.deepEqual(value, before);
+
+  const oldSave = await game.engine.request('/api/save/export');
+  oldSave.progress.completed = ['global', 'root', 'local'];
+  let state = await game.act('save_import', {save:oldSave});
+  assert.deepEqual(state.progress.completed, oldSave.progress.completed);
+  assert.equal(state.level_status.left, 'open');
+  assert.equal(state.level_status['root-proof'], 'locked');
+  assert.equal(state.level_status['left-proof'], 'locked');
+  assert.equal(state.level_status.right, 'hidden');
+  assert.equal(state.level_status['right-proof'], 'hidden');
+  await assert.rejects(game.act('understand_all', {level_id:'root-proof'}), /locked/i);
+
+  const replay = await setup({game:initial.game, storage:game.storage});
+  state = await replay.engine.request('/api/game');
+  assert.deepEqual(state.game.levels.map(level => level.parent), expectedParents);
+  for (const level of value.levels.slice(3)) {
+    assert.deepEqual(Object.keys(state.level_status).filter(id => state.level_status[id] === 'open'), [level.id]);
+    for (const {id, parent} of state.game.levels) {
+      if (parent && state.level_status[id] !== 'hidden') assert.notEqual(state.level_status[parent], 'hidden');
+    }
+    state = await replay.act('understand_all', {level_id:level.id});
+  }
+  assert.deepEqual(state.progress.completed, value.levels.map(level => level.id));
+});
+
+test('Main Results conventions follow the manuscript context across subsections', async () => {
+  const value = fixtureGame();
+  delete value.chinese;
+  const [statement, proof] = value.levels;
+  function setting(id, structural_path, parent, context) {
+    return {id, type:'convention', parent, structural_path, owner:statement.id, context:context.map(id => ({id})), text:id};
+  }
+  value.levels = [
+    setting('global', '1', null, []),
+    setting('second', '1.1', 'global', ['global']),
+    setting('third', '1.2', 'global', ['global', 'second']),
+    {...statement, structural_path:'1.2', parent:'third', context:[{id:'global'}, {id:'second'}, {id:'third'}]},
+    proof,
+  ];
+  const fixture = await setup({game:value});
+  const state = await fixture.engine.request('/api/game');
+  assert.deepEqual(state.game.levels.map(level => level.parent), [null, 'global', 'second', 'third', statement.id]);
+  assert.equal(state.level_status.second, 'hidden');
+  assert.equal(state.level_status.third, 'hidden');
 });
 test('failed DeepSeek requests and invented confirmations do not change progress',async()=>{
  for(const status of [401,402,429,500]){const f=await setup({fetcher:async()=>({ok:false,status})});f.engine.setKey('fake-key');await assert.rejects(f.act('start'));assert.equal((await f.engine.request('/api/game')).progress.revision,0);}

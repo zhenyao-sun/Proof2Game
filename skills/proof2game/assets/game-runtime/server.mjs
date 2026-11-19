@@ -7,6 +7,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import {spawn, spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {createLevelTree} from './level-tree.mjs';
 import {diagramSchema, renderGuideDiagram, validGuideImage} from './guide-diagram.mjs';
 
 const RUNTIME = path.dirname(fileURLToPath(import.meta.url));
@@ -36,24 +37,8 @@ const game = json(path.join(ROOT,'game.json'));
 const MODEL=game.model,EFFORT=game.reasoning_effort;
 if(game.schema!==1 || typeof MODEL!=='string'||!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(MODEL)||
     !['low','medium','high','xhigh','max','ultra'].includes(EFFORT)|| !game.snapshot_digest || !game.id || !Array.isArray(game.levels) || !game.levels.length) fail('Unsupported or incomplete game package.');
-const byId=new Map();
-for(const level of game.levels){
-  if(!level.id || byId.has(level.id) || !['statement','proof','convention'].includes(level.type) || typeof level.text!=='string') fail('Invalid game level.');
-  byId.set(level.id,level);
-}
-for(const level of game.levels){
-  if(level.type==='convention'){
-    const owner=byId.get(level.owner);
-    if((level.owner&&!owner)||level.paired)fail('Invalid section convention.');
-    continue;
-  }
-  const pair=byId.get(level.paired);
-  if(!pair || pair.paired!==level.id || pair.type===level.type) fail('Invalid statement/proof pairing.');
-}
-for(const level of game.levels){
-  const seen=new Set([level.id]);let ancestor=level.parent;
-  while(ancestor){if(!byId.has(ancestor)||seen.has(ancestor))fail('Invalid level hierarchy.');seen.add(ancestor);ancestor=byId.get(ancestor).parent;}
-}
+const {levels: mapLevels, byId, levelStatus}=createLevelTree(game.levels,fail);
+game.levels=mapLevels;
 if(!game.snapshot_files || !Object.keys(game.snapshot_files).length) fail('Package snapshot checksums are missing.');
 function verifySnapshot(){
   for(const [relative,expected] of Object.entries(game.snapshot_files)){
@@ -322,27 +307,6 @@ function saveAction(request,signature){
   cancelTurns();
   candidate.recent_actions=[];candidate.revision=progress.revision;
   return finishAction(candidate,request,signature);
-}
-function levelStatus(value,id){
-  const index=game.levels.findIndex(level=>level.id===id);
-  if(index<0)fail('Unknown level.',404);
-  if(value.completed.includes(id))return 'complete';
-  if(index===value.completed.length)return 'open';
-  const level=game.levels[index];
-  if(level.type==='convention'){
-    const owner=byId.get(level.owner);
-    const entry=owner?.type==='proof'?owner.paired:owner?.id;
-    if(entry&&game.levels.findIndex(item=>item.id===entry)<=value.completed.length)return 'locked';
-  }
-  if(level.type==='statement'){
-    const entrance=byId.get(level.parent);
-    if(entrance?.type==='convention'&&entrance.owner===level.id&&game.levels.findIndex(item=>item.id===entrance.id)<=value.completed.length)return 'locked';
-  }
-  if(level.type==='proof'){
-    const pairIndex=game.levels.findIndex(item=>item.id===level.paired);
-    if(pairIndex<=value.completed.length)return 'locked';
-  }
-  return 'hidden';
 }
 let cliHealth={available:false,authenticated:false,message:'Checking local Codex…'};
 function isExecutable(candidate){
