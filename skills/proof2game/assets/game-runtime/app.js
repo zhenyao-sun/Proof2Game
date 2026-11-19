@@ -50,7 +50,7 @@
     aiUnavailable:'unavailable',aiCheckLogin:'add API key',aiConnected:'connected',aiReady:'ready to connect',
     loading:'Loading the map…',loadingProgress:'Loading Proof2Game…',untitled:'Let understanding grow.',
     reload:'Please restart the game and refresh this page.',level:'Level',seed:'A SEED OF UNDERSTANDING',
-    lockedShort:'Locked',lockedError:'This level is locked.',reference:'Reference',formulaSource:'Formula — view source',
+    lockedShort:'Locked',lockedError:'This level is locked.',reference:'Reference',formulaSource:'Formula — view source',formulaScroll:'Scroll horizontally for the full formula',
     proofOf:name=>'Proof of '+name,pairedProof:()=> 'Proof location: ',understood:'Understood ✓',assistant:'ASSISTANT',
     chatPlaceholder:'Ask a question…',chatHint:'Ask anything about this mathematics.',chatEmpty:'What would you like to discuss?',
     undo:'Undo last action',withdraw:'Withdraw and edit',load:'Load',download:'Download',remove:'Delete',savedGame:'Saved game',
@@ -85,7 +85,7 @@
     aiUnavailable:'不可用',aiCheckLogin:'请配置 API key',aiConnected:'已连接',aiReady:'待连接',
     loading:'正在加载地图…',loadingProgress:'正在加载 Proof2Game…',untitled:'Proof2Game',
     reload:'请重新启动游戏并刷新页面。',level:'关卡',seed:'起点',
-    lockedShort:'未解锁',lockedError:'此关尚未解锁。',reference:'引用',formulaSource:'查看公式源码',
+    lockedShort:'未解锁',lockedError:'此关尚未解锁。',reference:'引用',formulaSource:'查看公式源码',formulaScroll:'左右滑动查看完整公式',
     proofOf:name=>name+'的证明',pairedProof:()=> '证明位置：',understood:'已理解 ✓',assistant:'助手',
     chatPlaceholder:'输入问题…',chatHint:'可以讨论你感兴趣的内容。',chatEmpty:'你想聊些什么？',
     undo:'撤回上一步',withdraw:'撤回并编辑',load:'载入',download:'下载',remove:'删除',savedGame:'存档',manualSave:'手动存档',
@@ -332,14 +332,16 @@
             catch(error) {
               const details=element('details','formula-fallback');details.append(element('summary','',t('formulaSource')),element('pre','',part.text));details.title=String(error.message);node.append(details);
             }
+            const frame=part.display?element('div','equation-frame'):node;
+            if(part.display)frame.append(node);
             if(part.equation){
               const row=element('div','numbered-equation'),numbers=element('div','equation-numbers');
               for(const key of part.equation.references){
                 const ref=referenceTarget(key);if(!ref)continue;
                 const number=internalReferenceLink(key,'('+ref.number+')');number.id=referenceAnchor(key);numbers.append(number);
               }
-              row.append(node,numbers);parent.append(row);
-            }else parent.append(node);
+              row.append(frame,numbers);parent.append(row);
+            }else parent.append(frame);
           }
         } else parent.append(document.createTextNode(m[0]));
       } else if(m[6]!==undefined){
@@ -535,7 +537,34 @@
     $('next-level').textContent=(!next?t('revisit'):done.size?t('continue'):t('start'))+' ↗';
     $('next-level').disabled=busy || !levels().length;
   }
+  let equationCheckPending=false;
+  function scheduleEquationCheck(){
+    if(equationCheckPending)return;
+    equationCheckPending=true;
+    requestAnimationFrame(()=>{
+      equationCheckPending=false;
+      const mobile=mobileLayout();
+      for(const frame of document.querySelectorAll('.equation-frame')){
+        const scroller=frame.firstElementChild;
+        const overflow=mobile && scroller.clientWidth>0 && scroller.scrollWidth>scroller.clientWidth+1;
+        if(overflow){
+          const label=t('formulaScroll');
+          frame.dataset.scrollHint=label;
+          scroller.tabIndex=0;
+          scroller.setAttribute('role','region');
+          scroller.setAttribute('aria-label',label);
+        }else if(frame.hasAttribute('data-scroll-hint')){
+          delete frame.dataset.scrollHint;
+          scroller.removeAttribute('tabindex');
+          scroller.removeAttribute('role');
+          scroller.removeAttribute('aria-label');
+        }
+      }
+    });
+  }
+  document.fonts?.addEventListener('loadingdone',scheduleEquationCheck);
   function renderMobileControls(){
+    scheduleEquationCheck();
     const panel = contentPanel ? 'content' : chatMode();
     $('level-dialog').dataset.panel = panel;
     for (const name of ['content','guide','chat']) {
@@ -571,14 +600,28 @@
         internalReferenceLink(proofLink[0],citation),document.createTextNode(full.slice(at+citation.length)));
     }
   }
+  function sizeComposerInput() {
+    const input = $('chat-input');
+    input.style.height = '';
+    if (mobileLayout() && input.value && !window.CSS?.supports('field-sizing', 'content') && input.scrollHeight) {
+      input.style.height = input.scrollHeight + 'px';
+    }
+  }
+  function renderComposer(mode) {
+    const mobile = mobileLayout();
+    const input = $('chat-input');
+    input.rows = mobile ? 1 : 2;
+    input.placeholder = t(mobile || mode === 'chat' ? 'chatPlaceholder' : 'placeholder');
+    document.querySelector('.composer-hint').textContent = t(mode === 'chat' ? 'chatHint' : 'composerHint');
+    requestAnimationFrame(sizeComposerInput);
+  }
   function renderLevel() {
     if (!currentLevel || !state) return;
     const level=levels().find(item=>item.id===currentLevel); if (!level) return;
     renderMobileControls();
     const saved=conversationState(),regular=chatMode()==='chat'; const done=completed().has(currentLevel);
     for(const [mode,id] of [['guide','mode-guide'],['chat','mode-chat']]){const tab=$(id);tab.setAttribute('aria-pressed',String(chatMode()===mode));tab.disabled=busy||saveBusy;}
-    $('chat-input').placeholder=regular?t('chatPlaceholder'):t('placeholder');
-    document.querySelector('.composer-hint').textContent=regular?t('chatHint'):t('composerHint');
+    renderComposer(chatMode());
     renderLevelHeading(level);
     renderRich($('level-original'),localizedLevel(level).text,{levelId:level.id});
     if(level.type==='statement'){
@@ -896,7 +939,10 @@
     contentPanel = panel === 'content';
     $('chat-input').value=conversationDrafts.get(id+':'+chatMode())??conversationState(id).draft??'';
     notice('level-error','');renderLevel();
-    if (!$('level-dialog').open) $('level-dialog').showModal();
+    if (!$('level-dialog').open) {
+      $('level-dialog').showModal();
+      if (mobileLayout()) $('mobile-'+panel).focus({preventScroll:true});
+    }
     $('messages').scrollTop=$('messages').scrollHeight;
     document.querySelector('.component-scroll').scrollTop=0;
     if(panel!=='content' && panel!==chatMode()){
@@ -1035,7 +1081,11 @@
   $('close-level').addEventListener('click',closeLevel);$('close-level-small').addEventListener('click',closeLevel);
   $('level-dialog').addEventListener('cancel',event=>{event.preventDefault();closeLevel();});
   $('level-dialog').addEventListener('close',()=>{clearTimeout(prefetchTimer);const button=[...document.querySelectorAll('.level-node')].find(el=>el.dataset.levelId===lastFocusedNode);button?.focus();schedulePrefetch();});
-  $('chat-input').addEventListener('input',()=>{$('send-message').disabled=busy || saveBusy || !$('chat-input').value.trim();});
+  $('chat-input').addEventListener('input',()=>{
+    sizeComposerInput();
+    $('send-message').disabled=busy || saveBusy || !$('chat-input').value.trim();
+  });
+  $('chat-input').addEventListener('focus',sizeComposerInput);
   // Safari can report compositionend before the commit's Enter keydown.
   // Native IMEs may also identify that key with code 229 rather than isComposing.
   let composing=false,compositionJustEnded=false,compositionTimer;
@@ -1062,17 +1112,24 @@
     if(needsBrowserKey()){window.openProof2GameConnection();return;}
     // Keep unsent feedback visible if the request fails.
     const levelId=currentLevel,mode=chatMode();
-    if(await act('message',{message})&&currentLevel===levelId&&chatMode()===mode){input.value='';$('send-message').disabled=true;if($('level-dialog').open)input.focus();}
+    if(await act('message',{message})&&currentLevel===levelId&&chatMode()===mode){
+      input.value='';sizeComposerInput();$('send-message').disabled=true;
+      if($('level-dialog').open)input.focus();
+    }
   });
   document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(prefetchTimer);else schedulePrefetch();});
   window.addEventListener('pagehide',()=>clearTimeout(prefetchTimer));
   let resizeTimer;
   let wasMobile=mobileLayout();
   window.addEventListener('resize',()=>{
+    scheduleEquationCheck();
     if(mobileLayout()!==wasMobile){
       wasMobile=mobileLayout();
       const level=state && levels().find(item=>item.id===currentLevel);
-      if(level)renderLevelHeading(level);
+      if(level){
+        renderLevelHeading(level);
+        renderComposer(chatMode());
+      }
     }
     clearTimeout(resizeTimer);
     resizeTimer=setTimeout(()=>{if(state)renderForest();},120);

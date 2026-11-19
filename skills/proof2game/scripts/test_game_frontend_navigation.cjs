@@ -15,7 +15,7 @@ class Node{
  showModal(){this.open=true;}
  close(){const was=this.open;this.open=false;if(was)this.fire('close');}
  click(){return this.fire('click');}
- focus(){} setSelectionRange(){} setPointerCapture(){} releasePointerCapture(){} hasPointerCapture(){return false;}
+ focus(){document.activeElement=this;} setSelectionRange(){} setPointerCapture(){} releasePointerCapture(){} hasPointerCapture(){return false;}
  closest(selector){if(selector==='#messages'&&this===nodes.get('messages'))return this;if(selector==='a.internal-reference'&&this.tag==='a'&&this.className?.includes('internal-reference'))return this;return this.parent?.closest(selector)||null;}
  getBoundingClientRect(){return {top:0};}
 }
@@ -258,6 +258,8 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  const mobilePane=()=>nodes.get('level-dialog').dataset.panel;
  await descendants(nodes.get('forest')).find(node=>node.dataset.levelId==='entry').fire('click');await settle();
  assert.equal(mobilePane(),'guide');
+ assert.equal(document.activeElement,nodes.get('mobile-guide'),'opening keyboard focus matches the selected panel');
+ assert.equal(nodes.get('chat-input').rows,1,'mobile input starts on one row');
  assert.equal(nodes.get('mobile-back').disabled,true);
  assert.equal(nodes.get('mobile-forward').disabled,true);
  await clickControl('mobile-chat');

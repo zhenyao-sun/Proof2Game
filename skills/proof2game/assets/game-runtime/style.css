@@ -49,7 +49,7 @@
 }
 
 .numbered-equation{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:stretch;margin:.9em 0;min-width:0}
-.numbered-equation>.rendered-equation{margin:0}
+.numbered-equation>.equation-frame>.rendered-equation{margin:0}
 .equation-numbers{display:flex;flex-direction:column;justify-content:space-around;gap:8px;font:11px/1.6 var(--sans);white-space:nowrap;padding:4px 0}
 .equation-numbers a{color:#6c7e61;text-decoration:none}
 .equation-numbers a:hover{text-decoration:underline}
@@ -118,8 +118,8 @@
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 2px;
-    padding: 6px max(4px, env(safe-area-inset-right)) 6px max(4px, env(safe-area-inset-left));
-    background: var(--paper);
+    padding: 2px max(4px, env(safe-area-inset-right)) 2px max(4px, env(safe-area-inset-left));
+    background: #fffef9;
     border-bottom: 1px solid var(--line);
   }
   .mobile-history, .mobile-actions { display: flex; }
@@ -129,30 +129,41 @@
     border: 0;
     border-radius: 8px;
     padding: 0;
-    font-size: 23px;
-    color: var(--ink);
+    display: grid;
+    place-items: center;
+    color: #485e50;
     background: transparent;
   }
+  .mobile-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .mobile-level-toolbar button:focus-visible { outline: 2px solid var(--green); outline-offset: -3px; }
   .mobile-panels {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 2px;
-    padding: 3px;
-    background: #e8eddf;
-    border-radius: 12px;
+    gap: 0;
   }
   .mobile-panels button {
     min-width: 0;
     min-height: 44px;
     padding: 0 1px;
     border: 0;
-    border-radius: 9px;
+    position: relative;
+    border-radius: 6px;
     white-space: nowrap;
-    font: 600 clamp(13px, 3.7vw, 15px)/1.25 var(--sans);
-    color: #526752;
+    font: 500 clamp(13px, 3.7vw, 15px)/1.25 var(--sans);
+    color: #56645a;
     background: transparent;
   }
-  .mobile-panels button[aria-pressed="true"] { color: white; background: var(--green); }
+  .mobile-panels button[aria-pressed="true"] { font-weight: 650; color: #28563b; }
+  .mobile-panels button[aria-pressed="true"]::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 15%;
+    right: 15%;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--green);
+  }
   .level-layout { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
   .level-dialog[data-panel="content"] .chat-panel,
   .level-dialog:not([data-panel="content"]) .component-panel,
@@ -169,23 +180,28 @@
   .component-scroll { padding-right: 0; }
   .component-scroll .original-text { font-size: 16px; }
   .component-footer .whole-button { min-height: 44px; font-size: 14px; }
-  .messages { padding: 16px 12px; scroll-behavior: auto; }
+  .chat-panel { background: #fafaf6; }
+  .messages { padding: 16px 12px 8px; scroll-behavior: auto; }
   .chat-message {
     width: fit-content;
-    max-width: 94%;
+    max-width: 97%;
     margin: 0 auto 14px 0;
-    padding: 10px 12px;
-    border-radius: 4px 14px 14px;
-    background: #f1f4e9;
+    padding: 12px 14px;
+    border-radius: 5px 15px 15px;
+    background: #fffefb;
+    box-shadow: inset 0 0 0 1px #e6e9df;
   }
   .chat-message.user {
     margin: 0 0 14px auto;
+    max-width: 89%;
     padding: 10px 12px;
     border-radius: 14px 4px 14px 14px;
-    background: #e0e9da;
+    background: #e5eddf;
+    box-shadow: none;
   }
   .chat-message.user.with-undo { padding-bottom: 37px; }
   .chat-message .message-body { font-size: 15px; line-height: 1.7; }
+  .chat-message .prose-run { line-height: 1.65; }
   .message-label {
     position: absolute;
     width: 1px; height: 1px;
@@ -193,6 +209,34 @@
     overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }
   .message-label::before, .chat-message.user .message-label::before { content: none; }
-  .chat-form { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
-  .composer textarea { font-size: 16px; }
+  .step-controls:not(:empty) { padding: 2px 14px 6px; }
+  .understand-button { font-size: 13px; min-height: 40px; padding: 6px 13px; background: #eef3e8; border-color: #d4dfc7; }
+  .chat-form { padding: 8px 12px max(8px, env(safe-area-inset-bottom)); background: #fffef9; }
+  .composer { gap: 8px; align-items: center; padding: 1px 2px 1px 13px; border-radius: 18px; }
+  .composer textarea { field-sizing: content; padding: 2px 0; font-size: 16px; line-height: 1.4; max-height: 6em; }
+  .composer textarea::placeholder { color: #69796a; }
+  .composer .send-button { position: relative; isolation: isolate; flex-basis: 44px; width: 44px; height: 44px; background: transparent; }
+  .composer .send-button::before { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: var(--green); z-index: -1; }
+  .composer-hint { display: none; }
+}
+
+
+.equation-frame { min-width: 0; }
+@media (max-width: 760px) {
+  /* KaTeX groups safe breakpoints into inline-block bases, leaving matrices and
+     stacked structures intact. Explicit equation tags need their original row. */
+  .rendered-equation .katex-display > .katex:not(:has(.katex-tag)) {
+    white-space: normal;
+    text-wrap: balance;
+  }
+  .message-body .rendered-equation .katex { font-size: 1.16em; }
+  .equation-frame[data-scroll-hint]::after {
+    content: attr(data-scroll-hint);
+    display: block;
+    margin: -.45em 0 .75em;
+    color: var(--muted);
+    font: 12px/1.45 var(--sans);
+  }
+  .numbered-equation .equation-frame[data-scroll-hint]::after { margin: .15em 0 0; }
+  .equation-frame .rendered-equation:focus-visible { outline-offset: -2px; }
 }

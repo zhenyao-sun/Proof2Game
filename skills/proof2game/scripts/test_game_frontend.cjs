@@ -35,6 +35,15 @@ assert.equal(all(equation,x=>x.className==='numbered-equation').length,1);assert
 const tutorEquation=render('\\[a+b=c\\]',{macroLevelId:'notation'});
 assert.equal(all(tutorEquation,x=>x.className==='numbered-equation').length,0);
 assert(!tutorEquation.textContent.includes('(1.1)'));checks++;
+// Both kinds of display share the equation scroller. The reference number
+// stays outside it, so horizontal scrolling cannot move the citation away.
+for(const parent of [equation,tutorEquation]){
+ const [frame]=all(parent,node=>node.className==='equation-frame');
+ assert.equal(frame.children[0].className,'rendered-equation');
+ assert(frame.children[0].math);
+ assert.equal(all(frame,node=>node.id==='ref-eq%3Aone').length,0);
+ checks++;
+}
 const tutorReference=render('See \\eqref{eq:one}.',{macroLevelId:'notation'});
 assert.equal(all(tutorReference,x=>x.tag==='a')[0].textContent,'(1.1)');checks++;
 for(const [text,expected] of [['Author, Theorem 2',['/references/Author.pdf#page=1']],['[Author](/references/Author.pdf#page=5)',['/references/Author.pdf#page=5']],['[fake](/references/secret.pdf)',[]],['[Author](/references/Author.pdf#page=99)',[]],['Authorland',[]],['`Author`',[]]]){
@@ -82,4 +91,36 @@ let macroValue;
 context.window.katex.render=(text,node,options)=>{macroValue=options.macros['\\symbol'];originalRender(text,node,options);};
 render('$\\symbol$',{levelId:'claim'});
 assert.equal(macroValue,'\\mathbb{R}');checks++;
+
+// A formula gets a swipe hint and a keyboard scroll stop only when its
+// rendered contents actually exceed the visible mobile region.
+const scrollBox = {
+ clientWidth: 220, scrollWidth: 380, attributes: {},
+ setAttribute(name,value){this.attributes[name]=value;},
+ removeAttribute(name){delete this.attributes[name];if(name==='tabindex')delete this.tabIndex;},
+};
+const frame = {
+ firstElementChild:scrollBox, dataset:{},
+ hasAttribute(name){return name==='data-scroll-hint' && 'scrollHint' in this.dataset;},
+};
+let phone = true;
+const layoutContext = {
+ document:{querySelectorAll:()=>[frame]}, requestAnimationFrame:fn=>fn(), mobileLayout:()=>phone, t:key=>key,
+};
+vm.createContext(layoutContext);
+vm.runInContext(source.slice(source.indexOf('  let equationCheckPending'),source.indexOf('  function renderMobileControls')), layoutContext);
+function checkScrollHint(width, expected){
+ scrollBox.clientWidth=width;
+ layoutContext.scheduleEquationCheck();
+ assert.equal('scrollHint' in frame.dataset,expected);
+ assert.equal(scrollBox.tabIndex,expected?0:undefined);
+ assert.equal(scrollBox.attributes['aria-label'],expected?'formulaScroll':undefined);
+ checks++;
+}
+checkScrollHint(220,true);
+checkScrollHint(380,false);
+checkScrollHint(0,false);
+checkScrollHint(220,true);
+phone=false;
+checkScrollHint(220,false);
 console.log(JSON.stringify({ok:true,rendering_cases:checks,actual_katex_fragments:formulaCount}));
