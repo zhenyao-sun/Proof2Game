@@ -98,7 +98,7 @@ Authors can [export and publish a game directory to GitHub Pages](skills/proof2g
 
 ## Examples
 
-- [Local smoothing for the Euclidean wave equation](https://zhenyao-sun.github.io/Proof2Game-OpenAI-Local-Smoothing/) — based on the OpenAI manuscript dated October 25, 2026. This existing example uses the earlier Mac/Codex player.
+- [Local smoothing for the Euclidean wave equation](https://zhenyao-sun.github.io/Proof2Game-OpenAI-Local-Smoothing/) — based on the OpenAI manuscript dated October 25, 2026. Play directly in your browser with your own DeepSeek API key.
 
 ## Revise an unpublished paper
 

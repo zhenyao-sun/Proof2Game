@@ -87,3 +87,33 @@ test('repeated save imports use bounded, content-free action receipts',async()=>
   assert.equal(current.progress.recent_actions.length,1);assert.match(current.progress.recent_actions[0].signature,/^[a-f0-9]{64}$/);
  }
 });
+
+test('browser loader bounds parallel downloads and rejects modified manuscript files',async()=>{
+ const {loadBrowserGame}=await import(moduleURL);
+ const value=fixtureGame(),encoder=new TextEncoder();
+ const files=new Map([['game.json',encoder.encode(JSON.stringify(value))]]);
+ for(const name of Object.keys(value.snapshot_files)){
+  const bytes=encoder.encode('Synthetic source');
+  value.snapshot_files[name]=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+  files.set(name,bytes);
+ }
+ for(let index=0;index<9;index++)files.set('snapshot/resource-'+index+'.tex',encoder.encode('Resource '+index));
+ files.set('game.json',encoder.encode(JSON.stringify(value)));
+ const records={};
+ for(const [name,bytes] of files)records[name]={size:bytes.length,sha256:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('')};
+ const manifest=encoder.encode(JSON.stringify({schema:1,launch_mode:'browser',game_id:value.id,files:records}));
+ let active=0,peak=0,corrupt=false;
+ const fetcher=async target=>{
+  const name=new URL(target).pathname.replace('/games/paper/','');
+  if(name==='proof2game.json')return new Response(manifest);
+  active++;peak=Math.max(peak,active);
+  await new Promise(resolve=>setImmediate(resolve));
+  active--;
+  return new Response(corrupt&&name==='snapshot/main.tex'?encoder.encode('changed'):files.get(name));
+ };
+ const engine=await loadBrowserGame({fetcher,storage:new MemoryStorage()});
+ assert.equal((await engine.request('/api/game')).game.id,value.id);
+ assert(peak>1&&peak<=6,'downloads must overlap within a bounded batch');
+ corrupt=true;
+ await assert.rejects(loadBrowserGame({fetcher,storage:new MemoryStorage()}),/game file changed/i);
+});

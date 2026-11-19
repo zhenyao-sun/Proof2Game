@@ -575,11 +575,17 @@ export async function loadBrowserGame({fetcher=fetch,storage=localStorage,onMiss
   const files={};
   const entries=Object.entries(manifest.files);
   if(entries.length>2048||entries.reduce((sum,[,item])=>sum+item.size,0)>128*1024*1024)throw new Error('Game exceeds browser package limits.');
-  for(const [file,record] of entries){
+  for(const [file] of entries){
     if(!/^(game\.json|snapshot\/[^?#%\\]+|translation\/zh\/[^?#%\\]+)$/.test(file)||file.split('/').some(part=>!part||part.startsWith('.')))throw new Error('Invalid game file path.');
-    const bytes=await read(file);
-    if(bytes.length!==record.size||await checksum(bytes)!==record.sha256)throw new Error('A game file changed. Reload after publication finishes.');
-    files[file]=bytes;
+  }
+  for(let offset=0;offset<entries.length;offset+=6){
+    const batch=await Promise.allSettled(entries.slice(offset,offset+6).map(async([file,record])=>{
+      const bytes=await read(file);
+      if(bytes.length!==record.size||await checksum(bytes)!==record.sha256)throw new Error('A game file changed. Reload after publication finishes.');
+      files[file]=bytes;
+    }));
+    const failure=batch.find(result=>result.status==='rejected');
+    if(failure)throw failure.reason;
   }
   const game=JSON.parse(new TextDecoder().decode(files['game.json']));
   if(game.id!==manifest.game_id)throw new Error('Game does not match its manifest.');
