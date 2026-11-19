@@ -54,6 +54,15 @@ test('guide, regular chat and language state remain distinct across reload',asyn
  await f.act('message',{mode:'chat',message:'Please explain the notation.'});await f.act('language',{language:'中文'});
  const next=await setup({storage:f.storage}),value=await next.engine.request('/api/game');assert.equal(value.progress.language,'中文');assert.equal(value.progress.levels.result.messages.length,1);assert.equal(value.progress.levels.result.chat.messages.length,2);
 });
+test('opening Guide from the map preserves the previous undo target', async () => {
+  const fixture = await setup();
+  const explicit = await fixture.act('mode', {mode: 'chat'});
+  assert.equal(explicit.undo.action, 'mode');
+  const navigation = await fixture.act('mode', {mode: 'guide', navigation: true});
+  assert.equal(navigation.progress.levels.result.mode, 'guide');
+  assert.deepEqual(navigation.undo, explicit.undo);
+  assert.equal(fixture.calls.length, 0);
+});
 test('malformed or truncated tutor output preserves progress',async()=>{
  for(const content of ['not JSON',JSON.stringify({message:'incomplete'})]){
   const f=await setup({fetcher:async()=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content}}]})})});f.engine.setKey('fake-key');await assert.rejects(f.act('start'));assert.equal((await f.engine.request('/api/game')).progress.revision,0);

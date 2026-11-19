@@ -579,7 +579,8 @@ async function act(request){
   if(busy)fail('The tutor is still preparing a response. Please wait.',409);
   const next=copy(progress),action=request.action;
   const actionId=request.request_id||crypto.randomUUID();
-  let undoFrame=LEARNING_ACTIONS.has(action)?frameBefore(progress,action,request.level_id,mode,actionId,request.message?.trim?.()):null;
+  const recordUndo=LEARNING_ACTIONS.has(action) && !(action==='mode' && request.navigation===true);
+  const undoFrame=recordUndo?frameBefore(progress,action,request.level_id,mode,actionId,request.message?.trim?.()):null;
   if(!['start','understand','connection','mode'].includes(action))discardPrepared();
   if(action==='connection'){cliHealth=checkCli();return payload();}
   if(action==='mode'){

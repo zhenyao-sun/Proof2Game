@@ -14,6 +14,9 @@
   let saveBusy = false;
   let languageBusy = false;
   let pendingNavigation = null;
+  let referenceDepth = 0;
+  let contentPanel = false;
+  const mobileLayout = () => window.innerWidth <= 760;
   let forestViewInitialized = false;
   const conversationDrafts=new Map();
   function chatMode(id=currentLevel){return state?.progress?.levels?.[id]?.mode||'guide';}
@@ -37,6 +40,8 @@
   };
   Object.assign(en,{
     home:'Proof2Game home',language:'Language',history:'Level history',back:'Back',forward:'Forward',
+    guideWithoutKey:'You can read the level now. Send a question to connect your DeepSeek API key and begin the guide.',
+    mobileContent:'Content',mobileGuide:'Guide',mobileChat:'Chat',
     conversation:'AI conversation',conversationMode:'Conversation mode',guideMode:'Step by step guide',chatMode:'Regular chat',
     saveGame:'Save game',savedGames:'Saved games',closeSaves:'Close saved games',saveCurrent:'Save current progress',
     uploadSave:'Upload save',downloadCurrent:'Download current progress',manualSaves:'Manual saves',
@@ -70,6 +75,8 @@
     unavailable:'本关尚未开放。',map:'关卡地图',close:'关闭关卡',send:'发送消息',
     convention:'约定',understandComponent:{convention:'我理解了本关约定',statement:'我理解了本关陈述',proof:'我理解了本关证明'},
     home:'Proof2Game 首页',language:'语言',history:'关卡浏览记录',back:'后退',forward:'前进',
+    guideWithoutKey:'可先阅读关卡内容，也可以发送问题，连接你的 DeepSeek API key 后开始逐步引导。',
+    mobileContent:'关卡内容',mobileGuide:'逐步引导',mobileChat:'普通聊天',
     conversation:'AI 对话',conversationMode:'对话模式',guideMode:'逐步引导',chatMode:'普通聊天',
     saveGame:'保存游戏',savedGames:'存档',closeSaves:'关闭存档',saveCurrent:'保存当前进度',
     uploadSave:'上传存档',downloadCurrent:'下载当前进度',manualSaves:'手动存档',
@@ -510,7 +517,7 @@
       title.append(element('span',cardTitle?'node-reference':'node-description',cardLabel));
       if(cardTitle)title.append(element('span','node-description',cardTitle));
       button.append(top,title);
-      button.addEventListener('click',() => { lastFocusedNode=level.id; openLevel(level.id); });
+      button.addEventListener('click',() => { lastFocusedNode=level.id; openLevel(level.id,{fromMap:true}); });
       forest.append(button);
     });
     forest.prepend(svg);
@@ -528,18 +535,51 @@
     $('next-level').textContent=(!next?t('revisit'):done.size?t('continue'):t('start'))+' ↗';
     $('next-level').disabled=busy || !levels().length;
   }
+  function renderMobileControls(){
+    const panel = contentPanel ? 'content' : chatMode();
+    $('level-dialog').dataset.panel = panel;
+    for (const name of ['content','guide','chat']) {
+      const button = $('mobile-'+name);
+      button.setAttribute('aria-pressed', String(panel === name));
+      button.disabled = name !== 'content' && name !== chatMode() && (busy || saveBusy || languageBusy);
+    }
+    const history = window.history.state?.referenceNav;
+    $('mobile-back').disabled = busy || saveBusy || !history?.depth;
+    $('mobile-forward').disabled = busy || saveBusy || !history?.forward;
+  }
+  function renderLevelHeading(level){
+    const title = $('level-title');
+    const metadata = $('mobile-level-meta');
+    const statement = level.type === 'proof' ? levels().find(item=>item.id===level.paired) : level;
+    const proofLink = level.type === 'proof' && Object.entries(state.game.internal_references || {})
+      .find(([,ref])=>ref.level_id===level.paired && ref.kind==='statement');
+    const citation = statement?.statement_number ? kindName(statement.kind || 'Statement')+' '+statement.statement_number : '';
+    const numbered = level.type === 'proof' && citation ? words().proofOf(citation) : citation;
+    const mobile = mobileLayout();
+    const name = mobile && numbered ? localizedLevel(level).title || '' : levelHeading(level);
+    title.textContent = name;
+    title.hidden = !name;
+    title.classList.remove('reference-target');
+    metadata.classList.remove('reference-target');
+    metadata.textContent = t('level')+' '+levelNumber(level)+(numbered?' · '+numbered:'');
+    $('level-dialog').setAttribute('aria-labelledby',mobile?'mobile-level-meta level-title':'level-title');
+    if(proofLink && citation){
+      const label = mobile ? metadata : title;
+      const full = label.textContent;
+      const at = full.indexOf(citation);
+      if(at !== -1)label.replaceChildren(document.createTextNode(full.slice(0,at)),
+        internalReferenceLink(proofLink[0],citation),document.createTextNode(full.slice(at+citation.length)));
+    }
+  }
   function renderLevel() {
     if (!currentLevel || !state) return;
     const level=levels().find(item=>item.id===currentLevel); if (!level) return;
+    renderMobileControls();
     const saved=conversationState(),regular=chatMode()==='chat'; const done=completed().has(currentLevel);
     for(const [mode,id] of [['guide','mode-guide'],['chat','mode-chat']]){const tab=$(id);tab.setAttribute('aria-pressed',String(chatMode()===mode));tab.disabled=busy||saveBusy;}
     $('chat-input').placeholder=regular?t('chatPlaceholder'):t('placeholder');
     document.querySelector('.composer-hint').textContent=regular?t('chatHint'):t('composerHint');
-    const statementRef=level.type==='proof'?Object.entries(state.game.internal_references||{}).find(([,ref])=>ref.level_id===level.paired&&ref.kind==='statement')?.[0]:null;
-    const heading=levelHeading(level),ref=referenceTarget(statementRef);
-    const citation=ref?kindName(ref.name)+' '+ref.number:'',offset=citation?heading.indexOf(citation):-1;
-    if(offset>=0)$('level-title').replaceChildren(document.createTextNode(heading.slice(0,offset)),internalReferenceLink(statementRef,citation),document.createTextNode(heading.slice(offset+citation.length)));
-    else $('level-title').textContent=heading;
+    renderLevelHeading(level);
     renderRich($('level-original'),localizedLevel(level).text,{levelId:level.id});
     if(level.type==='statement'){
       const proofKey=Object.keys(state.game.internal_references||{}).find(key=>
@@ -603,7 +643,10 @@
       article.append(element('div','message-label',t('you')));
       const body=element('div','message-body');body.textContent=pending.message;article.append(body,undoButton(pending.target_id));messages.append(article);
     }
-    if (!saved.messages?.length && !busy) messages.append(element('p','empty-message',regular?t('chatEmpty'):t('empty')));
+    if (!saved.messages?.length && !busy){
+      const empty=regular?'chatEmpty':needsBrowserKey()?'guideWithoutKey':'empty';
+      messages.append(element('p','empty-message',t(empty)));
+    }
     if (busy && pendingLabel) {const pending=element('div','pending-message');pending.append(element('span','pulse'),document.createTextNode(t(pendingLabel)));messages.append(pending);}
     if (wasBottom || busy) requestAnimationFrame(()=>{messages.scrollTop=messages.scrollHeight;});
     const controls=$('step-controls'); controls.replaceChildren();
@@ -640,8 +683,14 @@
     renderForest();renderLevel();renderSaves();renderUndo();schedulePrefetch();
   }
   let prefetchTimer;
+  function needsBrowserKey(){
+    return Boolean(window.proof2gameBrowser && state?.connection?.authenticated===false);
+  }
+  function shouldStartGuide(){
+    return !needsBrowserKey() && chatMode()==='guide' && !levelState(currentLevel).messages?.length;
+  }
   function prefetchLevel(){
-    if(busy||saveBusy||languageBusy||!state||document.hidden)return null;
+    if(busy||saveBusy||languageBusy||!state||document.hidden||needsBrowserKey())return null;
     const {next}=levelStatus();
     // Keep the guide's opening ready without displaying it in Regular chat.
     if(next&&!levelState(next.id).messages?.length&&(!$('level-dialog').open||!levelState(next.id).chat?.messages?.length))return next.id;
@@ -668,7 +717,7 @@
     return state?.undo;
   }
   function renderUndo(){
-    for(const id of ['undo-map','undo-level'])$(id).disabled=undoBusy||saveBusy||!undoTarget();
+    for(const id of ['undo-map','undo-level','mobile-undo'])$(id).disabled=undoBusy||saveBusy||!undoTarget();
   }
   async function withdrawMessage(targetId=undoTarget()?.id){
     if(undoBusy||!state||!targetId)return;
@@ -692,7 +741,7 @@
         const id=target.level_id;
         const input=$('chat-input');
         const draft=(target.mode==='chat'?levelState(id).chat:levelState(id))?.draft||'';
-        await openLevel(id,{startGuide:false});
+        await openLevel(id,{startGuide:false,panel:target.mode});
         conversationDrafts.set(id+':'+target.mode,draft);
         input.value=draft;input.disabled=false;input.focus();input.setSelectionRange(input.value.length,input.value.length);
         $('send-message').disabled=!input.value.trim();
@@ -771,8 +820,7 @@
       controls.append(load,download,remove);row.append(info,controls);rows.append(row);
     }
     if(!(state.saves||[]).length)rows.append(element('li','empty-message',t('emptySaves')));
-    for(const id of ['undo-map','undo-level'])$(id).addEventListener('click',()=>withdrawMessage());
-  for(const id of ['save-game','save-game-level','save-game-dialog','import-save'])$(id).disabled=busy||saveBusy||languageBusy;
+    for(const id of ['save-game','save-game-level','save-game-dialog','import-save'])$(id).disabled=busy||saveBusy||languageBusy;
     $('save-upload').disabled=busy||saveBusy||languageBusy;
     renderLanguageMenus();
   }
@@ -822,7 +870,8 @@
   }
   function focusReference(key){
     const anchor=document.getElementById(referenceAnchor(key));
-    const target=anchor?.closest('.numbered-equation')||anchor?.closest('.prose-run')||$('level-title');
+    const heading=$('level-title').hidden?$('mobile-level-meta'):$('level-title');
+    const target=anchor?.closest('.numbered-equation')||anchor?.closest('.prose-run')||heading;
     target.classList.add('reference-target');
     const scroll=document.querySelector('.component-scroll');
     if(anchor)scroll.scrollTop+=target.getBoundingClientRect().top-scroll.getBoundingClientRect().top-12;
@@ -835,42 +884,78 @@
     if(currentLevel)conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
     currentLevel=id;
     const url=window.location.pathname+'?level='+encodeURIComponent(id)+(options.reference?'&ref='+encodeURIComponent(options.reference):'');
-    if(options.historyMode!=='none'&&window.location.pathname+window.location.search!==url)
-      window.history[options.historyMode==='replace'?'replaceState':'pushState'](null,'',url);
+    if(options.historyMode!=='none' && (options.reference || window.location.pathname+window.location.search!==url)){
+      const entry = options.reference ? {referenceNav:{depth:referenceDepth+1}} : null;
+      if (!options.reference) discardReferenceForward();
+      window.history.pushState(entry,'',url);
+    }
+    referenceDepth = window.history.state?.referenceNav?.depth || 0;
+    const source = options.source;
+    const panel = source?.panel || options.panel || (options.reference ? 'content' :
+      options.fromMap && mobileLayout() ? 'guide' : chatMode());
+    contentPanel = panel === 'content';
     $('chat-input').value=conversationDrafts.get(id+':'+chatMode())??conversationState(id).draft??'';
     notice('level-error','');renderLevel();
     if (!$('level-dialog').open) $('level-dialog').showModal();
     $('messages').scrollTop=$('messages').scrollHeight;
     document.querySelector('.component-scroll').scrollTop=0;
-    if (options.startGuide!==false&&chatMode()==='guide'&&!levelState(id).messages?.length) await act('start');
+    if(panel!=='content' && panel!==chatMode()){
+      if(!await act('mode',{mode:panel,navigation:true}) || currentLevel!==id || !$('level-dialog').open)return;
+      $('chat-input').value=conversationDrafts.get(id+':'+panel)??conversationState(id).draft??'';
+      renderLevel();
+    }
+    if (options.startGuide!==false && !source && (!contentPanel || !mobileLayout()) && shouldStartGuide()) await act('start');
     else schedulePrefetch();
-    if(currentLevel===id&&$('level-dialog').open&&options.reference)requestAnimationFrame(()=>focusReference(options.reference));
+    if (source || options.reference) requestAnimationFrame(()=>{
+      if(currentLevel!==id || !$('level-dialog').open)return;
+      if(source){
+        document.querySelector('.component-scroll').scrollTop = source.reading;
+        $('messages').scrollTop = source.messages;
+      }else focusReference(options.reference);
+    });
+  }
+  function discardReferenceForward(){
+    const entry = window.history.state;
+    if(entry?.referenceNav?.forward){
+      window.history.replaceState({...entry,referenceNav:{depth:entry.referenceNav.depth}},'',window.location.href);
+    }
   }
   async function flushNavigation(){
     if(!pendingNavigation||busy||saveBusy)return false;
     const target=pendingNavigation;pendingNavigation=null;
-    if(window.location.pathname+window.location.search!==target)window.history.replaceState(null,'',target);
-    await navigateFromLocation();return true;
+    if(window.location.pathname+window.location.search!==target.url)window.history.replaceState(target.entry,'',target.url);
+    await navigateFromLocation(true);return true;
   }
-  async function navigateFromLocation(){
+  async function navigateFromLocation(fromHistory=false){
     if(!state)return;
-    if(busy||saveBusy){pendingNavigation=window.location.pathname+window.location.search;return;}
+    if(busy||saveBusy){pendingNavigation={url:window.location.pathname+window.location.search,entry:window.history.state};return;}
     pendingNavigation=null;
     const query=new URLSearchParams(window.location.search),id=query.get('level');
-    if(!id){closeLevel({historyMode:'none'});return;}
+    if(!id){referenceDepth=0;closeLevel({historyMode:'none'});return;}
     if(!levelStatus().available.has(id)){
       closeLevel({historyMode:'none'});notice('global-error',t('lockedError'));return;
     }
-    await openLevel(id,{historyMode:'none',reference:query.get('ref')});
+    const entry=window.history.state?.referenceNav;
+    const source=fromHistory && entry && entry.depth < referenceDepth ? entry.source : null;
+    await openLevel(id,{historyMode:'none',reference:query.get('ref'),source});
   }
   document.addEventListener('click',event=>{
     const link=event.target.closest?.('a.internal-reference');
     if(!link||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
     event.preventDefault();if(busy||saveBusy)return;
     const query=new URL(link.href,window.location.href).searchParams;
+    if(!levelStatus().available.has(query.get('level')))return;
+    const source = {
+      panel:link.closest('#messages') ? chatMode() : 'content',
+      reading:document.querySelector('.component-scroll').scrollTop,
+      messages:$('messages').scrollTop
+    };
+    window.history.replaceState({referenceNav:{depth:referenceDepth,forward:true,source}},'',window.location.href);
     openLevel(query.get('level'),{reference:query.get('ref')});
   });
-  window.addEventListener('popstate',()=>navigateFromLocation());
+  window.addEventListener('popstate',()=>navigateFromLocation(true));
+  $('mobile-back').addEventListener('click',()=>{if(!$('mobile-back').disabled)window.history.back();});
+  $('mobile-forward').addEventListener('click',()=>{if(!$('mobile-forward').disabled)window.history.forward();});
   $('level-back').addEventListener('click',()=>{if(!busy&&!saveBusy)window.history.back();});
   $('level-forward').addEventListener('click',()=>{if(!busy&&!saveBusy)window.history.forward();});
   const mapView=$('map-scroll');let mapPan=null,suppressMapClick=false;
@@ -907,10 +992,22 @@
     if(!await act('mode',{mode})||currentLevel!==levelId||!$('level-dialog').open)return;
     $('chat-input').value=conversationDrafts.get(currentLevel+':'+mode)??conversationState().draft??'';
     renderLevel();
-    if(mode==='guide'&&!levelState(currentLevel).messages?.length)await act('start');
+    if(shouldStartGuide())await act('start');
     else $('chat-input').focus();
   }
-  for(const id of ['undo-map','undo-level'])$(id).addEventListener('click',()=>withdrawMessage());
+  $('mobile-content').addEventListener('click',()=>{
+    contentPanel=true;
+    renderMobileControls();
+  });
+  for (const mode of ['guide','chat']) {
+    $('mobile-'+mode).addEventListener('click',async ()=>{
+      contentPanel=false;
+      renderMobileControls();
+      if(mode!==chatMode())await switchMode(mode);
+      else if(!busy && shouldStartGuide())await act('start');
+    });
+  }
+  for(const id of ['undo-map','undo-level','mobile-undo'])$(id).addEventListener('click',()=>withdrawMessage());
   for(const id of ['save-game','save-game-level','save-game-dialog'])$(id).addEventListener('click',()=>saveAction('save_create'));
   for(const id of ['open-saves','open-saves-level'])$(id).addEventListener('click',openSaves);
   $('close-saves').addEventListener('click',()=>$('save-dialog').close());
@@ -923,13 +1020,17 @@
   $('connection-check').addEventListener('click',()=>window.proof2gameBrowser?window.openProof2GameConnection():act('connection'));
   downloadSave($('export-current'),'/api/save/export');
   window.addEventListener('storage',event=>{if(window.proof2gameBrowser&&(event.key===window.proof2gameBrowser.storageKey||event.key==='proof2game:deepseek-key'))request('/api/game').then(accept).catch(error=>notice('global-error',error.message));});
-  $('next-level').addEventListener('click',()=>{const {next}=levelStatus();const first=next || levels()[0];if(first){lastFocusedNode=first.id;openLevel(first.id);}});
+  $('next-level').addEventListener('click',()=>{const {next}=levelStatus();const first=next || levels()[0];if(first){lastFocusedNode=first.id;openLevel(first.id,{fromMap:true});}});
   function closeLevel(options={}) {
     if(!options.keepPending)pendingNavigation=null;
     clearTimeout(prefetchTimer);
     if(currentLevel)conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
     $('level-dialog').close();
-    if(options.historyMode!=='none'&&window.location.search)window.history.pushState(null,'',window.location.pathname);
+    if(options.historyMode!=='none'&&window.location.search){
+      discardReferenceForward();
+      window.history.pushState(null,'',window.location.pathname);
+      referenceDepth=0;
+    }
   }
   $('close-level').addEventListener('click',closeLevel);$('close-level-small').addEventListener('click',closeLevel);
   $('level-dialog').addEventListener('cancel',event=>{event.preventDefault();closeLevel();});
@@ -958,6 +1059,7 @@
   });
   $('chat-form').addEventListener('submit',async event=>{
     event.preventDefault();const input=$('chat-input');const message=input.value.trim();if(!message || busy || saveBusy)return;
+    if(needsBrowserKey()){window.openProof2GameConnection();return;}
     // Keep unsent feedback visible if the request fails.
     const levelId=currentLevel,mode=chatMode();
     if(await act('message',{message})&&currentLevel===levelId&&chatMode()===mode){input.value='';$('send-message').disabled=true;if($('level-dialog').open)input.focus();}
@@ -965,7 +1067,16 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(prefetchTimer);else schedulePrefetch();});
   window.addEventListener('pagehide',()=>clearTimeout(prefetchTimer));
   let resizeTimer;
-  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(state)renderForest();},120);});
+  let wasMobile=mobileLayout();
+  window.addEventListener('resize',()=>{
+    if(mobileLayout()!==wasMobile){
+      wasMobile=mobileLayout();
+      const level=state && levels().find(item=>item.id===currentLevel);
+      if(level)renderLevelHeading(level);
+    }
+    clearTimeout(resizeTimer);
+    resizeTimer=setTimeout(()=>{if(state)renderForest();},120);
+  });
   window.addEventListener('pageshow',event=>{if(event.persisted)request('/api/game').then(accept).catch(()=>{});});
   request('/api/game').then(async result=>{
     accept(result);await navigateFromLocation();

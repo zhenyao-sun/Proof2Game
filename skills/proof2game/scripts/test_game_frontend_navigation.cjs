@@ -16,7 +16,7 @@ class Node{
  close(){const was=this.open;this.open=false;if(was)this.fire('close');}
  click(){return this.fire('click');}
  focus(){} setSelectionRange(){} setPointerCapture(){} releasePointerCapture(){} hasPointerCapture(){return false;}
- closest(selector){if(selector==='a.internal-reference'&&this.tag==='a'&&this.className?.includes('internal-reference'))return this;return this.parent?.closest(selector)||null;}
+ closest(selector){if(selector==='#messages'&&this===nodes.get('messages'))return this;if(selector==='a.internal-reference'&&this.tag==='a'&&this.className?.includes('internal-reference'))return this;return this.parent?.closest(selector)||null;}
  getBoundingClientRect(){return {top:0};}
 }
 const nodes=new Map(),html=fs.readFileSync(path.join(assets,'index.html'),'utf8');
@@ -25,11 +25,23 @@ const special=new Map(['.garden','.composer-hint','.component-scroll'].map(key=>
 const descendants=node=>[node,...node.children.filter(x=>x instanceof Node).flatMap(descendants)];
 const document={...new Node('document'),title:html.match(/<title>([^<]+)<\/title>/)?.[1],hidden:false,documentElement:{},createTextNode:text=>new Node('#text',text),createElement:tag=>new Node(tag),createElementNS:(_,tag)=>new Node(tag),getElementById:id=>nodes.get(id)||descendants(nodes.get('level-original')).find(node=>node.id===id),querySelector:key=>special.get(key),querySelectorAll:key=>key==='[data-i18n]'?[]:key==='.level-node'?descendants(nodes.get('forest')).filter(node=>node.dataset.levelId):[]};
 document.addEventListener=Node.prototype.addEventListener;document.fire=Node.prototype.fire;
-let url=new URL('http://localhost/'),entries=[url.href],cursor=0;
+let url=new URL('http://localhost/'),entries=[{url:url.href,state:null}],cursor=0;
 const window=new Node('window');window.innerWidth=1200;window.location={};
 function locate(value){url=new URL(value,url);for(const key of ['href','pathname','search'])window.location[key]=url[key];}
 locate(url.href);
-window.history={pushState:(_,__,value)=>{entries=entries.slice(0,cursor+1);entries.push(new URL(value,url).href);cursor++;locate(entries[cursor]);},replaceState:(_,__,value)=>{entries[cursor]=new URL(value,url).href;locate(entries[cursor]);},back:()=>{if(cursor){locate(entries[--cursor]);return window.fire('popstate');}},forward:()=>{if(cursor<entries.length-1){locate(entries[++cursor]);return window.fire('popstate');}}};
+window.history={
+ get state(){return entries[cursor].state;},
+ pushState(state,_,value){
+  const entry={url:new URL(value,url).href,state:structuredClone(state)};
+  entries=entries.slice(0,cursor+1);
+  entries.push(entry);cursor++;locate(entry.url);
+ },
+ replaceState(state,_,value){
+  entries[cursor]={url:new URL(value,url).href,state:structuredClone(state)};locate(entries[cursor].url);
+ },
+ back(){if(cursor){locate(entries[--cursor].url);return window.fire('popstate');}},
+ forward(){if(cursor<entries.length-1){locate(entries[++cursor].url);return window.fire('popstate');}},
+};
 const game={title:'Synthetic game',levels:[{id:'convention',type:'convention',title:'Notation',section_title:'Introduction',text:'See \\ref{thm:one} and \\ref{proof:one}.',equations:[]},{id:'one',type:'statement',kind:'Lemma',statement_number:'1.1',title:'A statement',text:'An assertion.',paired:'proof',equations:[]},{id:'proof',type:'proof',kind:'Lemma',statement_number:'1.1',title:'A statement',text:'An argument.',paired:'one',equations:[]}],internal_references:{'thm:one':{level_id:'one',kind:'statement',name:'Lemma',number:'1.1'},'proof:one':{level_id:'proof',kind:'section',name:'Section',number:'2.1'}}};
 const progress={language:null,revision:1,completed:['convention'],levels:{convention:{messages:[],chat:{messages:[]}},one:{messages:[],chat:{messages:[]}},proof:{messages:[],chat:{messages:[]}}}};
 let slowReply=null,releaseReply=null;
@@ -224,6 +236,91 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  nodes.get('save-upload').files=[{size:10,text:async()=>'{invalid'}];await nodes.get('save-upload').fire('change');await settle();assert(nodes.get('save-error').textContent.includes('valid JSON'));assert.equal(JSON.stringify(progress),beforeBad);
  nodes.get('save-upload').files=[{size:17*1024*1024,text:async()=>{throw Error('should not read large file');}}];await nodes.get('save-upload').fire('change');await settle();assert(nodes.get('save-error').textContent.includes('16 MB'));assert.equal(JSON.stringify(progress),beforeBad);
  nodes.get('save-upload').files=[{size:10,text:async()=>JSON.stringify({wrong:true})}];await nodes.get('save-upload').fire('change');await settle();assert(nodes.get('save-error').textContent.includes('snapshot'));assert.equal(JSON.stringify(progress),beforeBad);
+
+ // A saved chat preference must not override phone map entry. Reference history
+ // tracks the source pane and scroll position independently of undo and close.
+ window.innerWidth=320;
+ window.history.pushState(null,'','/');
+ await window.fire('popstate');await settle();
+ progress.levels.entry.mode='chat';
+ progress.levels.entry.chat.messages=[{role:'assistant',content:'Read \\ref{thm:one}.'}];
+ progress.levels.entry.messages=[{role:'assistant',content:'Read \\ref{thm:one}.'}];
+ statuses.one='open';
+ game.levels.find(level=>level.id==='one').text='Refer to \\ref{thm:one} again.';
+ await nodes.get('connection-check').fire('click');await settle();
+ const clickControl=async id=>{await nodes.get(id).fire('click');await settle();};
+ const openReference=async container=>{
+  const link=descendants(nodes.get(container)).find(node=>node.tag==='a'&&node.className?.includes('internal-reference'));
+  assert(link,'the visible fixture contains an active reference');
+  await document.fire('click',{target:link,button:0,preventDefault(){}});
+  await settle();
+ };
+ const mobilePane=()=>nodes.get('level-dialog').dataset.panel;
+ await descendants(nodes.get('forest')).find(node=>node.dataset.levelId==='entry').fire('click');await settle();
+ assert.equal(mobilePane(),'guide');
+ assert.equal(nodes.get('mobile-back').disabled,true);
+ assert.equal(nodes.get('mobile-forward').disabled,true);
+ await clickControl('mobile-chat');
+ assert.equal(mobilePane(),'chat');
+ nodes.get('chat-input').value='Unsent thought';
+ nodes.get('messages').scrollTop=83;
+ await openReference('messages');
+ assert.equal(window.location.search,'?level=one&ref=thm%3Aone');
+ assert.equal(mobilePane(),'content');
+ assert.match(nodes.get('mobile-level-meta').textContent,/1\.1/);
+ assert.equal(nodes.get('level-title').textContent,'A statement','mobile title does not repeat the number above it');
+ assert.equal(nodes.get('mobile-back').disabled,false);
+ assert.equal(nodes.get('mobile-forward').disabled,true);
+ await clickControl('mobile-back');
+ assert.equal(window.location.search,'?level=entry');
+ assert.equal(mobilePane(),'chat');
+ assert.equal(nodes.get('chat-input').value,'Unsent thought');
+ assert.equal(nodes.get('messages').scrollTop,83);
+ assert.equal(nodes.get('mobile-forward').disabled,false);
+ await clickControl('mobile-forward');
+ assert.equal(mobilePane(),'content');
+ assert.equal(window.location.search,'?level=one&ref=thm%3Aone');
+ special.get('.component-scroll').scrollTop=63;
+ await openReference('level-original'); // Same URL, still a separate jump.
+ await clickControl('mobile-back');
+ assert.equal(mobilePane(),'content');
+ assert.equal(special.get('.component-scroll').scrollTop,63);
+ assert.equal(nodes.get('mobile-back').disabled,false);
+ await clickControl('mobile-back');
+ assert.equal(mobilePane(),'chat');
+ assert.equal(nodes.get('mobile-back').disabled,true);
+ await clickControl('close-level-small');
+ assert.equal(window.location.search,'');
+ assert.equal(nodes.get('level-dialog').open,false);
+
+ // An anonymous static-site visitor can read a new level before entering a key.
+ // The transport rejects every action, so opening and switching panes cannot
+ // acquire credentials, start a tutor turn, or fake a successful response.
+ let connections=0;
+ const anonymousActions=[];
+ const anonymous=()=>structuredClone({...response(),connection:{available:true,authenticated:false}});
+ progress.levels.entry={mode:'guide',messages:[],chat:{messages:[]}};
+ window.proof2gameBrowser={request:async (route,body)=>{
+  if(body){anonymousActions.push(body.action);throw Error('Unexpected anonymous action');}
+  return anonymous();
+ }};
+ window.openProof2GameConnection=()=>{connections++;};
+ await window.fire('storage',{key:'proof2game:deepseek-key'});await settle();
+ await descendants(nodes.get('forest')).find(node=>node.dataset.levelId==='entry').fire('click');await settle();
+ assert.equal(mobilePane(),'guide');
+ assert.equal(connections,0);
+ assert(nodes.get('messages').textContent.includes('DeepSeek API key'));
+ await clickControl('mobile-content');
+ assert.equal(mobilePane(),'content');
+ assert(nodes.get('level-original').textContent.includes('notation'));
+ await clickControl('mobile-guide');
+ assert.equal(mobilePane(),'guide');
+ assert.equal(connections,0);
+ nodes.get('chat-input').value='Anonymous draft';
+ await nodes.get('chat-form').fire('submit',{preventDefault(){}});
+ assert.equal(connections,1);
+ assert.equal(nodes.get('chat-input').value,'Anonymous draft');
+ assert.deepEqual(anonymousActions,[]);
  assert(html.includes('href="/api/save/export"'));
  console.log(JSON.stringify({ok:true,navigation_checks:checks,manual_save_records:true,import_export_controls:true,live_model_calls:0}));
 })().catch(error=>{console.error(error);process.exitCode=1;});
