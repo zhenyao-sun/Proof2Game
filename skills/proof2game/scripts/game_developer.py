@@ -610,6 +610,12 @@ def browser_assets():
     names = ['app.js', 'style.css', 'guide-diagram.mjs', 'browser-entry.mjs', 'browser-engine.mjs']
     assets = {name: (runtime / name).read_bytes() for name in names}
     assets['index.html'] = (runtime / 'browser.html').read_bytes()
+    release = (Path(__file__).resolve().parents[3] / 'VERSION').read_text(encoding='ascii').strip()
+    for name in ['index.html', 'browser-entry.mjs', 'browser-engine.mjs']:
+        text = assets[name].decode('utf-8')
+        for dependency in names:
+            text = text.replace('./' + dependency, './' + dependency + '?v=' + release)
+        assets[name] = text.encode('utf-8')
     assets['.nojekyll'] = b''
     assets['LICENSE'] = (Path(__file__).resolve().parents[3] / 'LICENSE').read_bytes()
     for path in (runtime / 'vendor').rglob('*'):

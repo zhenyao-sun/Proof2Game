@@ -72,5 +72,11 @@ test('a real Pages export opens directly and restores browser progress', {
   const manifest=JSON.parse(await fs.readFile(path.join(website,'proof2game.json'),'utf8'));
   await assert.rejects(loadBrowserGame({storage,fetcher:async(target,options)=>target.pathname.endsWith('/proof2game.json')?Response.json({...manifest,files:{...manifest.files,'snapshot/../private.tex':manifest.files['game.json']}}):fakeFetch(target,options)}),/Invalid game file path/);
   assert.equal(manifest.launch_mode,'browser');
-  assert.match(await fs.readFile(path.join(website,'index.html'),'utf8'),/src=".\/browser-entry.mjs"/);
+  const html=await fs.readFile(path.join(website,'index.html'),'utf8');
+  assert(html.includes('src="./browser-entry.mjs?v='+manifest.connector+'"'));
+  assert(html.includes('href="./style.css?v='+manifest.connector+'"'));
+  const entry=await fs.readFile(path.join(website,'browser-entry.mjs'),'utf8');
+  for(const dependency of ['browser-engine.mjs','app.js']){
+    assert(entry.includes('./'+dependency+'?v='+manifest.connector));
+  }
 });
