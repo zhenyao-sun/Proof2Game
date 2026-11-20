@@ -45,9 +45,10 @@ window.history={
 const game={title:'Synthetic game',levels:[{id:'convention',type:'convention',title:'Notation',section_title:'Introduction',text:'See \\ref{thm:one} and \\ref{proof:one}.',equations:[]},{id:'one',type:'statement',kind:'Lemma',statement_number:'1.1',title:'A statement',text:'An assertion.',paired:'proof',equations:[]},{id:'proof',type:'proof',kind:'Lemma',statement_number:'1.1',title:'A statement',text:'An argument.',paired:'one',equations:[]}],internal_references:{'thm:one':{level_id:'one',kind:'statement',name:'Lemma',number:'1.1'},'proof:one':{level_id:'proof',kind:'section',name:'Section',number:'2.1'}}};
 const progress={language:null,revision:1,completed:['convention'],levels:{convention:{messages:[],chat:{messages:[]}},one:{messages:[],chat:{messages:[]}},proof:{messages:[],chat:{messages:[]}}}};
 let slowReply=null,releaseReply=null;
+let delayedPassage=null,passageUndo=null;
 const calls=[],getCalls=[],saveRecords=[],savedStates=new Map();let saveIndex=0;
 let statuses={convention:'complete',one:'open',proof:'locked'};
-function response(){return {game,progress,saves:saveRecords,connection:{available:true,authenticated:true},level_status:statuses};}
+function response(){return {game,progress,undo:passageUndo,saves:saveRecords,connection:{available:true,authenticated:true},level_status:statuses};}
 function complete(id){if(!progress.completed.includes(id))progress.completed.push(id);statuses[id]='complete';const next=game.levels[progress.completed.length];if(next)statuses[next.id]='open';progress.revision++;}
 const context={document,window,URL,URLSearchParams,crypto:{randomUUID:()=>String(calls.length+1)},requestAnimationFrame:fn=>fn(),setTimeout:()=>1,clearTimeout:()=>{},fetch:async(route,options)=>{
  if(route==='/api/saves'){getCalls.push(route);return {ok:true,json:async()=>structuredClone({saves:saveRecords})};}
@@ -55,6 +56,24 @@ const context={document,window,URL,URLSearchParams,crypto:{randomUUID:()=>String
   if(body.action==='language'){progress.language=body.language;progress.revision++;}
   if(body.action==='mode'){progress.levels[body.level_id].mode=body.mode;progress.revision++;}
   if(body.action==='start'){const level=progress.levels[body.level_id];if(!level.messages.length){level.messages.push({role:'assistant',content:'Welcome. Let us explore this level together.',step_goal:'Confirm when this passage feels clear.',phase:'step'});level.phase='step';}progress.revision++;}
+  if(body.action==='understand'){
+    const level=progress.levels[body.level_id];
+    level.messages.push({role:'user',content:'[Understood the preceding explanatory passage]',language:progress.language});
+    level.phase='awaiting_continuation';progress.revision++;
+    passageUndo={id:body.request_id,action:'understand',level_id:body.level_id,mode:'guide'};
+    if(delayedPassage)await delayedPassage;
+    return {ok:false,status:503,json:async()=>({error:'The tutor is unavailable.'})};
+  }
+  if(body.action==='undo_action'){
+    if(body.expected_revision!==progress.revision)return {ok:false,status:409,json:async()=>({error:'Progress changed.'})};
+    assert.equal(body.target_id,passageUndo.id);
+    const level=progress.levels[passageUndo.level_id];level.messages.pop();level.phase='step';
+    passageUndo=null;progress.revision++;
+  }
+  if(body.action==='continue'){
+    const level=progress.levels[body.level_id];assert.equal(level.phase,'awaiting_continuation');
+    level.messages.push({role:'assistant',content:'The next passage.',phase:'step'});level.phase='step';progress.revision++;
+  }
   if(body.action==='understand_all')complete(body.level_id);
   if(body.action==='message'){const level=progress.levels[body.level_id],chat=body.mode==='chat'?(level.chat??={messages:[]}):level;chat.messages.push({role:'user',content:body.message},{role:'assistant',content:'Your understanding is noted.',phase:'step'});if(body.message==='I understand this whole level.')complete(body.level_id);else progress.revision++;}
   if(body.action==='save_create'){const id='save-'+(++saveIndex);savedStates.set(id,structuredClone({progress,statuses}));saveRecords.unshift({id,label:'Progress '+saveIndex,created_at:'2026-11-01T10:00:0'+saveIndex+'Z',completed_count:progress.completed.length});progress.revision++;}
@@ -101,7 +120,30 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal(nodes.get('level-original').textContent,'中文陈述。');
  assert.equal(nodes.get('language-level').value,'中文');
  assert(nodes.get('messages').textContent.includes('Welcome.'));
+ const stepButton=()=>nodes.get('step-controls').children[0];
+ assert.match(stepButton().textContent,/我理解了这一段/);
+ let releasePassage;
+ delayedPassage=new Promise(resolve=>{releasePassage=resolve;});
+ const pendingConfirmation=stepButton().click();await settle();
+ assert.equal(nodes.get('undo-level').disabled,false);
+ await nodes.get('undo-level').click();await settle();
+ assert.equal(passageUndo,null,'undo targets the active confirmation while the next passage loads');
+ releasePassage();await pendingConfirmation;delayedPassage=null;
+ assert.match(stepButton().textContent,/我理解了这一段/);
+ assert.equal(nodes.get('level-error').textContent,'','the cancelled request cannot show a stale provider error');
+ await stepButton().click();await settle();
+ assert.match(nodes.get('level-error').textContent,/已保存你对本段的确认/);
+ assert.equal(stepButton().textContent,'继续下一段');
+ await nodes.get('close-level').click();await settle();
+ await nodes.get('next-level').click();await settle();
+ assert.equal(stepButton().textContent,'继续下一段','reopening a saved confirmation only offers continuation');
  nodes.get('language-level').value='English';await nodes.get('language-level').fire('change');await settle();
+ assert.equal(stepButton().textContent,'Continue to the next passage');
+ await stepButton().click();await settle();
+ assert.equal(calls.filter(call=>call.action==='understand').length,2,'retry does not create another confirmation');
+ assert.equal(calls.filter(call=>call.action==='continue').length,1);
+ assert(nodes.get('messages').textContent.includes('The next passage.'));
+ assert.match(stepButton().textContent,/I understand this passage/);
  assert.equal(nodes.get('level-original').textContent,'An assertion.');
  assert(nodes.get('messages').textContent.includes('Welcome.'));
  assert.equal(window.location.search,'?level=one');

@@ -45,7 +45,7 @@ if ctx['player_message']=='SLOW' or (
 if os.environ.get('FAKE_DELAY_UNDERSTAND') and ctx['action']=='understand':time.sleep(.7)
 pathlib.Path('last-prompt.json').write_text(json.dumps(ctx))
 pathlib.Path('last-args.json').write_text(json.dumps(args))
-if ctx['player_message']=='FAIL':
+if ctx['player_message']=='FAIL' or (ctx['action']=='understand' and pathlib.Path('fail-next-passage').is_file()):
     print(json.dumps({'type':'error','message':'Synthetic provider failure'}));sys.exit(1)
 phase='goal_confirmation' if ctx['action']=='understand' else 'step'
 u={'kind':'none','scope':'partial','description':'','quote':''}
@@ -55,6 +55,8 @@ if msg=='I actually did not understand B.':u={'kind':'correct','scope':'partial'
 if msg=='I understand this whole level.':u={'kind':'confirm','scope':'level','description':'The whole current level','quote':msg}
 if msg=='UNBOUND':u={'kind':'confirm','scope':'level','description':'whole','quote':'I understand this whole level.'}
 if msg=='MODEL COMPLETES':u={'kind':'confirm','scope':'level','description':'whole','quote':''}
+if ctx['action']=='understand' and os.environ.get('FAKE_BUTTON_CONFIRMATION'):
+    u={'kind':'confirm','scope':'level','description':'whole level','quote':'I understood this entire level.'}
 answer={'message':'Welcome. A redesigned passage: \\(x=x\\).','phase':phase,'step_goal':('This level is clear; confirm the whole level when ready.' if phase=='goal_confirmation' else 'Do you understand this passage?'),'understanding':u}
 u['level_id']=ctx['level']['id'] if u['kind']!='none' else None
 if msg=='I understand another level.':u={'kind':'confirm','scope':'level','description':'Another level','quote':msg,'level_id':'b'}
@@ -568,6 +570,56 @@ class GameRuntimeTests(unittest.TestCase):
         for message in ['UNBOUND','MODEL COMPLETES']:
             self.assertEqual(self.action('message',message=message)[0],500)
             self.assertEqual(self.get()['progress'],before)
+
+    def test_button_confirmation_is_authoritative_for_a_prefetched_reply(self):
+        self.stop()
+        self.env['FAKE_BUTTON_CONFIRMATION'] = '1'
+        self.start()
+        self.assertEqual(self.action('start')[0], 200)
+        before = self.guide_state()
+        self.action('prefetch')
+        self.wait_for(lambda: len(self.calls()) == 2)
+        self.assertEqual(self.guide_state(), before)
+        status, result = self.action('understand', request_id='understood-passage')
+        self.assertEqual(status, 200)
+        self.assertEqual(len(self.calls()), 2)
+        guide = result['progress']['levels']['a']
+        self.assertEqual([m['role'] for m in guide['messages']], ['assistant', 'user', 'assistant'])
+        self.assertEqual([e['scope'] for e in guide['understanding']], ['passage'])
+        self.assertEqual(guide['phase'], 'goal_confirmation')
+        self.assertEqual(result['progress']['completed'], [])
+        self.assertEqual(result['level_status']['a'], 'open')
+        self.assertEqual(self.action('undo_action', target_id=result['undo']['id'])[0], 200)
+        self.assertEqual(self.guide_state()['messages'], before['messages'])
+        self.assertFalse(self.guide_state().get('understanding'))
+
+    def test_retry_after_provider_failure_and_restart_preserves_one_passage_and_one_undo(self):
+        self.assertEqual(self.action('start')[0], 200)
+        before = self.guide_state()
+        (self.root/'fail-next-passage').touch()
+        status, _ = self.action('understand', request_id='explicit-passage')
+        self.assertGreaterEqual(status, 400)
+        pending = self.get()
+        guide = pending['progress']['levels']['a']
+        self.assertEqual(guide['phase'], 'awaiting_continuation')
+        self.assertEqual([m['role'] for m in guide['messages']], ['assistant', 'user'])
+        self.assertEqual([e['scope'] for e in guide['understanding']], ['passage'])
+        self.stop()
+        (self.root/'fail-next-passage').rename(self.root/'provider-restored')
+        self.start()
+        self.assertEqual(self.guide_state(), guide)
+        status, result = self.action('continue', request_id='retry-continuation')
+        self.assertEqual(status, 200)
+        resumed = result['progress']['levels']['a']
+        self.assertEqual([m['role'] for m in resumed['messages']], ['assistant', 'user', 'assistant'])
+        self.assertEqual(resumed['understanding'], guide['understanding'])
+        self.assertEqual(result['progress']['completed'], [])
+        self.assertEqual(result['undo'], pending['undo'])
+        self.assertEqual(self.action('continue', request_id='retry-continuation')[0], 200)
+        self.assertEqual(len(self.calls()), 3)
+        self.assertEqual(self.action('undo_action', target_id=result['undo']['id'])[0], 200)
+        self.assertEqual(self.guide_state()['messages'], before['messages'])
+        self.assertFalse(self.guide_state().get('understanding'))
 
     def test_completed_level_and_whole_component_confirmation_need_no_guide_permission(self):
         self.assertEqual(self.action('understand_all')[0], 200)

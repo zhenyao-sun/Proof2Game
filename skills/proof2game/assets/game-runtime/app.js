@@ -8,7 +8,7 @@
   let pendingLabel = '';
   let lastFocusedNode = null;
   let failedRequest = null;
-  let pendingSend = null;
+  let pendingPlayerTurn = null;
   let actionEpoch = 0;
   let undoBusy = false;
   let saveBusy = false;
@@ -27,6 +27,11 @@
     available:'Ready to explore',cleared:'Understood',locked:'Not open yet',footer:'Curiosity is the beginning. Understanding is the journey.',
     composerHint:'Ask anything. If it feels easy, ask your guide to take bigger steps.',statement:'Statement',proof:'Proof',
     start:'Begin exploring',continue:'Keep exploring',revisit:'Revisit the grove',understand:'I understand this passage · Continue',
+    continueGuide:'Continue to the next passage',passageSaved:'Your confirmation is saved.',
+    nextPassageFailed:'The next passage could not be loaded. Please try again.',
+    nextPassageKey:'Check your DeepSeek API key in AI Connection.',
+    nextPassageBalance:'Your DeepSeek account has insufficient balance.',
+    nextPassageLimited:'DeepSeek is receiving too many requests. Please retry in a moment.',
     doneNote:'Level complete. You can still ask your guide anything.',waiting:'Your guide is preparing the next step…',
     thinking:'Thinking…',saving:'Saving…',error:'The connection did not finish. Please try again.',
     intro:'Begin with an idea. Follow the branches of its proof. Explore the mathematics one goal at a time.',
@@ -68,6 +73,11 @@
     footer:'按自己的节奏读懂数学。',composerHint:'随时提问，也可以请引导讲快一点或慢一点。',
     statement:'陈述',proof:'证明',start:'开始学习',continue:'继续学习',revisit:'重访关卡',
     understand:'我理解了这一段 · 继续',doneNote:'本关已完成，仍可继续提问。',
+    continueGuide:'继续下一段',passageSaved:'已保存你对本段的确认。',
+    nextPassageFailed:'下一段暂时无法加载，请重试。',
+    nextPassageKey:'请在 AI 连接中检查 DeepSeek API key。',
+    nextPassageBalance:'DeepSeek 账户余额不足。',
+    nextPassageLimited:'DeepSeek 请求过于频繁，请稍后重试。',
     waiting:'正在准备下一步…',thinking:'思考中…',saving:'保存中…',error:'连接未完成，请重试。',
     intro:'沿着证明的结构，逐步理解这篇稿件。',hint:'每完成一关，就会开放下一关。',allDone:'已完成全部关卡，可以随时重访。',
     progress:en.progress,progressCaption:done=>done?'已完成全部关卡':'逐关学习',
@@ -689,7 +699,7 @@
       if(message.role==='user'&&undo?.message_index===messageIndex&&!busy&&!saveBusy){article.classList.add('with-undo');article.append(undoButton(undo.target_id));}
       messages.append(article);
     }
-    const activePending=[pendingSend,state.pending_message].find(p=>p?.level_id===currentLevel&&(p.mode||'guide')===chatMode());
+    const activePending=[pendingPlayerTurn,state.pending_message].find(p=>p?.message&&p.level_id===currentLevel&&(p.mode||'guide')===chatMode());
     const pending=activePending||null;
     if(pending){
       const article=element('article','chat-message user pending-user with-undo');
@@ -705,9 +715,10 @@
     const controls=$('step-controls'); controls.replaceChildren();
     if (!regular && !busy && !saveBusy && saved.messages?.length) {
       if (done) controls.append(element('span','step-note',t('doneNote')));
-      else if (saved.phase==='step') {
-        const label=t('understand');
-        const button=element('button','understand-button',label+' ✓');button.type='button';button.addEventListener('click',()=>act('understand'));controls.append(button);
+      else if (saved.phase==='step' || saved.phase==='awaiting_continuation') {
+        const pendingPassage=saved.phase==='awaiting_continuation';
+        const button=element('button','understand-button',pendingPassage?t('continueGuide'):t('understand')+' ✓');
+        button.type='button';button.addEventListener('click',()=>act(pendingPassage?'continue':'understand'));controls.append(button);
       }
     }
     for(const id of ['level-back','level-forward'])$(id).disabled=busy||saveBusy;
@@ -766,7 +777,7 @@
     button.append(icon);button.addEventListener('click',()=>withdrawMessage(targetId));return button;
   }
   function undoTarget(){
-    if(pendingSend)return {id:pendingSend.target_id,action:'message',level_id:pendingSend.level_id,mode:pendingSend.mode};
+    if(pendingPlayerTurn)return {id:pendingPlayerTurn.target_id,action:pendingPlayerTurn.action,level_id:pendingPlayerTurn.level_id,mode:pendingPlayerTurn.mode};
     return state?.undo;
   }
   function renderUndo(){
@@ -776,7 +787,7 @@
     if(undoBusy||!state||!targetId)return;
     const target=undoTarget();
     if(target?.id!==targetId)return;
-    undoBusy=true;++actionEpoch;clearTimeout(prefetchTimer);pendingSend=null;
+    undoBusy=true;++actionEpoch;clearTimeout(prefetchTimer);pendingPlayerTurn=null;
     busy=true;pendingLabel='saving';state.pending_message=null;renderLevel();renderUndo();
     const requestId=crypto.randomUUID();
     try{
@@ -822,11 +833,14 @@
     renderForest();renderLevel();renderSaves();
     const signature=JSON.stringify({level_id:currentLevel,action,mode:chatMode(),...extras,revision:state.progress.revision});
     const requestId=failedRequest?.signature===signature?failedRequest.request_id:crypto.randomUUID();
-    if(action==='message'){pendingSend={level_id:currentLevel,mode:chatMode(),message:extras.message,target_id:requestId};renderLevel();renderUndo();}
+    if(action==='message'||action==='understand'){
+      pendingPlayerTurn={action,level_id:levelId,mode,message:extras.message,target_id:requestId};
+      renderLevel();renderUndo();
+    }
     try {
       const result=await request('/api/action',{level_id:currentLevel,action,mode:chatMode(),expected_revision:state.progress.revision,request_id:requestId,...extras});
       if(epoch!==actionEpoch)return false;
-      pendingSend=null;busy=false;pendingLabel='';failedRequest=null;
+      pendingPlayerTurn=null;busy=false;pendingLabel='';failedRequest=null;
       if(action==='message'){
         conversationDrafts.delete(levelId+':'+mode);
         if(currentLevel===levelId&&chatMode()===mode)$('chat-input').value='';
@@ -839,12 +853,21 @@
       return true;
     } catch (error) {
       if(epoch!==actionEpoch)return false;
-      pendingSend=null;busy=false;pendingLabel='';failedRequest={signature,request_id:requestId};
-      if (error.status===409) {
-        try {accept(await request('/api/game'));} catch (_) { /* Preserve local transcript if refresh fails. */ }
+      const passageTurn=action==='understand'||action==='continue';
+      if (passageTurn || error.status===409) {
+        let latest;
+        try {latest=await request('/api/game');} catch (_) { /* Keep the last known progress. */ }
+        if(epoch!==actionEpoch)return false;
+        if(latest)accept(latest);
       }
-      renderForest();renderLevel();renderSaves();
-      notice($('level-dialog').open?'level-error':'global-error',error.message);
+      pendingPlayerTurn=null;busy=false;pendingLabel='';failedRequest={signature,request_id:requestId};
+      renderForest();renderLevel();renderSaves();renderUndo();
+      let message=error.message;
+      if(passageTurn && levelState(levelId).phase==='awaiting_continuation'){
+        const cause=window.proof2gameBrowser && {401:'nextPassageKey',402:'nextPassageBalance',429:'nextPassageLimited'}[error.status];
+        message=t('passageSaved')+' '+t(cause||'nextPassageFailed');
+      }
+      notice($('level-dialog').open?'level-error':'global-error',message);
       await flushNavigation();return false;
     }
   }
@@ -892,7 +915,7 @@
     if(!state||busy||saveBusy||languageBusy)return false;
     const restoring=['save_load','save_import'].includes(action);
     const epoch=++actionEpoch;
-    saveBusy=true;clearTimeout(prefetchTimer);pendingSend=null;failedRequest=null;renderForest();renderLevel();renderSaves();
+    saveBusy=true;clearTimeout(prefetchTimer);pendingPlayerTurn=null;failedRequest=null;renderForest();renderLevel();renderSaves();
     notice('save-error','');notice('save-status','');
     try{
       const result=await request('/api/action',{action,expected_revision:state.progress.revision,request_id:crypto.randomUUID(),...extras});

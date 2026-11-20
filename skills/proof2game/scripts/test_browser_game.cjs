@@ -11,6 +11,9 @@ const game=()=>({schema:1,id:'synthetic',snapshot_digest:'synthetic',model:'deep
 function fixtureGame(){const value=game();value.snapshot_files['translation/zh/main.tex']='fixture';return value;}
 const none={kind:'none',scope:'partial',description:'',quote:'',level_id:null};
 const answer=(extra={})=>({message:'A short explanation.',diagram:null,step_goal:'Understand this passage',phase:'step',understanding:none,...extra});
+function tutorReply(fields) {
+  return Response.json({choices:[{finish_reason:'stop', message:{content:JSON.stringify(answer(fields))}}]});
+}
 async function setup(options={}){
  const {createBrowserGame}=await import(moduleURL);const storage=options.storage||new MemoryStorage();const calls=[];
  const fetcher=options.fetcher||async function(url,options){calls.push({url,options});const result=answer();if(JSON.parse(options.body).messages[0].content[0].text.startsWith('Respond to')){delete result.phase;delete result.step_goal;}return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(result)}}]})};};
@@ -112,6 +115,71 @@ test('failed DeepSeek requests and invented confirmations do not change progress
  for(const status of [401,402,429,500]){const f=await setup({fetcher:async()=>({ok:false,status})});f.engine.setKey('fake-key');await assert.rejects(f.act('start'));assert.equal((await f.engine.request('/api/game')).progress.revision,0);}
  const f=await setup({fetcher:async()=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(answer({understanding:{kind:'confirm',scope:'level',level_id:'result',quote:'I understand',description:'all'}}))}}]})})});f.engine.setKey('fake-key');await assert.rejects(f.act('start'),/current player message/);assert.deepEqual((await f.engine.request('/api/game')).progress.completed,[]);
 });
+
+test('the passage button accepts the next lesson even if the tutor invents a whole-level confirmation', async () => {
+  const invented = {kind:'confirm', scope:'level', level_id:'result', quote:'I understood this entire level.', description:'whole level'};
+  let requests = 0;
+  const fixture = await setup({fetcher:async () => ++requests === 1
+    ? tutorReply({message:'First passage.'})
+    : tutorReply({message:'Next passage.', understanding:invented})});
+  fixture.engine.setKey('test-key');
+  const before = await fixture.act('start');
+  const result = await fixture.act('understand');
+  const guide = result.progress.levels.result;
+  assert.equal(requests, 2);
+  assert.deepEqual(guide.messages.map(row => row.role), ['assistant', 'user', 'assistant']);
+  assert.equal(guide.messages.at(-1).content, 'Next passage.');
+  assert.deepEqual(guide.understanding.map(event => [event.level_id, event.scope]), [['result', 'passage']]);
+  assert.deepEqual(result.progress.completed, []);
+  assert.equal(result.level_status.proof, 'locked');
+  assert.equal(result.undo.action, 'understand');
+
+  await assert.rejects(fixture.act('message', {message:'Please explain.'}), /current player message/);
+  const restored = await fixture.act('undo_action', {target_id:result.undo.id});
+  assert.deepEqual(restored.progress.levels.result.messages, before.progress.levels.result.messages);
+  assert.equal(restored.progress.levels.result.understanding?.length || 0, 0);
+});
+
+test('a passage is saved before the tutor replies and a retry after reload adds only the next explanation', async () => {
+  let failNext, notifyRequested;
+  const nextResponse = new Promise(resolve => { failNext = resolve; });
+  const requested = new Promise(resolve => { notifyRequested = resolve; });
+  let calls = 0;
+  const fixture = await setup({fetcher:async () => {
+    if (++calls === 1) return tutorReply({message:'First passage.'});
+    notifyRequested();
+    return nextResponse;
+  }});
+  fixture.engine.setKey('test-key');
+  const before = await fixture.act('start');
+  const turn = fixture.act('understand', {request_id:'confirm-passage'});
+  await requested;
+  const readFromAnotherTab = await setup({storage:fixture.storage});
+  const pending = await readFromAnotherTab.engine.request('/api/game');
+  failNext(new Response(null, {status:503}));
+  await assert.rejects(turn);
+  const guide = pending.progress.levels.result;
+  assert.equal(guide.phase, 'awaiting_continuation');
+  assert.deepEqual(guide.messages.map(row => row.role), ['assistant', 'user']);
+  assert.deepEqual(guide.understanding.map(event => event.scope), ['passage']);
+  assert.equal(guide.messages.at(-1).confirms, 0);
+  assert.equal(pending.undo.id, 'confirm-passage');
+
+  const restored = await setup({storage:fixture.storage});
+  assert.deepEqual((await restored.engine.request('/api/game')).progress, pending.progress);
+  const result = await restored.act('continue', {request_id:'retry-generation'});
+  const resumed = result.progress.levels.result;
+  assert.equal(resumed.phase, 'step');
+  assert.deepEqual(resumed.messages.map(row => row.role), ['assistant', 'user', 'assistant']);
+  assert.deepEqual(resumed.understanding, guide.understanding);
+  assert.deepEqual(result.progress.completed, []);
+  assert.deepEqual(result.undo, pending.undo);
+  await restored.act('continue', {request_id:'retry-generation'});
+  assert.equal(restored.calls.length, 1);
+  const undone = await restored.act('undo_action', {target_id:result.undo.id});
+  assert.deepEqual(undone.progress.levels.result.messages, before.progress.levels.result.messages);
+  assert.equal(undone.progress.levels.result.understanding?.length || 0, 0);
+});
 test('different tabs reject stale actions and keep confirmed newer progress',async()=>{
  const storage=new MemoryStorage(),a=await setup({storage}),b=await setup({storage});const before=await b.engine.request('/api/game');await a.act('understand_all');
  await assert.rejects(b.engine.request('/api/action',{action:'understand_all',level_id:'result',expected_revision:before.progress.revision}),/Progress changed/);
@@ -144,6 +212,46 @@ test('a pending reply cannot overwrite progress changed in another tab',async()=
  await new Promise(resolve=>setImmediate(resolve));await b.act('understand_all');
  await a.engine.request('/api/game');finish();await rejected;
  assert.deepEqual((await a.engine.request('/api/game')).progress.completed,['result']);
+});
+
+test('undo cancels a pending passage without committing its late reply or starting a replacement request', async () => {
+  for (const usePrefetch of [false, true]) {
+    const requested = Promise.withResolvers();
+    const pendingReply = Promise.withResolvers();
+    let calls = 0;
+    const fixture = await setup({fetcher:async (url, {signal}) => {
+      calls++;
+      if (calls === 1) return tutorReply({message:'First passage.'});
+      if (calls > 2) return tutorReply({message:'Unwanted replacement.'});
+      if (usePrefetch) {
+        signal.addEventListener('abort', () => pendingReply.reject(signal.reason), {once:true});
+      }
+      requested.resolve();
+      return pendingReply.promise;
+    }});
+    fixture.engine.setKey('test-key');
+    const before = await fixture.act('start');
+    if (usePrefetch) await fixture.act('prefetch');
+    const cancelled = assert.rejects(fixture.act('understand'), /withdrawn|cancelled/i);
+    await requested.promise;
+    const deadline = Date.now() + 3000;
+    let pending = await fixture.engine.request('/api/game');
+    while (!pending.connection.busy) {
+      assert.ok(Date.now() < deadline, 'The click should consume the pending prefetch');
+      await new Promise(resolve => setImmediate(resolve));
+      pending = await fixture.engine.request('/api/game');
+    }
+    const undone = await fixture.act('undo_action', {target_id:pending.undo.id});
+    if (!usePrefetch) pendingReply.resolve(tutorReply({message:'Late explanation.'}));
+    await cancelled;
+    assert.equal(calls, 2);
+    const result = await fixture.engine.request('/api/game');
+    assert.deepEqual(result.progress, undone.progress);
+    assert.deepEqual(result.progress.levels.result.messages, before.progress.levels.result.messages);
+    assert.equal(result.progress.levels.result.phase, 'step');
+    assert.equal(result.progress.levels.result.understanding?.length || 0, 0);
+    assert.deepEqual(result.undo, before.undo);
+  }
 });
 
 test('diagrams render and survive saves without Node globals',async()=>{
