@@ -383,10 +383,10 @@ class WriterTests(unittest.TestCase):
         self.assertIsNone(candidate["snapshot_digest"])
         checks = self.self_check(
             candidate, scope="Only the original conclusion and counterexample are discussed.",
-            findings={"F1": {"original_location": "page 1, Finding", "evidence": "page 1, Finding",
-                             "affected_conclusion": "page 1, Finding"}},
+            findings={"F1": {"original_location": "Major Issues, item 1, equation (1)",
+                             "evidence": "Major Issues, item 1, the value -1"}},
             withdrawal="page 1, Major Issues, item 1",
-            diagnosis_only="The report contains the failing real number and leaves the verified repair private.",
+            diagnosis_only="The item ends at the counterexample to the quoted assertion.",
             issues={"major": [{"location": "p. 1, equation (1)", "quotation": "every real is positive",
                                "problem": "The assertion fails at -1."}], "minor": []},
         )
@@ -396,6 +396,10 @@ class WriterTests(unittest.TestCase):
         for invalid in ({"major": [], "minor": []}, {"major": [{"location": "p. 1"}], "minor": []}):
             with self.subTest(invalid=invalid), self.assertRaises(writer.Rejected):
                 writer.check_evidence(checks | {"issues": invalid}, read_inputs(), candidate)
+        for field in ("original_location", "evidence"):
+            incomplete = {k: v for k, v in checks["findings"]["F1"].items() if k != field}
+            with self.subTest(field=field), self.assertRaisesRegex(writer.Rejected, field):
+                writer.check_evidence(checks | {"findings": {"F1": incomplete}}, read_inputs(), candidate)
         for conflict in ({"major_count": 2}, {"summary": "The paper gives a result."}):
             with self.subTest(conflict=conflict), self.assertRaises(writer.Rejected):
                 writer.check_evidence(checks | {"openings": checks["openings"] | conflict}, read_inputs(), candidate)

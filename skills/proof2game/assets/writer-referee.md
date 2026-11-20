@@ -20,7 +20,7 @@
 
    > *[Shortest sufficient verbatim excerpt, including any quoted math.]*
 
-   [State the problem, evidence and affected conclusion.]
+   [Identify the error or unsupported step in this passage. Give just enough evidence to verify it.]
 
 ## Minor Issues
 
@@ -28,4 +28,4 @@
 
 1. [Original page and exact location.] *“[Verbatim short quotation.]”*
 
-   [Identify the local problem.]
+   [Identify the specific problem at this location.]

@@ -30,7 +30,7 @@ You can attach a LaTeX file, Markdown notes, or a PDF, or paste an arXiv link. A
 
 Proof2Game keeps your original and builds a separate English game script. Independent Codex reviewers check the argument and the cited results. For public papers, a separate reviewer checks the route against the exact edition you supplied. For unpublished work, the team explores whether the proof can be made simpler.
 
-The Summary opens with one sentence stating the paper’s main contribution. The Assessment opens with the overall judgment, including the number of major issues and their collective impact when any are present. Major Issues and Minor Issues follow. Each item locates the original passage, quotes it in italics and explains the problem and its impact. All verbatim excerpts appear in italics, including inline quotations and quoted formulas. The authors decide how to address it. You can request a fresh report from the same approved manuscript. Writer uses the bundled [Humanizer v4.0.0](skills/proof2game/references/humanizer/SKILL.md) when drafting, revising and checking its prose.
+The Summary opens with one sentence stating the paper’s main contribution. The Assessment opens with the overall judgment, including the number of major issues and their collective impact when any are present. Major Issues and Minor Issues follow. Each item locates the original passage, quotes it in italics and states exactly what is wrong there and gives just enough evidence to check the diagnosis. All verbatim excerpts appear in italics, including inline quotations and quoted formulas. The authors decide how to address it. You can request a fresh report from the same approved manuscript. Writer uses the bundled [Humanizer v4.0.0](skills/proof2game/references/humanizer/SKILL.md) when drafting, revising and checking its prose.
 
 ## What it's like to play
 
@@ -115,8 +115,8 @@ If you already have a verified release checkout, use it and let Proof2Game check
 ```sh
 proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.1.44 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.44"
-python3 "$proof2game_releases/v0.1.44/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch v0.1.45 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.1.45"
+python3 "$proof2game_releases/v0.1.45/skills/proof2game/scripts/release.py" verify
 ```
 
 Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)

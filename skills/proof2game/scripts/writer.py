@@ -380,7 +380,9 @@ def check_evidence(checks, inputs, candidate):
         require(isinstance(covered, dict) and set(covered) == {finding["id"] for finding in inputs["report_findings"]},
                 "Locate every approved finding in the referee report.")
         for finding in inputs["report_findings"]:
-            fields = ["original_location", "evidence", "affected_conclusion"]
+            fields = ["original_location", "evidence"]
+            if candidate["schema"] in (1, 2):  # Historical PDF receipts included an impact locator.
+                fields.append("affected_conclusion")
             if candidate["schema"] == 1 and "confirmed_revision" in finding:
                 fields.append("confirmed_revision")
             require_text(covered[finding["id"]], fields, f'finding {finding["id"]}')
