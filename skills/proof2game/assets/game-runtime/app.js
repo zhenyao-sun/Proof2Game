@@ -17,9 +17,16 @@
   let referenceDepth = 0;
   let contentPanel = false;
   const mobileLayout = () => window.innerWidth <= 760;
+  const touchComposer = () => mobileLayout() || window.matchMedia?.('(pointer: coarse)')?.matches;
   let forestViewInitialized = false;
   const conversationDrafts=new Map();
-  function chatMode(id=currentLevel){return state?.progress?.levels?.[id]?.mode||'guide';}
+  const unsentChatMessages=new Map();
+  let editingDuringUndo=null;
+  let openingMode=null;
+  function chatMode(id=currentLevel){
+    if(openingMode && openingMode.levelId===id)return openingMode.mode;
+    return state?.progress?.levels?.[id]?.mode||'guide';
+  }
   function conversationState(id=currentLevel){return chatMode(id)==='chat'?(levelState(id).chat||{messages:[],phase:null}):levelState(id);}
   function undoMessages(){return chatMode()==='chat'?state.chat_undoable_messages:state.undoable_messages;}
   const en={
@@ -57,7 +64,7 @@
     reload:'Please restart the game and refresh this page.',level:'Level',seed:'A SEED OF UNDERSTANDING',
     lockedShort:'Locked',lockedError:'This level is locked.',reference:'Reference',formulaSource:'Formula — view source',formulaScroll:'Scroll horizontally for the full formula',
     proofOf:name=>'Proof of '+name,pairedProof:()=> 'Proof location: ',understood:'Understood ✓',assistant:'ASSISTANT',
-    chatPlaceholder:'Ask a question…',chatHint:'Ask anything about this mathematics.',chatEmpty:'What would you like to discuss?',
+    chatPlaceholder:'Ask a question…',chatHint:'Ask anything about this mathematics.',chatEmpty:'What would you like to discuss?',notSent:'Not sent',withdrawn:'Withdrawn',
     undo:'Undo last action',withdraw:'Withdraw and edit',load:'Load',download:'Download',remove:'Delete',savedGame:'Saved game',
     manualSave:'Manual save',unreadableSave:'Unreadable save (preserved)',
     emptySaves:'No manual saves yet. Save a progress point to return to it later.',
@@ -97,7 +104,7 @@
     reload:'请重新启动游戏并刷新页面。',level:'关卡',seed:'起点',
     lockedShort:'未解锁',lockedError:'此关尚未解锁。',reference:'引用',formulaSource:'查看公式源码',formulaScroll:'左右滑动查看完整公式',
     proofOf:name=>name+'的证明',pairedProof:()=> '证明位置：',understood:'已理解 ✓',assistant:'助手',
-    chatPlaceholder:'输入问题…',chatHint:'可以讨论你感兴趣的内容。',chatEmpty:'你想聊些什么？',
+    chatPlaceholder:'输入问题…',chatHint:'可以讨论你感兴趣的内容。',chatEmpty:'你想聊些什么？',notSent:'未发送',withdrawn:'已撤回',
     undo:'撤回上一步',withdraw:'撤回并编辑',load:'载入',download:'下载',remove:'删除',savedGame:'存档',manualSave:'手动存档',
     unreadableSave:'无法读取的存档（已保留）',emptySaves:'还没有手动存档。',
     levelsComplete:(count,total)=>'已完成 '+count+' / '+total+' 关',
@@ -706,7 +713,13 @@
       article.append(element('div','message-label',t('you')));
       const body=element('div','message-body');body.textContent=pending.message;article.append(body,undoButton(pending.target_id));messages.append(article);
     }
-    if (!saved.messages?.length && !busy){
+    const unsent=regular ? unsentChatMessages.get(currentLevel)||[] : [];
+    for(const message of unsent){
+      const article=element('article','chat-message user');
+      article.append(element('small','',t(message.label)),element('div','message-body',message.text));
+      messages.append(article);
+    }
+    if (!saved.messages?.length && !busy && !unsent.length){
       const empty=regular?'chatEmpty':needsBrowserKey()?'guideWithoutKey':'empty';
       messages.append(element('p','empty-message',t(empty)));
     }
@@ -722,7 +735,8 @@
       }
     }
     for(const id of ['level-back','level-forward'])$(id).disabled=busy||saveBusy;
-    $('chat-input').disabled=busy||saveBusy;
+    const editingChat=regular && (openingMode?.levelId===currentLevel || activePending?.nextDraft || editingDuringUndo===currentLevel);
+    $('chat-input').disabled=saveBusy || (busy && !editingChat);
     updateSendButton();
   }
   async function request(path,body) {
@@ -774,7 +788,8 @@
     button.title=label;button.setAttribute('aria-label',label);button.disabled=undoBusy;
     const icon=svgEl('svg',{viewBox:'0 0 24 24',width:17,height:17,'aria-hidden':'true'});
     icon.append(svgEl('path',{d:'M9 5 4 10l5 5M4 10h10a6 6 0 0 1 0 12',fill:'none',stroke:'currentColor','stroke-width':1.8,'stroke-linecap':'round','stroke-linejoin':'round'}));
-    button.append(icon);button.addEventListener('click',()=>withdrawMessage(targetId));return button;
+    button.append(icon);button.addEventListener('pointerdown',keepChatEditorFocused);
+    button.addEventListener('click',()=>withdrawMessage(targetId));return button;
   }
   function undoTarget(){
     if(pendingPlayerTurn)return {id:pendingPlayerTurn.target_id,action:pendingPlayerTurn.action,level_id:pendingPlayerTurn.level_id,mode:pendingPlayerTurn.mode};
@@ -783,11 +798,43 @@
   function renderUndo(){
     for(const id of ['undo-map','undo-level','mobile-undo'])$(id).disabled=undoBusy||saveBusy||!undoTarget();
   }
+  function restoreConversationDraft(){
+    const draft=conversationDrafts.get(currentLevel+':'+chatMode())??conversationState().draft??'';
+    if(chatInput.value!==draft)chatInput.value=draft;
+    sizeComposerInput();updateSendButton();
+  }
+  function finishOpeningMode(){
+    if(!openingMode)return;
+    conversationDrafts.set(openingMode.levelId+':'+openingMode.mode,chatInput.value);
+    openingMode=null;
+  }
+  function retainChatMessage(id,label,text){
+    if(!text)return;
+    const retained=unsentChatMessages.get(id)||[];
+    if(!retained.some(item=>item.text===text))retained.push({label,text});
+    unsentChatMessages.set(id,retained);
+  }
+  async function restoreWithdrawnChat(id,withdrawn,allowNavigation){
+    const key=id+':chat',dialog=$('level-dialog');
+    const sameEditor=currentLevel===id && chatMode()==='chat';
+    const next=sameEditor?chatInput.value:conversationDrafts.get(key)||'';
+    const keepNext=next!==withdrawn && (next || (sameEditor && composing));
+    if(keepNext)retainChatMessage(id,'withdrawn',withdrawn);
+    const draft=keepNext?next:withdrawn;
+    conversationDrafts.set(key,draft);
+    if(sameEditor && chatInput.value!==draft)chatInput.value=draft;
+    if(allowNavigation && (!sameEditor || !dialog.open || contentPanel))await openLevel(id,{startGuide:false,panel:'chat'});
+    renderLevel();
+  }
   async function withdrawMessage(targetId=undoTarget()?.id){
     if(undoBusy||!state||!targetId)return;
     const target=undoTarget();
     if(target?.id!==targetId)return;
+    const touchChat=target.action==='message' && target.mode==='chat' && (pendingPlayerTurn?.nextDraft || touchComposer());
+    const wasOpen=$('level-dialog').open,wasContent=contentPanel;
+    if(touchChat)editingDuringUndo=target.level_id;
     undoBusy=true;++actionEpoch;clearTimeout(prefetchTimer);pendingPlayerTurn=null;
+    if(openingMode){finishOpeningMode();restoreConversationDraft();}
     busy=true;pendingLabel='saving';state.pending_message=null;renderLevel();renderUndo();
     const requestId=crypto.randomUUID();
     try{
@@ -800,15 +847,20 @@
           if(state.undo?.id!==targetId)throw error;
         }
       }
-      busy=false;pendingLabel='';undoBusy=false;failedRequest=null;accept(result);
+      busy=false;pendingLabel='';undoBusy=false;editingDuringUndo=null;failedRequest=null;accept(result);
       if(target.action==='message'){
         const id=target.level_id;
         const input=$('chat-input');
         const draft=(target.mode==='chat'?levelState(id).chat:levelState(id))?.draft||'';
-        await openLevel(id,{startGuide:false,panel:target.mode});
-        conversationDrafts.set(id+':'+target.mode,draft);
-        input.value=draft;input.disabled=false;input.focus();input.setSelectionRange(input.value.length,input.value.length);
-        updateSendButton();
+        if(touchChat){
+          const leftPanel=wasOpen && (!$('level-dialog').open || (!wasContent && contentPanel));
+          await restoreWithdrawnChat(id,draft,!leftPanel && !pendingNavigation);
+        }else{
+          await openLevel(id,{startGuide:false,panel:target.mode});
+          conversationDrafts.set(id+':'+target.mode,draft);
+          input.value=draft;input.disabled=false;input.focus();input.setSelectionRange(input.value.length,input.value.length);
+          updateSendButton();
+        }
       }else if(currentLevel&&$('level-dialog').open){
         if(!levelStatus().available.has(currentLevel)||target.action==='start'&&currentLevel===target.level_id)closeLevel();
         else{
@@ -818,7 +870,7 @@
       }
       notice('level-error','');notice('global-error','');await flushNavigation();
     }catch(error){
-      busy=false;pendingLabel='';undoBusy=false;
+      busy=false;pendingLabel='';undoBusy=false;editingDuringUndo=null;
       try{accept(await request('/api/game'));}catch(_){}
       notice($('level-dialog').open?'level-error':'global-error',error.message);renderUndo();await flushNavigation();
     }
@@ -830,22 +882,40 @@
     const epoch=++actionEpoch;
     busy=true; pendingLabel=['complete','understand_all','mode'].includes(action)?'saving':action==='message'&&chatMode()==='chat'?'thinking':'waiting';
     notice('level-error','');notice('global-error','');
-    renderForest();renderLevel();renderSaves();
     const signature=JSON.stringify({level_id:currentLevel,action,mode:chatMode(),...extras,revision:state.progress.revision});
     const requestId=failedRequest?.signature===signature?failedRequest.request_id:crypto.randomUUID();
-    if(action==='message'||action==='understand'){
-      pendingPlayerTurn={action,level_id:levelId,mode,message:extras.message,target_id:requestId};
-      renderLevel();renderUndo();
+    if(action==='mode'){
+      conversationDrafts.set(levelId+':'+mode,chatInput.value);
+      if(touchComposer()){
+        openingMode={levelId,mode:extras.mode};
+        restoreConversationDraft();
+      }
     }
+    const nextDraft=action==='message' && mode==='chat' && touchComposer()?{sent:chatInput.value,edited:false}:null;
+    if(action==='message'||action==='understand'){
+      pendingPlayerTurn={action,level_id:levelId,mode,message:extras.message,target_id:requestId,nextDraft};
+      if(nextDraft){
+        chatInput.value='';
+        conversationDrafts.set(levelId+':'+mode,'');
+      }
+      renderUndo();
+    }
+    renderForest();renderLevel();renderSaves();
     try {
       const result=await request('/api/action',{level_id:currentLevel,action,mode:chatMode(),expected_revision:state.progress.revision,request_id:requestId,...extras});
       if(epoch!==actionEpoch)return false;
+      finishOpeningMode();
       pendingPlayerTurn=null;busy=false;pendingLabel='';failedRequest=null;
-      if(action==='message'){
+      if(action==='message' && mode==='chat' && unsentChatMessages.has(levelId)){
+        const retained=unsentChatMessages.get(levelId).filter(item=>item.text.trim()!==extras.message);
+        unsentChatMessages.set(levelId,retained);
+      }
+      if(action==='message' && !nextDraft){
         conversationDrafts.delete(levelId+':'+mode);
         if(currentLevel===levelId&&chatMode()===mode)$('chat-input').value='';
       }
       accept(result);
+      if(action==='mode' && currentLevel===levelId)restoreConversationDraft();
       if(!await flushNavigation()){
         if(!wasComplete&&completed().has(levelId))closeLevel();
         else schedulePrefetch();
@@ -860,7 +930,11 @@
         if(epoch!==actionEpoch)return false;
         if(latest)accept(latest);
       }
+      finishOpeningMode();
       pendingPlayerTurn=null;busy=false;pendingLabel='';failedRequest={signature,request_id:requestId};
+      if(nextDraft?.edited)retainChatMessage(levelId,'notSent',nextDraft.sent);
+      if(nextDraft && !nextDraft.edited)conversationDrafts.set(levelId+':'+mode,nextDraft.sent);
+      if(currentLevel===levelId && (action==='mode' || (nextDraft && !nextDraft.edited)))restoreConversationDraft();
       renderForest();renderLevel();renderSaves();renderUndo();
       let message=error.message;
       if(passageTurn && levelState(levelId).phase==='awaiting_continuation'){
@@ -921,7 +995,7 @@
       const result=await request('/api/action',{action,expected_revision:state.progress.revision,request_id:crypto.randomUUID(),...extras});
       if(epoch!==actionEpoch)return false;
       if(restoring){
-        closeLevel({keepPending:true});currentLevel=null;conversationDrafts.clear();forestViewInitialized=false;
+        closeLevel({keepPending:true});currentLevel=null;conversationDrafts.clear();unsentChatMessages.clear();forestViewInitialized=false;
         window.history.replaceState(null,'',window.location.pathname);
       }
       saveBusy=false;accept(result);
@@ -980,8 +1054,6 @@
     document.querySelector('.component-scroll').scrollTop=0;
     if(panel!=='content' && panel!==chatMode()){
       if(!await act('mode',{mode:panel,navigation:true}) || currentLevel!==id || !$('level-dialog').open)return;
-      $('chat-input').value=conversationDrafts.get(id+':'+panel)??conversationState(id).draft??'';
-      renderLevel();
     }
     if (options.startGuide!==false && !source && (!contentPanel || !mobileLayout()) && shouldStartGuide()) await act('start');
     else schedulePrefetch();
@@ -1066,13 +1138,10 @@
   },true);
   async function switchMode(mode){
     if(busy||saveBusy||!state||mode===chatMode())return;
-    const levelId=currentLevel;
-    conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
+    const levelId=currentLevel,touch=touchComposer();
     if(!await act('mode',{mode})||currentLevel!==levelId||!$('level-dialog').open)return;
-    $('chat-input').value=conversationDrafts.get(currentLevel+':'+mode)??conversationState().draft??'';
-    renderLevel();
-    if(shouldStartGuide())await act('start');
-    else $('chat-input').focus();
+    if(shouldStartGuide() && !(mobileLayout() && contentPanel))await act('start');
+    else if(!touch && !touchComposer())$('chat-input').focus();
   }
   $('mobile-content').addEventListener('click',()=>{
     contentPanel=true;
@@ -1112,9 +1181,19 @@
     }
   }
   $('close-level').addEventListener('click',closeLevel);$('close-level-small').addEventListener('click',closeLevel);
-  $('level-dialog').addEventListener('close',()=>{clearTimeout(prefetchTimer);const button=[...document.querySelectorAll('.level-node')].find(el=>el.dataset.levelId===lastFocusedNode);button?.focus();schedulePrefetch();});
+  $('level-dialog').addEventListener('close',()=>{
+    if($('level-dialog').open)return;
+    clearTimeout(prefetchTimer);
+    const button=[...document.querySelectorAll('.level-node')].find(el=>el.dataset.levelId===lastFocusedNode);
+    button?.focus();schedulePrefetch();
+  });
   const chatInput=$('chat-input');
   const sendButton=$('send-message');
+  function keepChatEditorFocused(event){
+    // The touch keyboard stays attached to its editor. The button's click still runs.
+    if(touchComposer() && chatMode()==='chat' && document.activeElement===chatInput && event.button===0)event.preventDefault();
+  }
+  for(const button of [sendButton,$('mobile-undo'),$('undo-level')])button.addEventListener('pointerdown',keepChatEditorFocused);
   let composing=false;
   let selectionKeyDown=false;
   let commitEnterUntil=0;
@@ -1143,6 +1222,7 @@
     updateSendButton();
   }
   chatInput.addEventListener('compositionstart',()=>{
+    if(pendingPlayerTurn?.nextDraft)pendingPlayerTurn.nextDraft.edited=true;
     composing=true;
     imeEscapeUntil=0;
     selectionKeyDown=false;
@@ -1151,6 +1231,7 @@
   });
   chatInput.addEventListener('compositionend',endComposition);
   chatInput.addEventListener('input',event=>{
+    if(pendingPlayerTurn?.nextDraft)pendingPlayerTurn.nextDraft.edited=true;
     if(event.isComposing)composing=true;
     else if(composing && event.inputType==='insertFromComposition')endComposition();
     sizeComposerInput();
@@ -1193,15 +1274,32 @@
     if(composing || (Date.now()<commitEnterUntil && event.submitter!==sendButton))return;
     const input=chatInput;const message=input.value.trim();if(!message || busy || saveBusy)return;
     if(needsBrowserKey()){window.openProof2GameConnection();return;}
-    // Keep unsent feedback visible if the request fails.
-    const levelId=currentLevel,mode=chatMode();
-    if(await act('message',{message})&&currentLevel===levelId&&chatMode()===mode){
-      input.value='';sizeComposerInput();$('send-message').disabled=true;
-      if($('level-dialog').open)input.focus();
-    }
+    const levelId=currentLevel,mode=chatMode(),touchChat=touchComposer() && mode==='chat';
+    if(await act('message',{message}) && !touchChat && !(mode==='chat' && touchComposer()) && currentLevel===levelId && chatMode()===mode &&
+       $('level-dialog').open && (!mobileLayout() || !contentPanel))input.focus();
   });
   document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(prefetchTimer);else schedulePrefetch();});
   window.addEventListener('pagehide',()=>clearTimeout(prefetchTimer));
+  // A soft keyboard can resize or pan only the visual viewport. Keep the
+  // full-screen level in that rectangle without scrolling or refocusing its editor.
+  const visualViewport=window.visualViewport;
+  function syncLevelViewport(){
+    const style=$('level-dialog').style;
+    if(Math.abs(visualViewport.scale-1)>0.01 || !(visualViewport.height>0)){
+      style.removeProperty('--level-viewport-height');
+      style.removeProperty('--level-viewport-top');
+      return;
+    }
+    style.setProperty('--level-viewport-height',visualViewport.height+'px');
+    style.setProperty('--level-viewport-top',Math.max(0,visualViewport.offsetTop)+'px');
+  }
+  if(visualViewport){
+    visualViewport.addEventListener('resize',syncLevelViewport);
+    visualViewport.addEventListener('scroll',syncLevelViewport);
+    window.addEventListener('resize',syncLevelViewport);
+    window.addEventListener('pageshow',syncLevelViewport);
+    syncLevelViewport();
+  }
   let resizeTimer;
   let wasMobile=mobileLayout();
   window.addEventListener('resize',()=>{

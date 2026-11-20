@@ -10,12 +10,22 @@ class Node{
  get textContent(){return this._text+this.children.map(x=>x.textContent||'').join('');}
  set textContent(value){this._text=String(value);this.children=[];}
  setAttribute(key,value){this.attrs[key]=String(value);}
+ get value(){return this._value;}
+ set value(next){if(this._value!==next){this._value=next;this.selectionStart=this.selectionEnd=next.length;}}
+ get disabled(){return this._disabled||false;}
+ set disabled(value){this._disabled=Boolean(value);if(this._disabled)this.blur();}
  addEventListener(type,fn){(this.handlers[type]??=[]).push(fn);}
  async fire(type,event={}){for(const fn of this.handlers[type]||[])await fn(event);}
  showModal(){this.open=true;}
  close(){const was=this.open;this.open=false;if(was)this.fire('close');}
  click(){return this.fire('click');}
- focus(){document.activeElement=this;} setSelectionRange(){} setPointerCapture(){} releasePointerCapture(){} hasPointerCapture(){return false;}
+ focus(){
+  if(this.disabled||document.activeElement===this)return;
+  document.activeElement?.blur();document.activeElement=this;this.fire('focus');
+ }
+ blur(){if(document.activeElement===this){document.activeElement=null;this.fire('blur');}}
+ setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;}
+ setPointerCapture(){} releasePointerCapture(){} hasPointerCapture(){return false;}
  closest(selector){if(selector==='#messages'&&this===nodes.get('messages'))return this;if(selector==='a.internal-reference'&&this.tag==='a'&&this.className?.includes('internal-reference'))return this;return this.parent?.closest(selector)||null;}
  getBoundingClientRect(){return {top:0};}
 }
@@ -27,6 +37,14 @@ const document={...new Node('document'),title:html.match(/<title>([^<]+)<\/title
 document.addEventListener=Node.prototype.addEventListener;document.fire=Node.prototype.fire;
 let url=new URL('http://localhost/'),entries=[{url:url.href,state:null}],cursor=0;
 const window=new Node('window');window.innerWidth=1200;window.location={};
+let coarsePointer=false;
+window.matchMedia=query=>({matches:coarsePointer && query==='(pointer: coarse)'});
+const viewport=Object.assign(new Node('visualViewport'),{height:844,width:1200,offsetTop:0,scale:1});
+window.visualViewport=viewport;
+const dialogStyle=nodes.get('level-dialog').style;
+dialogStyle.setProperty=function(name,value){this[name]=String(value);};
+dialogStyle.removeProperty=function(name){delete this[name];};
+dialogStyle.getPropertyValue=function(name){return this[name]||'';};
 function locate(value){url=new URL(value,url);for(const key of ['href','pathname','search'])window.location[key]=url[key];}
 locate(url.href);
 window.history={
@@ -44,7 +62,7 @@ window.history={
 };
 const game={title:'Synthetic game',levels:[{id:'convention',type:'convention',title:'Notation',section_title:'Introduction',text:'See \\ref{thm:one} and \\ref{proof:one}.',equations:[]},{id:'one',type:'statement',kind:'Lemma',statement_number:'1.1',title:'A statement',text:'An assertion.',paired:'proof',equations:[]},{id:'proof',type:'proof',kind:'Lemma',statement_number:'1.1',title:'A statement',text:'An argument.',paired:'one',equations:[]}],internal_references:{'thm:one':{level_id:'one',kind:'statement',name:'Lemma',number:'1.1'},'proof:one':{level_id:'proof',kind:'section',name:'Section',number:'2.1'}}};
 const progress={language:null,revision:1,completed:['convention'],levels:{convention:{messages:[],chat:{messages:[]}},one:{messages:[],chat:{messages:[]}},proof:{messages:[],chat:{messages:[]}}}};
-let slowReply=null,releaseReply=null;
+let slowReply=null,releaseReply=null,delayedMode=null;
 let delayedPassage=null,passageUndo=null;
 const calls=[],getCalls=[],saveRecords=[],savedStates=new Map();let saveIndex=0;
 let statuses={convention:'complete',one:'open',proof:'locked'};
@@ -53,8 +71,18 @@ function complete(id){if(!progress.completed.includes(id))progress.completed.pus
 const context={document,window,URL,URLSearchParams,crypto:{randomUUID:()=>String(calls.length+1)},requestAnimationFrame:fn=>fn(),setTimeout:()=>1,clearTimeout:()=>{},fetch:async(route,options)=>{
  if(route==='/api/saves'){getCalls.push(route);return {ok:true,json:async()=>structuredClone({saves:saveRecords})};}
  if(options?.body){const body=JSON.parse(options.body);calls.push(body);if(['Slow question','Slow failure'].includes(body.message)){await slowReply;if(body.message==='Slow failure')return {ok:false,status:500,json:async()=>({error:'Test response failed.'})};}
+  if(body.action==='message' && body.message==='Withdraw this pending question'){
+    const chat=progress.levels[body.level_id].chat;
+    chat.messages.push({role:'user',content:body.message});
+    passageUndo={id:body.request_id,action:'message',level_id:body.level_id,mode:'chat'};
+    await slowReply;
+    return {ok:false,status:409,json:async()=>({error:'This turn was withdrawn.'})};
+  }
   if(body.action==='language'){progress.language=body.language;progress.revision++;}
-  if(body.action==='mode'){progress.levels[body.level_id].mode=body.mode;progress.revision++;}
+  if(body.action==='mode'){
+    if(delayedMode && await delayedMode==='fail')return {ok:false,status:500,json:async()=>({error:'Mode change failed.'})};
+    progress.levels[body.level_id].mode=body.mode;progress.revision++;
+  }
   if(body.action==='start'){const level=progress.levels[body.level_id];if(!level.messages.length){level.messages.push({role:'assistant',content:'Welcome. Let us explore this level together.',step_goal:'Confirm when this passage feels clear.',phase:'step'});level.phase='step';}progress.revision++;}
   if(body.action==='understand'){
     const level=progress.levels[body.level_id];
@@ -67,7 +95,12 @@ const context={document,window,URL,URLSearchParams,crypto:{randomUUID:()=>String
   if(body.action==='undo_action'){
     if(body.expected_revision!==progress.revision)return {ok:false,status:409,json:async()=>({error:'Progress changed.'})};
     assert.equal(body.target_id,passageUndo.id);
-    const level=progress.levels[passageUndo.level_id];level.messages.pop();level.phase='step';
+    const level=progress.levels[passageUndo.level_id];
+    if(passageUndo.action==='message'){
+      if(level.chat.messages.at(-1)?.role==='assistant')level.chat.messages.pop();
+      level.chat.draft=level.chat.messages.pop().content;
+    }
+    else{level.messages.pop();level.phase='step';}
     passageUndo=null;progress.revision++;
   }
   if(body.action==='continue'){
@@ -76,6 +109,7 @@ const context={document,window,URL,URLSearchParams,crypto:{randomUUID:()=>String
   }
   if(body.action==='understand_all')complete(body.level_id);
   if(body.action==='message'){const level=progress.levels[body.level_id],chat=body.mode==='chat'?(level.chat??={messages:[]}):level;chat.messages.push({role:'user',content:body.message},{role:'assistant',content:'Your understanding is noted.',phase:'step'});if(body.message==='I understand this whole level.')complete(body.level_id);else progress.revision++;}
+  if(body.action==='message' && body.message==='Withdraw after the reply')passageUndo={id:body.request_id,action:'message',level_id:body.level_id,mode:'chat'};
   if(body.action==='save_create'){const id='save-'+(++saveIndex);savedStates.set(id,structuredClone({progress,statuses}));saveRecords.unshift({id,label:'Progress '+saveIndex,created_at:'2026-11-01T10:00:0'+saveIndex+'Z',completed_count:progress.completed.length});progress.revision++;}
   if(body.action==='save_load'){const previous=savedStates.get(body.save_id),revision=progress.revision+1;Object.assign(progress,structuredClone(previous.progress));progress.revision=revision;statuses=structuredClone(previous.statuses);}
   if(body.action==='save_delete'){const index=saveRecords.findIndex(item=>item.id===body.save_id);saveRecords.splice(index,1);savedStates.delete(body.save_id);progress.revision++;}
@@ -85,6 +119,104 @@ const context={document,window,URL,URLSearchParams,crypto:{randomUUID:()=>String
 }};
 vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(assets,'app.js'),'utf8'),context);
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
+
+async function exerciseMobileViewport(mode){
+ const input=nodes.get('chat-input'), messages=nodes.get('messages');
+ const wide=window.innerWidth>760, covered=wide?216:436, full=wide?390:844;
+ input.focus();
+ input.value='我还想问一个问题';
+ await input.fire('input',{inputType:'insertText'});
+ input.setSelectionRange(2,4);
+ messages.scrollTop=61;
+ const update=async(type,geometry,expected)=>{
+   Object.assign(viewport,geometry);
+   await viewport.fire(type);await settle();
+   assert.deepEqual(['--level-viewport-top','--level-viewport-height'].map(name=>dialogStyle.getPropertyValue(name)),expected,mode+' dialog follows the exposed screen');
+ };
+ await update('resize',{width:window.innerWidth,height:covered,offsetTop:0},['0px',covered+'px']);
+ await update('scroll',{offsetTop:47},['47px',covered+'px']);
+ assert.equal(document.activeElement,input,mode+' keeps typing focus as the keyboard pans the screen');
+ assert.equal(input.value,'我还想问一个问题');
+ assert.deepEqual([input.selectionStart,input.selectionEnd],[2,4]);
+ assert.equal(messages.scrollTop,61,mode+' preserves the current passage while typing');
+ await update('resize',{scale:2,height:218},['','']);
+ await update('resize',{scale:1,height:full,offsetTop:0},['0px',full+'px']);
+ input.value='';await input.fire('input',{inputType:'deleteContentBackward'});
+ input.blur();
+}
+
+async function exerciseMobileChatReply(){
+ const input=nodes.get('chat-input'), send=nodes.get('send-message'), form=nodes.get('chat-form');
+ const submit=()=>form.fire('submit',{submitter:send,preventDefault(){}});
+ const type=async value=>{input.value=value;await input.fire('input',{inputType:'insertText'});};
+ const sent=()=>calls.filter(call=>call.action==='message'&&call.mode==='chat');
+ const begin=async message=>{
+   input.focus();await type(message);
+   const pointer={pointerType:'touch',button:0,preventDefault(){this.defaultPrevented=true;}};
+   await send.fire('pointerdown',pointer);
+   if(!pointer.defaultPrevented)send.focus();
+   slowReply=new Promise(resolve=>releaseReply=resolve);
+   const pending=submit();await settle();
+   assert.equal(sent().at(-1).message,message);
+   assert.equal(input.disabled,false,'the next chat draft stays editable while waiting for a reply');
+   assert.equal(document.activeElement,input,'tapping Send keeps the active mobile editor focused');
+   assert.equal(input.value,'','only the submitted message is cleared');
+   return {pending};
+ };
+ let {pending}=await begin('Slow question');
+ await input.fire('compositionstart',{data:''});
+ input.value='准备问di';await input.fire('input',{inputType:'insertCompositionText',isComposing:true});
+ input.setSelectionRange(2,3);
+ const count=sent().length;
+ assert.equal(send.disabled,true,'a second send waits for the pending reply');
+ await submit();assert.equal(sent().length,count);
+ await window.fire('pageshow',{persisted:true});await settle();
+ assert.equal(input.disabled,false);assert.equal(document.activeElement,input);
+ releaseReply();await pending;await settle();
+ assert.equal(input.value,'准备问di','the previous reply leaves marked text for the next draft intact');
+ assert.deepEqual([input.selectionStart,input.selectionEnd],[2,3]);
+ assert.equal(send.disabled,true,'a response does not commit an active composition');
+ await submit();assert.equal(sent().length,count);
+ input.value='准备问第二个问题';await input.fire('compositionend',{data:'第二个问题'});
+ await input.fire('input',{inputType:'insertText',isComposing:false});
+ assert.equal(send.disabled,false);assert.equal(document.activeElement,input);
+ await submit();await settle();assert.equal(sent().at(-1).message,'准备问第二个问题');
+
+ ({pending}=await begin('Slow failure'));
+ input.blur();releaseReply();await pending;await settle();
+ assert.equal(input.value,'Slow failure','a failed request restores an untouched draft');
+ assert.notEqual(document.activeElement,input,'a failed request respects keyboard dismissal');
+ ({pending}=await begin('Slow failure'));
+ await type('保留新的问题');releaseReply();await pending;await settle();
+ assert.equal(input.value,'保留新的问题','a failed request respects edits made in the meantime');
+ const unsent=nodes.get('messages').children.find(node=>node.textContent.includes('Not sent'));
+ assert(unsent?.textContent.includes('Slow failure'),'the failed question remains visible alongside the new draft');
+ ({pending}=await begin('Slow question'));
+ input.blur();releaseReply();await pending;await settle();
+ assert.notEqual(document.activeElement,input,'a successful reply respects keyboard dismissal');
+
+ ({pending}=await begin('Withdraw this pending question'));
+ await input.fire('compositionstart',{data:''});
+ input.value='继续编辑wen';await input.fire('input',{inputType:'insertCompositionText',isComposing:true});
+ input.setSelectionRange(4,7);
+ const undo=nodes.get(window.innerWidth<=760?'mobile-undo':'undo-level');
+ assert.equal(undo.disabled,false);await undo.click();await settle();
+ assert.equal(input.value,'继续编辑wen','withdrawing the prior turn preserves the next draft');
+ assert.deepEqual([input.selectionStart,input.selectionEnd],[4,7]);
+ assert.equal(send.disabled,true,'withdrawal cannot commit the next marked candidate');
+ assert.equal(document.activeElement,input);
+ assert(nodes.get('messages').textContent.includes('Withdraw this pending question'),'the withdrawn text is available alongside the new draft');
+ releaseReply();await pending;await settle();
+ assert.equal(input.value,'继续编辑wen','the late withdrawn reply cannot replace current text');
+ await input.fire('compositionend',{data:'问'});input.value='';await input.fire('input',{inputType:'deleteContentBackward'});
+ await type('Withdraw after the reply');await submit();await settle();
+ await type('第二条草稿');input.setSelectionRange(0,2);
+ assert.equal(undo.disabled,false);await undo.click();await settle();
+ assert.equal(input.value,'第二条草稿','undo after the reply also preserves the new draft');
+ assert.deepEqual([input.selectionStart,input.selectionEnd],[0,2]);
+ assert(nodes.get('messages').children.some(node=>/withdrawn/i.test(node.textContent)&&node.textContent.includes('Withdraw after the reply')));
+ await type('');
+}
 
 // Dispatch editor events to the live controller and observe actual message requests.
 // Only the host IME's native editing of the textarea is supplied by the fixture.
@@ -406,7 +538,7 @@ async function exerciseChatInput(mode) {
 
  // A saved chat preference must not override phone map entry. Reference history
  // tracks the source pane and scroll position independently of undo and close.
- window.innerWidth=320;
+ window.innerWidth=320;await window.fire('resize');await settle();
  window.history.pushState(null,'','/');
  await window.fire('popstate');await settle();
  progress.levels.entry.mode='chat';
@@ -429,8 +561,49 @@ async function exerciseChatInput(mode) {
  assert.equal(nodes.get('chat-input').rows,1,'mobile input starts on one row');
  assert.equal(nodes.get('mobile-back').disabled,true);
  assert.equal(nodes.get('mobile-forward').disabled,true);
+ await exerciseMobileViewport('guide');
+ let releaseMode;
+ delayedMode=new Promise(resolve=>{releaseMode=resolve;});
+ const switching=nodes.get('mobile-chat').click();await settle();
+ assert.equal(mobilePane(),'chat','chat can be used as soon as its tab is tapped');
+ const mobileInput=nodes.get('chat-input');
+ assert.equal(mobileInput.disabled,false);
+ mobileInput.focus();mobileInput.value='切换时输入的问题';
+ await mobileInput.fire('input',{inputType:'insertText'});
+ nodes.get('mobile-content').focus();await clickControl('mobile-content');
+ releaseMode();await switching;await settle();delayedMode=null;
+ assert.equal(mobilePane(),'content');
+ assert.equal(document.activeElement,nodes.get('mobile-content'),'a delayed chat switch respects the panel the player chose');
  await clickControl('mobile-chat');
  assert.equal(mobilePane(),'chat');
+ assert.equal(mobileInput.value,'切换时输入的问题','the mode save preserves the chat draft');
+ await exerciseMobileViewport('chat');
+ await exerciseMobileChatReply();
+ await clickControl('mobile-guide');mobileInput.value='引导草稿';
+ await mobileInput.fire('input',{inputType:'insertText'});
+ delayedMode=new Promise(resolve=>{releaseMode=resolve;});
+ const failedSwitch=nodes.get('mobile-chat').click();await settle();
+ mobileInput.focus();mobileInput.value='等待切换时的普通聊天草稿';
+ await mobileInput.fire('input',{inputType:'insertText'});
+ releaseMode('fail');await failedSwitch;await settle();delayedMode=null;
+ assert.equal(mobilePane(),'guide','a failed mode change returns to the saved guide');
+ assert.equal(mobileInput.value,'引导草稿','the two conversation drafts stay independent');
+ await clickControl('mobile-chat');
+ assert.equal(mobileInput.value,'等待切换时的普通聊天草稿','retrying the switch recovers the new chat draft');
+ // A landscape phone and a laptop can have the same width. Keep the existing
+ // wide layout on both while the touch keyboard supports the next draft.
+ window.innerWidth=844;coarsePointer=true;await window.fire('resize');await settle();
+ assert.equal(mobileInput.rows,2,'wide touch keeps the existing two-column layout');
+ await exerciseMobileViewport('landscape chat');
+ await exerciseMobileChatReply();
+ coarsePointer=false;await window.fire('resize');await settle();
+ mobileInput.focus();mobileInput.value='Slow question';await mobileInput.fire('input',{inputType:'insertText'});
+ slowReply=new Promise(resolve=>releaseReply=resolve);
+ const laptopSend=nodes.get('chat-form').fire('submit',{submitter:nodes.get('send-message'),preventDefault(){}});await settle();
+ assert.equal(mobileInput.disabled,true,'wide mouse and keyboard retains the original single-draft behavior');
+ assert.equal(mobileInput.value,'Slow question');
+ releaseReply();await laptopSend;await settle();assert.equal(mobileInput.value,'');
+ window.innerWidth=320;await window.fire('resize');await settle();
  nodes.get('chat-input').value='Unsent thought';
  nodes.get('messages').scrollTop=83;
  await openReference('messages');

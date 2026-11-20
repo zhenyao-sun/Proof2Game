@@ -106,10 +106,20 @@
 .paper-byline{margin:12px 0 0;color:var(--muted);font-size:14px;line-height:1.7}
 @media(max-width:760px){.paper-credit{margin-top:22px}.paper-byline{font-size:12px}}
 
-.level-dialog[open] { display: flex; flex-direction: column; }
+.level-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  top: var(--level-viewport-top, 0px);
+  bottom: auto;
+  height: var(--level-viewport-height, 100dvh);
+}
 .level-layout { flex: 1; }
 #level-error { margin: 0; flex-shrink: 0; }
 .mobile-level-toolbar, .mobile-level-meta { display: none; }
+
+@media (pointer: coarse) {
+  .composer textarea { font-size: 16px; }
+}
 
 @media (max-width: 760px) {
   .mobile-level-toolbar {
