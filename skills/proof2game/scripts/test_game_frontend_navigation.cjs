@@ -85,6 +85,146 @@ const context={document,window,URL,URLSearchParams,crypto:{randomUUID:()=>String
 }};
 vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(assets,'app.js'),'utf8'),context);
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
+
+// Dispatch editor events to the live controller and observe actual message requests.
+// Only the host IME's native editing of the textarea is supplied by the fixture.
+async function exerciseChatInput(mode) {
+ const input=nodes.get('chat-input'), form=nodes.get('chat-form'), send=nodes.get('send-message');
+ const sent=()=>calls.filter(call=>call.action==='message' && call.mode===mode);
+ const formSubmit=submitter=>form.fire('submit',{submitter,preventDefault(){}});
+ form.requestSubmit=()=>formSubmit(null);
+ const key=async(type,value,extra={})=>{
+   const event={key:value,preventDefault(){this.defaultPrevented=true;},...extra};
+   await input.fire(type,event);
+   return event;
+ };
+ const typeMarked=async text=>{
+   await input.fire('compositionstart',{data:''});
+   input.value=text;
+   await input.fire('input',{data:text,isComposing:true,inputType:'insertCompositionText'});
+ };
+ const commit=async text=>{
+   input.value=text;
+   await input.fire('compositionend',{data:text});
+   await input.fire('input',{data:text,isComposing:false,inputType:'insertText'});
+ };
+ const deliberateEnter=async text=>{
+   const before=sent().length;
+   await key('keydown','Enter');await key('keyup','Enter');await settle();
+   assert.equal(sent().length,before+1,mode+' sends precisely once on a separate Enter');
+   assert.equal(sent().at(-1).message,text);
+   assert.equal(input.value,'');
+ };
+ const oldTimeout=context.setTimeout,oldClear=context.clearTimeout;
+ const timers=[];
+ context.setTimeout=(fn,delay)=>{const timer=setTimeout(fn,delay);timers.push(timer);return timer;};
+ context.clearTimeout=clearTimeout;
+ try {
+   input.focus();
+   await typeMarked('pin');
+   await window.fire('pageshow',{persisted:true});await settle();
+   assert.equal(document.activeElement,input,mode+' keeps composer focus when progress is redrawn');
+   assert.equal(input.value,'pin');
+   let before=sent().length;
+   // Form submission can be requested while composing, without any Enter keydown.
+   assert.equal(send.disabled,true,mode+' disables Send for unfinished input');
+   await formSubmit(null);
+   await send.fire('pointerdown',{pointerType:'touch',preventDefault(){}});
+   await input.fire('blur');
+   await formSubmit(send);await settle();
+   assert.equal(sent().length,before,mode+' must not submit provisional characters');
+   assert.equal(input.value,'pin');
+
+   await commit('拼音');
+   // A release from an earlier composing key does not release the candidate Enter.
+   await key('keyup','Shift');await key('keyup','n');
+   await key('keyup','Process',{keyCode:229});
+   // A later browser task can deliver the settling Enter after compositionend.
+   await new Promise(resolve=>setTimeout(resolve,8));
+   await formSubmit(null);await settle();
+   assert.equal(sent().length,before,mode+' ignores keyboard submission while the commit is settling');
+   const trailingEnter=await key('keydown','Enter',{isComposing:false});
+   assert.equal(trailingEnter.defaultPrevented,true,mode+' avoids an extra newline after committing the candidate');
+   await key('keyup','Enter');await settle();
+   assert.equal(sent().length,before,mode+' must not submit with the candidate-confirming Enter');
+   assert.equal(input.value,'拼音');
+   await deliberateEnter('拼音');
+
+   await typeMarked('raw');
+   before=sent().length;
+   const imeKey=await key('keydown','Enter',{isComposing:true,keyCode:229});
+   assert.equal(imeKey.defaultPrevented,undefined,mode+' leaves the active Enter to the IME');
+   await commit('raw');await key('keyup','Enter');await settle();
+   assert.equal(sent().length,before,mode+' can commit the literal Latin input');
+   await deliberateEnter('raw');
+
+   for(const selectionKey of [' ','2']){
+     await typeMarked('wen');
+     await key('keydown',selectionKey,{isComposing:true,keyCode:229});
+     await commit('问');
+     if(selectionKey===' ')await key('keyup',selectionKey);
+     await deliberateEnter('问');
+     if(selectionKey!==' ')await key('keyup',selectionKey);
+   }
+
+   // WebKit can dispatch a dialog cancel for the Escape used in marked text.
+   before=sent().length;
+   const dialog=nodes.get('level-dialog');
+   const cancelDialog=()=>dialog.fire('cancel',{preventDefault(){}});
+   input.focus();
+   for(const cancelBeforeEnd of [true,false]){
+     await typeMarked('先前的草稿pin');
+     const escape=await key('keydown','Escape',{isComposing:true});
+     assert.equal(escape.defaultPrevented,undefined,mode+' leaves Escape available to the input method');
+     if(cancelBeforeEnd)await cancelDialog();
+     input.value='先前的草稿';
+     await input.fire('compositionend',{data:''});
+     if(!cancelBeforeEnd)await cancelDialog();
+     await key('keyup','Escape');
+     assert.equal(dialog.open,true,mode+' keeps the level open on candidate cancellation');
+     assert.equal(sent().length,before);
+     assert.equal(input.value,'先前的草稿');
+   }
+   await key('keydown','Escape');await cancelDialog();await key('keyup','Escape');
+   assert.equal(dialog.open,false,mode+' still closes on a separate Escape');
+   await window.history.back();await settle();
+   assert.equal(dialog.open,true);
+   assert.equal(input.value,'先前的草稿',mode+' keeps the unsent draft on return');
+
+   // A candidate may be selected with a pointer in the IME window, outside this document.
+   await typeMarked('zi');await commit('字');
+   before=sent().length;
+   await formSubmit(send);await settle();
+   assert.equal(sent().length,before+1,mode+' sends committed pointer selection on explicit Send');
+   assert.equal(sent().at(-1).message,'字');
+
+   // Some software keyboards communicate the start/end only through InputEvent.
+   input.value='ci';
+   await input.fire('input',{inputType:'insertCompositionText',isComposing:true,data:'ci'});
+   before=sent().length;
+   await formSubmit(send);await settle();
+   assert.equal(sent().length,before,mode+' also guards input-event composition');
+   input.value='词';
+   await input.fire('input',{inputType:'insertFromComposition',isComposing:false,data:'词'});
+   assert.equal(send.disabled,false);
+   await formSubmit(send);await settle();
+   assert.equal(sent().at(-1).message,'词');
+
+   input.value='line one';
+   await input.fire('input',{inputType:'insertText'});
+   before=sent().length;
+   const newline=await key('keydown','Enter',{shiftKey:true});
+   assert.equal(newline.defaultPrevented,undefined,mode+' leaves Shift+Enter to the textarea');
+   await key('keyup','Enter');
+   await key('keydown','Enter',{keyCode:229});await key('keyup','Enter');
+   await key('keydown','Enter',{repeat:true});await key('keyup','Enter');await settle();
+   assert.equal(sent().length,before);
+   input.value='';
+ } finally {
+   timers.forEach(clearTimeout);
+   context.setTimeout=oldTimeout;context.clearTimeout=oldClear;
+ }
+}
 (async()=>{
  await settle();assert.equal(nodes.get('level-dialog').open,false);
  assert.equal(document.documentElement.lang,'en');assert.equal(document.title,'Proof2Game');
@@ -160,24 +300,8 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  window.history.pushState(null,'','/?level=convention');await window.fire('popstate');await settle();
  const links=descendants(nodes.get('level-original')).filter(node=>node.tag==='a');assert.equal(links.length,1,'locked proof must not be a link');assert(nodes.get('level-original').textContent.includes('Locked'));
  await document.fire('click',{target:links[0],button:0,preventDefault:()=>{}});await settle();assert.equal(window.location.search,'?level=one&ref=thm%3Aone');assert(nodes.get('level-title').textContent.includes('Lemma 1.1'));
+ await exerciseChatInput('guide');
  // Browser Back may run even while the in-page controls are disabled. Apply its latest location after the turn settles.
- const composer=nodes.get('chat-input'),form=nodes.get('chat-form');
- let submitCount=0;
- form.requestSubmit=()=>{submitCount++;};
- const enter=async extra=>{const event={key:'Enter',preventDefault(){this.suppressed=true;},...extra};await composer.fire('keydown',event);return event;};
- await composer.fire('compositionstart');composer.value='abc';
- assert.equal((await enter({})).suppressed,undefined,'Pinyin must receive its Enter');
- await composer.fire('compositionend');
- assert.equal((await enter({isComposing:false})).suppressed,undefined,'Safari commit can follow compositionend');
- await composer.fire('keyup',{key:'Enter'});
- assert.equal((await enter({keyCode:229})).suppressed,undefined,'IME sentinel remains safe');
- assert.equal((await enter({isComposing:true})).suppressed,undefined,'native composing event remains safe');
- await enter({shiftKey:true});await enter({repeat:true});
- assert.equal(submitCount,0);
- assert.equal(composer.value,'abc');
- assert.equal((await enter({})).suppressed,true);
- assert.equal(submitCount,1,'a separate deliberate Enter still submits');
- composer.value='';
  slowReply=new Promise(resolve=>releaseReply=resolve);nodes.get('chat-input').value='Slow question';
  const pendingQuestion=nodes.get('chat-form').fire('submit',{preventDefault:()=>{}});await settle();
  assert.equal(nodes.get('level-back').disabled,true);assert.equal(nodes.get('chat-input').disabled,true);
@@ -231,7 +355,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  progress.levels['entry'].messages.push({role:'assistant',content:'',image,step_goal:'Do you understand this step?',phase:'step'});
  await nodes.get('connection-check').fire('click');await settle();
  await nodes.get('close-level').fire('click');await settle();
- locate('/?level=entry');await window.fire('popstate');await settle();
+ window.history.pushState(null,'','/?level=entry');await window.fire('popstate');await settle();
  const illustrated=nodes.get('messages').children.filter(article=>descendants(article).some(node=>node.tag==='img'));
  assert.equal(illustrated.length,1);
  const picture=illustrated[0].children.find(node=>node.tag==='img');
@@ -240,6 +364,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  assert(!illustrated[0].children.some(node=>node.className?.startsWith('message-body')));
  assert(illustrated[0].textContent.includes('Do you understand this step?'));
  await nodes.get('mode-chat').fire('click');await settle();assert.equal(nodes.get('mode-chat').attrs['aria-pressed'],'true');
+ await exerciseChatInput('chat');
  assert(!descendants(nodes.get('messages')).some(node=>node.tag==='img'));
  progress.levels.entry.chat.messages.push({role:'assistant',content:'',image});
  await nodes.get('connection-check').fire('click');await settle();

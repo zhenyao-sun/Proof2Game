@@ -723,7 +723,7 @@
     }
     for(const id of ['level-back','level-forward'])$(id).disabled=busy||saveBusy;
     $('chat-input').disabled=busy||saveBusy;
-    $('send-message').disabled=busy || saveBusy || !$('chat-input').value.trim();
+    updateSendButton();
   }
   async function request(path,body) {
     if(window.proof2gameBrowser)return window.proof2gameBrowser.request(path,body);
@@ -808,7 +808,7 @@
         await openLevel(id,{startGuide:false,panel:target.mode});
         conversationDrafts.set(id+':'+target.mode,draft);
         input.value=draft;input.disabled=false;input.focus();input.setSelectionRange(input.value.length,input.value.length);
-        $('send-message').disabled=!input.value.trim();
+        updateSendButton();
       }else if(currentLevel&&$('level-dialog').open){
         if(!levelStatus().available.has(currentLevel)||target.action==='start'&&currentLevel===target.level_id)closeLevel();
         else{
@@ -1112,36 +1112,86 @@
     }
   }
   $('close-level').addEventListener('click',closeLevel);$('close-level-small').addEventListener('click',closeLevel);
-  $('level-dialog').addEventListener('cancel',event=>{event.preventDefault();closeLevel();});
   $('level-dialog').addEventListener('close',()=>{clearTimeout(prefetchTimer);const button=[...document.querySelectorAll('.level-node')].find(el=>el.dataset.levelId===lastFocusedNode);button?.focus();schedulePrefetch();});
-  $('chat-input').addEventListener('input',()=>{
-    sizeComposerInput();
-    $('send-message').disabled=busy || saveBusy || !$('chat-input').value.trim();
-  });
-  $('chat-input').addEventListener('focus',sizeComposerInput);
-  // Safari can report compositionend before the commit's Enter keydown.
-  // Native IMEs may also identify that key with code 229 rather than isComposing.
-  let composing=false,compositionJustEnded=false,compositionTimer;
   const chatInput=$('chat-input');
-  chatInput.addEventListener('compositionstart',()=>{
-    clearTimeout(compositionTimer);
-    composing=true;compositionJustEnded=false;
+  const sendButton=$('send-message');
+  let composing=false;
+  let selectionKeyDown=false;
+  let commitEnterUntil=0;
+  let imeEscapeUntil=0;
+  $('level-dialog').addEventListener('cancel',event=>{
+    event.preventDefault();
+    // The dialog's close request can arrive after the editor has ended the composition.
+    if(composing || Date.now()<imeEscapeUntil){
+      imeEscapeUntil=0;
+      return;
+    }
+    closeLevel();
   });
-  chatInput.addEventListener('compositionend',()=>{
-    composing=false;compositionJustEnded=true;
-    clearTimeout(compositionTimer);
-    compositionTimer=setTimeout(()=>{compositionJustEnded=false;},0);
+  function candidateSelectionKey(event){
+    return event.key===' ' || /^\d$/.test(event.key) || /^(Space|Digit\d|Numpad\d)$/.test(event.code);
+  }
+  function updateSendButton(){
+    sendButton.disabled=busy || saveBusy || composing || !chatInput.value.trim();
+  }
+  function endComposition(){
+    composing=false;
+    // WebKit can deliver the commit Enter in a later task, without any IME flag.
+    // Key release ends the guard. Some soft keyboards never send a keyup.
+    commitEnterUntil=selectionKeyDown?0:Date.now()+200;
+    selectionKeyDown=false;
+    updateSendButton();
+  }
+  chatInput.addEventListener('compositionstart',()=>{
+    composing=true;
+    imeEscapeUntil=0;
+    selectionKeyDown=false;
+    commitEnterUntil=0;
+    updateSendButton();
+  });
+  chatInput.addEventListener('compositionend',endComposition);
+  chatInput.addEventListener('input',event=>{
+    if(event.isComposing)composing=true;
+    else if(composing && event.inputType==='insertFromComposition')endComposition();
+    sizeComposerInput();
+    updateSendButton();
+  });
+  chatInput.addEventListener('focus',()=>{
+    // Blur alone does not commit the marked text. Start a fresh editing session on refocus.
+    composing=false;
+    imeEscapeUntil=0;
+    selectionKeyDown=false;
+    commitEnterUntil=0;
+    updateSendButton();
+    sizeComposerInput();
   });
   chatInput.addEventListener('keyup',event=>{
-    if(event.key==='Enter'&&!composing)compositionJustEnded=false;
+    if(event.key==='Enter' || event.code==='Enter' || event.code==='NumpadEnter' || candidateSelectionKey(event)){
+      selectionKeyDown=false;
+      commitEnterUntil=0;
+    }
   });
   chatInput.addEventListener('keydown',event=>{
-    if(event.key!=='Enter'||event.shiftKey||composing||compositionJustEnded||event.isComposing||event.keyCode===229)return;
+    if(event.key==='Escape' || event.code==='Escape'){
+      imeEscapeUntil=composing || event.isComposing || event.keyCode===229 ? Date.now()+200 : 0;
+      return;
+    }
+    if(composing || event.isComposing || event.keyCode===229){
+      if(composing)selectionKeyDown=candidateSelectionKey(event);
+      return;
+    }
+    if(event.key!=='Enter'){
+      if(event.key.length===1 || event.key==='Backspace')commitEnterUntil=0;
+      return;
+    }
+    if(event.shiftKey)return;
     event.preventDefault();
-    if(!event.repeat)$('chat-form').requestSubmit();
+    if(!event.repeat && Date.now()>=commitEnterUntil)$('chat-form').requestSubmit();
   });
   $('chat-form').addEventListener('submit',async event=>{
-    event.preventDefault();const input=$('chat-input');const message=input.value.trim();if(!message || busy || saveBusy)return;
+    event.preventDefault();
+    if(composing || (Date.now()<commitEnterUntil && event.submitter!==sendButton))return;
+    const input=chatInput;const message=input.value.trim();if(!message || busy || saveBusy)return;
     if(needsBrowserKey()){window.openProof2GameConnection();return;}
     // Keep unsent feedback visible if the request fails.
     const levelId=currentLevel,mode=chatMode();
