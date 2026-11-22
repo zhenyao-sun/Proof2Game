@@ -21,6 +21,42 @@ async function setup(options={}){
  async function act(action,extras={}){const value=await engine.request('/api/game');return engine.request('/api/action',{action,level_id:'result',mode:'guide',expected_revision:value.progress.revision,request_id:crypto.randomUUID(),...extras});}
  return {engine,storage,calls,act};
 }
+test('opening a numbered theorem scopes its lesson even when the next convention shares the number',async()=>{
+  const value=fixtureGame();
+  delete value.chinese;
+  const [result,proof]=value.levels;
+  value.levels=[
+    {id:'previous',type:'statement',title:'Previous result',text:'Prerequisite identity',paired:'previous-proof',parent:null},
+    {...result,kind:'Theorem',title:'A synthetic theorem',statement_number:'1.3',structural_path:'1.2',parent:'previous',text:String.raw`Apply \ref{ms:previous}.`},
+    {id:'later',type:'convention',title:'Convention',structural_path:'1.3',owner:result.id,parent:null,text:'Future convention'},
+    proof,
+    {id:'previous-proof',type:'proof',title:'Proof of the previous result',text:'Earlier proof',paired:'previous',parent:'previous'},
+  ];
+  value.internal_references={'ms:previous':{level_id:'previous'}};
+  const f=await setup({game:value});
+  const prompt=()=>JSON.parse(f.calls.at(-1).options.body).messages[0].content[0].text;
+  const context=()=>JSON.parse(prompt().split('CONTEXT DATA:\n')[1].split('\nReturn ONLY')[0]);
+  f.engine.setKey('test-key');
+  await f.act('start',{level_id:'previous'});
+  await f.act('understand_all',{level_id:'previous'});
+  await f.act('prefetch');
+  const resultState=await f.act('start');
+  assert.equal(f.calls.length,2);
+  assert.equal(resultState.progress.levels.result.messages.length,1);
+  assert.equal(resultState.progress.levels.later,undefined);
+  assert.match(prompt(),/Only context\.level identifies the active level/);
+  assert.equal(context().level.id,'result');
+  assert.equal(context().level.statement_number,'1.3');
+  assert.equal(context().level.structural_path,'1.2');
+  assert.deepEqual(context().supporting_levels.map(({id,text})=>[id,text]),[['previous','Prerequisite identity']]);
+  assert.deepEqual(context().manuscript,[]);
+  assert.equal(context().other_level_conversations,undefined);
+  assert(!prompt().includes('Future convention'));
+  await f.act('message',{message:'Where is this used?'});
+  assert.equal(context().manuscript[0].text,'Synthetic source');
+  assert(context().other_level_conversations.previous);
+});
+
 test('anonymous map and prefetch require neither key nor network',async()=>{
  let prompts=0;const f=await setup({onMissingKey:()=>prompts++});
  assert.equal((await f.engine.request('/api/game')).level_status.result,'open');await f.act('prefetch');assert.equal(f.calls.length,0);assert.equal(prompts,0);
