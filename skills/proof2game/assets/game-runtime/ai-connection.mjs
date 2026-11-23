@@ -1,82 +1,84 @@
-const providers = ['deepseek', 'bailian'];
-const prefix = 'proof2game:ai:';
-const legacy = 'proof2game:deepseek-key';
+const connectionKey = 'proof2game:ai:deepseek';
+const legacyKey = 'proof2game:deepseek-key';
 
 export function createConnections({storage, models, checks, onChange = () => {}, onRequired = () => {}}) {
-  const attempts = new Map();
+  storage.removeItem('proof2game:ai:bailian');
+  let attempt;
   const waiters = new Set();
-  const stored = provider => {
-    if (!providers.includes(provider)) throw new Error('Unknown AI service.');
-    const raw = storage.getItem(prefix + provider);
-    if (raw) {
-      const record = JSON.parse(raw);
-      if (typeof record.key === 'string' && Array.isArray(record.models)) return record;
-      throw new Error('Invalid AI connection configuration.');
-    }
-    return {key: provider === 'deepseek' ? storage.getItem(legacy) || '' : '', models: []};
-  };
-  function state(provider) {
-    const record = stored(provider);
+
+  function checkProvider(provider) {
+    if (provider !== 'deepseek') throw new Error('Unknown AI service.');
+  }
+  function stored() {
+    const raw = storage.getItem(connectionKey);
+    if (!raw) return {key: storage.getItem(legacyKey) || '', models: []};
+    const record = JSON.parse(raw);
+    if (typeof record.key !== 'string' || !Array.isArray(record.models)) throw new Error('Invalid AI connection configuration.');
+    return record;
+  }
+  function state() {
+    const record = stored();
     if (!record.key) return 'missing';
-    if (attempts.get(provider)?.key === record.key) return 'verifying';
-    if (record.models.includes(models[provider])) return 'verified';
+    if (attempt?.key === record.key) return 'verifying';
+    if (record.models.includes(models.deepseek)) return 'verified';
     return record.error || 'unverified';
   }
-  const verified = () => providers.every(provider => state(provider) === 'verified');
+  const verified = () => state() === 'verified';
   const snapshot = () => ({
-    available: true, authenticated: verified(),
-    providers: Object.fromEntries(providers.map(provider => [provider, {state: state(provider)}]))
+    available: true, authenticated: verified(), providers: {deepseek: {state: state()}}
   });
   function notify() {
-    onChange(snapshot());
-    if (verified()) for (const wake of [...waiters]) wake();
+    const connection = snapshot();
+    onChange(connection);
+    if (connection.authenticated) for (const wake of [...waiters]) wake();
   }
   function setKey(provider, value) {
-    const previous = stored(provider);
+    checkProvider(provider);
+    const previous = stored();
     if (typeof value !== 'string' || value.length > 1024 || /[\s\x00-\x1f]/.test(value)) throw new Error('Enter an API key without spaces.');
     if (value === previous.key) return;
-    attempts.get(provider)?.controller.abort();
-    attempts.delete(provider);
-    if (value) storage.setItem(prefix + provider, JSON.stringify({key: value, models: []}));
-    else storage.removeItem(prefix + provider);
-    if (provider === 'deepseek') storage.removeItem(legacy);
+    attempt?.controller.abort();
+    attempt = undefined;
+    if (value) storage.setItem(connectionKey, JSON.stringify({key: value, models: []}));
+    else storage.removeItem(connectionKey);
+    storage.removeItem(legacyKey);
     notify();
   }
   async function verify(provider, {force = false} = {}) {
-    const record = stored(provider);
+    checkProvider(provider);
+    const record = stored();
     if (!record.key) throw new Error('Enter an API key first.');
-    const existing = attempts.get(provider);
-    if (existing?.key === record.key) return existing.promise;
-    if (!force && state(provider) === 'verified') return snapshot();
+    if (attempt?.key === record.key) return attempt.promise;
+    if (!force && verified()) return snapshot();
     const controller = new AbortController();
-    const attempt = {controller, key: record.key};
+    const active = {controller, key: record.key};
     const timer = setTimeout(() => controller.abort(), 120000);
-    attempts.set(provider, attempt);
-    attempt.promise = (async () => {
+    attempt = active;
+    active.promise = (async () => {
       try {
-        await checks[provider](record.key, controller.signal);
-        const current = stored(provider);
-        if (attempts.get(provider) === attempt && current.key === record.key) {
-          storage.setItem(prefix + provider, JSON.stringify({key: current.key, models: [...new Set([...current.models, models[provider]])]}));
-          if (provider === 'deepseek') storage.removeItem(legacy);
+        await checks.deepseek(record.key, controller.signal);
+        const current = stored();
+        if (attempt === active && current.key === record.key) {
+          storage.setItem(connectionKey, JSON.stringify({key: current.key, models: [...new Set([...current.models, models.deepseek])]}));
+          storage.removeItem(legacyKey);
         }
       } catch (error) {
-        const current = stored(provider);
-        if (attempts.get(provider) === attempt && current.key === record.key) {
+        const current = stored();
+        if (attempt === active && current.key === record.key) {
           const reason = error.reason === 'invalid_key' || error.reason === 'balance' ? error.reason : 'failed';
-          const retained = reason === 'failed' ? current.models.filter(model => model !== models[provider]) : [];
-          storage.setItem(prefix + provider, JSON.stringify({...current, models: retained, error: reason}));
+          const retained = reason === 'failed' ? current.models.filter(model => model !== models.deepseek) : [];
+          storage.setItem(connectionKey, JSON.stringify({...current, models: retained, error: reason}));
         }
         throw error;
       } finally {
         clearTimeout(timer);
-        if (attempts.get(provider) === attempt) attempts.delete(provider);
+        if (attempt === active) attempt = undefined;
         notify();
       }
       return snapshot();
     })();
     notify();
-    return attempt.promise;
+    return active.promise;
   }
   function waitUntilVerified(signal) {
     if (verified()) return Promise.resolve();
@@ -92,28 +94,28 @@ export function createConnections({storage, models, checks, onChange = () => {},
   function requireVerified() {
     if (verified()) return;
     onRequired({connection: snapshot()});
-    throw Object.assign(new Error('Verify both API keys in AI Connection to enter a level.'), {status: 401, code: 'missingKey'});
+    throw Object.assign(new Error('Verify your DeepSeek API key in AI Connection to enter a level.'), {status: 401, code: 'missingKey'});
   }
   async function withVerifiedService(provider, operation, signal, background = false, onPause = () => {}) {
+    checkProvider(provider);
     for (;;) {
       signal?.throwIfAborted();
       if (!verified()) {
-        if (background) throw new Error('Waiting for verified API connections.');
+        if (background) throw new Error('Waiting for the DeepSeek connection.');
         onPause(true);
         try {
           onRequired({connection: snapshot(), paused: true});
           await waitUntilVerified(signal);
         } finally {onPause(false);}
       }
-      const attemptedKey = stored(provider).key;
+      const attemptedKey = stored().key;
       try {return await operation(attemptedKey);}
       catch (error) {
         const invalid = error.reason === 'invalid_key' || error.status === 401;
-        const billing = provider === 'bailian' && error.reason === 'balance';
-        if (!invalid && !billing) throw error;
-        const current = stored(provider);
+        if (!invalid) throw error;
+        const current = stored();
         if (current.key === attemptedKey) {
-          storage.setItem(prefix + provider, JSON.stringify({...current, models: [], error: billing ? 'balance' : 'invalid_key'}));
+          storage.setItem(connectionKey, JSON.stringify({...current, models: [], error: 'invalid_key'}));
           notify();
         }
         if (background) throw error;
@@ -121,7 +123,7 @@ export function createConnections({storage, models, checks, onChange = () => {},
     }
   }
   function syncStorage(eventKey) {
-    if (eventKey && eventKey !== legacy && !eventKey.startsWith(prefix)) return false;
+    if (eventKey && eventKey !== legacyKey && eventKey !== connectionKey) return false;
     notify();
     return true;
   }

@@ -2,31 +2,26 @@ import {loadBrowserGame} from './browser-engine.mjs';
 
 const $ = id => document.getElementById(id);
 const dialog = $('ai-dialog');
-const services = {
-  deepseek: {name: 'DeepSeek', url: 'https://platform.deepseek.com/api_keys'},
-  bailian: {name: 'Bailian', url: 'https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key'}
-};
 const copy = {
   en: {
-    description: 'This browser stores each key for future visits. Tutor requests go directly to DeepSeek. Image requests go directly to Alibaba Cloud Bailian (Beijing). Each service bills your own account.',
+    description: 'This browser saves your API key for future visits. Tutor requests go directly to DeepSeek and are billed to your account.',
     missing: 'Key needed', unverified: 'Verify key', verifying: 'Verifying…', verified: 'Verified ✓',
     failed: 'Verification failed. Check the key, model access and network, then retry.',
     invalid_key: 'Key rejected. Replace it and verify again.', balance: 'Insufficient balance. Top up and verify again.',
-    apply: 'Get an API key ↗', verify: 'Verify', clear: 'Clear', warning: 'Verification generates a test image and may incur a charge.',
+    apply: 'Get an API key ↗', verify: 'Verify', clear: 'Clear',
     existing: 'Saved key · enter a new key to replace it', enter: 'Enter your API key', invalid: 'Enter a key without spaces.', close: 'Close'
   },
   zh: {
-    description: '两把 Key 分别保存在当前浏览器，重开游戏后可继续使用。导师请求直连 DeepSeek，绘图请求直连阿里云百炼（北京），费用分别计入你的对应账户。',
+    description: 'API Key 保存在当前浏览器，重开游戏后可继续使用。导师请求直接发给 DeepSeek，费用计入你的账户。',
     missing: '待配置', unverified: '待验证', verifying: '验证中…', verified: '已验证 ✓', failed: '验证失败。请检查 Key、模型访问权限和网络后重试。',
     invalid_key: 'Key 已失效，请更换并重新验证。', balance: '余额不足，请充值后重新验证。',
-    apply: '申请 API Key ↗', verify: '验证', clear: '清除', warning: '验证会生成一张测试图，可能计费',
+    apply: '申请 API Key ↗', verify: '验证', clear: '清除',
     existing: '已保存，可输入新 Key 更换', enter: '输入 API Key', invalid: '请输入不含空格的 Key。', close: '关闭'
   }
 };
 const chinese = () => document.documentElement.lang.startsWith('zh');
 const words = () => chinese() ? copy.zh : copy.en;
-const nameOf = (service, zh) => service === 'bailian' && zh ? '百炼' : services[service].name;
-const rows = new Map();
+let row;
 let whenReady;
 let autoClose = false;
 let lastConnection;
@@ -35,27 +30,25 @@ function node(tag, className) {
   if (className) el.className = className;
   return el;
 }
-function makeRow(service) {
+function makeRow() {
   const form = node('form', 'provider-connection');
   const label = node('label'), link = node('a');
   const input = node('input'), status = node('span', 'provider-status');
   const actions = node('div', 'save-tools'), verify = node('button', 'primary-button'), clear = node('button', 'plain-button');
-  const warning = node('small');
-  label.htmlFor = input.id = service+'-key';
-  link.href = services[service].url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+  label.htmlFor = input.id = 'deepseek-key';
+  link.href = 'https://platform.deepseek.com/api_keys'; link.target = '_blank'; link.rel = 'noopener noreferrer';
   input.type = 'password'; input.autocomplete = 'off'; input.spellcheck = false; input.maxLength = 1024;
   status.setAttribute('role', 'status');
   verify.type = 'submit'; clear.type = 'button';
   actions.append(verify, clear);
   form.append(label, link, input, status, actions);
-  if (service === 'bailian') form.append(warning);
   $('ai-providers').append(form);
   const engine = window.proof2gameBrowser;
   function storeInput(clearAfter = false) {
     const value = input.value.trim();
     try {
       // An empty submitted field rechecks the saved key.
-      if (value || !clearAfter) engine.setKey(service, value);
+      if (value || !clearAfter) engine.setKey('deepseek', value);
       if (clearAfter) input.value = '';
       return true;
     } catch {
@@ -72,17 +65,17 @@ function makeRow(service) {
   form.addEventListener('submit', async event => {
     event.preventDefault();
     if (!storeInput(true)) {input.reportValidity(); return;}
-    if (engine.connection().providers[service].state === 'missing') {
+    if (engine.connection().providers.deepseek.state === 'missing') {
       input.setCustomValidity(words().enter); input.reportValidity(); return;
     }
-    try {await engine.verifyKey(service, {force: true});} catch {render(engine.connection());}
+    try {await engine.verifyKey('deepseek', {force: true});} catch {render(engine.connection());}
   });
   clear.addEventListener('click', () => {
     input.value = ''; input.setCustomValidity('');
-    engine.setKey(service, '');
+    engine.setKey('deepseek', '');
     render(engine.connection());
   });
-  rows.set(service, {label, link, input, status, verify, clear, warning});
+  return {label, link, input, status, verify, clear};
 }
 function render(connection) {
   lastConnection = connection;
@@ -90,23 +83,22 @@ function render(connection) {
   $('ai-title').textContent = chinese() ? 'AI Connection · AI 连接' : 'AI Connection';
   $('close-ai').setAttribute('aria-label', text.close);
   $('ai-description').textContent = text.description;
-  for (const [service,row] of rows) {
-    const state = connection.providers[service].state;
-    row.label.textContent = nameOf(service, chinese())+' API Key';
-    row.link.textContent = text.apply;
-    row.input.placeholder = state === 'missing' ? text.enter : text.existing;
-    row.status.textContent = text[state];
-    row.status.dataset.state = state;
-    row.verify.textContent = text.verify;
-    row.verify.disabled = state === 'verifying';
-    row.clear.textContent = text.clear;
-    row.warning.textContent = text.warning;
-  }
+  if (!row) return;
+  const state = connection.providers.deepseek.state;
+  row.label.textContent = 'DeepSeek API Key';
+  row.link.textContent = text.apply;
+  row.input.placeholder = state === 'missing' ? text.enter : text.existing;
+  row.status.textContent = text[state];
+  row.status.dataset.state = state;
+  row.verify.textContent = text.verify;
+  row.verify.disabled = state === 'verifying';
+  row.clear.textContent = text.clear;
 }
 window.proof2gameConnectionStatus = (providers, language) => {
   const zh = language === '中文', text = zh ? copy.zh : copy.en;
   const compact = {invalid_key: zh ? '失效' : 'rejected', balance: zh ? '余额不足' : 'low balance', failed: zh ? '失败' : 'failed'};
-  return Object.entries(providers).map(([service, {state}]) => nameOf(service, zh)+' '+(compact[state] || text[state])).join(' · ');
+  const state = providers.deepseek.state;
+  return 'DeepSeek '+(compact[state] || text[state]);
 };
 window.openProof2GameConnection = (reason = {}) => {
   render(reason.connection || window.proof2gameBrowser.connection());
@@ -130,7 +122,7 @@ function onConnectionChange(connection) {
 try {
   const engine = await loadBrowserGame({onMissingKey: window.openProof2GameConnection, onConnectionChange});
   window.proof2gameBrowser = engine;
-  Object.keys(services).forEach(makeRow);
+  row = makeRow();
   $('close-ai').addEventListener('click', () => dialog.close());
   // A history navigation supersedes the house or citation that opened setup.
   window.addEventListener('popstate', () => {
@@ -140,7 +132,7 @@ try {
   dialog.addEventListener('close', () => {
     if (dialog.open) return;
     whenReady = undefined; autoClose = false;
-    for (const {input} of rows.values()) {input.value = ''; input.setCustomValidity('');}
+    row.input.value = ''; row.input.setCustomValidity('');
   });
   render(engine.connection());
   const result = await engine.request('/api/game');

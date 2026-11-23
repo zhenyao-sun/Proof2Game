@@ -44,7 +44,7 @@ reviewed snapshot. Correct a translation-only defect in the game translation.
 
    Omit `--paper-metadata` for an unpublished project. Omit `--source-bindings`
    when there are no external citations. The browser tutor uses
-   `deepseek-flash` for tool calls and visual review of candidate images.
+   `deepseek-flash` for Guide and Chat replies.
 
 ## Publish the website
 
@@ -66,16 +66,12 @@ verified locators retained in the game.
 
 Open the published GitHub Pages link directly in a browser, including when hosted under a repository subpath. For public literature, verify the original title, authors and exact version. The map must load without an API key or a local service.
 
-Use AI Connection to verify the player’s DeepSeek and Bailian (Beijing) keys separately. Verification calls the configured tutor and image model. Bailian verification generates one potentially billable test image. Check that a player can focus the next house before verification and enter it once both services succeed. Replace or clear each key independently. A save, download or deployment must contain no credentials.
-
-When a Guide passage needs a drawing, or a player requests one in Regular chat, the tutor sends the drawing instructions to Bailian. DeepSeek inspects the returned image before choosing which candidates appear with the explanation. Background preparation may plan a drawing. Only a player-triggered reply can start generation. The initial timing budget is 45 seconds per image request and 120 seconds for the drawing and review round. The 120-second value is provisional pending live measurements. In a live check, record image quality and elapsed time for a first usable drawing, a redraw and an ordinary failure followed by retry. Check key recovery and insufficient balance separately.
+Use AI Connection to verify the player’s DeepSeek key. Check that a player can focus the next house before verification and enter it once the tutor connection succeeds. Check key replacement, clearing and insufficient balance. Keep the key out of saves, downloads and deployments.
 
 Check that each visible road follows the manuscript tree, including branches from a proof to its direct child statements. Verify the first house, the reveal of a new road and house, and the full village after the final level. Restore earlier progress and check that Continue learning focuses the next open house in manuscript order.
 
-On portrait iPhone Safari and Android Chrome, check map gestures, wide formulas, inline illustrations and the keyboard. Verify that returning to a level restores its panel, reading position and Chat draft for the current page session. Check both languages, passage confirmations, manual save, delete/undo, restore after load/import and cross-device image placement. Same-origin tabs share browser storage; reject stale writes. Different browsers and devices use separate storage and can transfer progress through a downloaded save. Imports of existing same-snapshot local-runtime saves remain supported. No credentials are transferred.
+On portrait iPhone Safari and Android Chrome, check map gestures, wide formulas and the keyboard. Verify that returning to a level restores its panel, reading position and Chat draft for the current page session. Check both languages, passage confirmations, manual save, delete/undo, restore after load/import and cross-device conversation history. Same-origin tabs share browser storage; reject stale writes. Different browsers and devices use separate storage and can transfer progress through a downloaded save. Imports of existing same-snapshot local-runtime saves remain supported. No credentials are transferred.
 
 JSON mode may return blank content even with `finish_reason=stop`. Keep the runtime’s bounded JSON recovery and exact post-reply validation; distinguish provider/format failures from network failures without logging keys or reply content. Same-origin snapshot reads must retain login cookies on private hosting.
 
-On Safari, test the signed PNG download and an actual illustrated reply after key verification. Check that a reviewed image opens in the viewer and survives a refresh. A retry can report that the browser could not download an image or that the tutor selected none. If the tutor supplies unusable placement metadata, correct only that metadata using the same candidates and preserve the original lesson and learning state.
-
-Test the real deployed URL and an actual tutor request when credentials are available. Unit tests and synthetic API responses do not establish live provider availability. Record precisely which checks ran. Existing published games and their saves are left intact; re-export or deployment of a specific game requires its author's authorization.
+On the deployed URL, use Safari and an available verified key to request a Guide explanation and a Chat reply. Reload and check that the messages and progress are restored. When upgrading a game, open a previous same-snapshot save and check its text and learning state. Unit tests and synthetic API responses do not establish live provider availability. Record precisely which checks ran. Existing published games and their saves are left intact; re-export or deployment of a specific game requires its author's authorization.

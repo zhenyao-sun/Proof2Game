@@ -16,7 +16,7 @@ import threading
 import time
 
 RUNTIME = Path(__file__).resolve().parents[1] / 'assets/game-runtime/server.mjs'
-RUNTIME_MODULES = ('guide-diagram.mjs', 'level-tree.mjs')
+RUNTIME_MODULES = ('save-store.mjs', 'level-tree.mjs')
 
 FAKE_CLI = r'''#!/usr/bin/env python3
 import json, os, pathlib, sys, time
@@ -68,19 +68,8 @@ if ctx['language']=='中文':
     answer['message']='这一步给出等式 \(x=x\)。' if ctx.get('mode')=='guide' else '这是对你的问题的回答。'
     if ctx.get('mode')=='guide':answer['step_goal']='理解这一小步。'
 schema=json.loads(pathlib.Path(args[args.index('--output-schema')+1]).read_text())
-assert 'diagram' in schema['required']
-answer['diagram']=None
-if msg in ['Show this with a diagram.', 'Invalid diagram.', 'Draw a blueberry.']:
-    answer['message']=''
-    answer['diagram']={'alt':'Two points joined by an arrow.', 'elements':[
-        {'kind':'line','x1':100,'y1':200,'x2':530,'y2':200,'arrow':True,'color':'ink'},
-        {'kind':'label','x':100,'y':160,'text':'x < y','color':'blue'},
-    ]}
-    if msg=='Draw a blueberry.':
-        answer['diagram']={'alt':'A blueberry.', 'elements':[
-            {'kind':'circle','x':320,'y':200,'radius':75,'color':'blue'}
-        ]}
-    if msg=='Invalid diagram.':answer['diagram']['elements'][0]['x1']='0" onclick="alert(1)'
+assert 'diagram' not in schema['properties']
+assert 'illustrations' not in schema['properties']
 pathlib.Path(args[args.index('--output-last-message')+1]).write_text(json.dumps(answer))
 print(json.dumps({'type':'turn.completed'}))
 '''
@@ -795,75 +784,57 @@ class GameRuntimeTests(unittest.TestCase):
         self.assertIn(before,backups)
         self.assertEqual(self.payload['progress']['recent_actions'] if 'recent_actions' in self.payload['progress'] else [],[])
 
-    def test_guide_diagram_stays_in_its_step_after_revisit_restart_and_portable_import(self):
+    def test_guide_and_chat_drawing_requests_return_text(self):
         self.assertEqual(self.action('start')[0], 200)
-        self.assertEqual(self.action('message', message='Show this with a diagram.')[0], 200)
-        history = self.guide_state()['messages']
-        step = history[2]
-        self.assertEqual(step['content'], '')
-        self.assertIn('understand', step['step_goal'])
-        self.assertEqual(step['image']['alt'], 'Two points joined by an arrow.')
-        self.assertIn('x &lt; y', step['image']['svg'])
-        self.assertNotIn('image', history[0])
+        for mode in ('guide', 'chat'):
+            with self.subTest(mode=mode):
+                self.assertEqual(self.action('mode', mode=mode)[0], 200)
+                self.assertEqual(self.action('message', mode=mode, message='Draw a blueberry.')[0], 200)
+                level = self.guide_state()
+                history = level if mode == 'guide' else level['chat']
+                reply = history['messages'][-1]
+                self.assertTrue(reply['content'].strip())
+                self.assertNotIn('image', reply)
+                self.assertNotIn('images', reply)
+                self.assertEqual(self.payload['progress']['completed'], [])
+
+    def test_old_illustrated_save_preserves_text_and_progress_across_import_and_restart(self):
+        self.assertEqual(self.action('start')[0], 200)
         self.assertEqual(self.action('understand_all')[0], 200)
-        self.assertEqual(self.action('start')[0], 200)
-        self.assertEqual(self.guide_state()['messages'][:3], history)
-        self.assertEqual(self.action('save_create')[0], 200)
+        self.assertEqual(self.action('mode', mode='chat')[0], 200)
+        self.assertEqual(self.action('message', mode='chat', message='What is the definition?')[0], 200)
+        saved = json.loads(self.call('GET', '/api/save/export')[2])
+        previous = self.guide_state()
+        legacy = saved['progress']['levels']['a']
+        legacy['messages'][0]['image'] = {'alt': 'Two labelled points.', 'svg': '<svg></svg>'}
+        legacy['chat']['messages'][-1]['images'] = [{'alt': 'One point.', 'after_paragraph': 0,
+                                                     'data_url': 'data:image/png;base64,AA=='}]
+        legacy['chat']['messages'][-1]['image_retry'] = True
+        self.assertEqual(self.action('save_create', label='Earlier release')[0], 200)
+        old_id = self.payload['saves'][0]['id']
+        old_file = self.root/'manual-saves'/f'{old_id}.json'
+        self.stop()
+        old_file.write_text(json.dumps(saved))
+        original_bytes = old_file.read_bytes()
+        self.start()
+        status, _, downloaded = self.call('GET', f'/api/saves/{old_id}/download')
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(downloaded)['progress']['levels']['a'], previous)
+        self.assertEqual(self.action('save_load', save_id=old_id)[0], 200)
+        self.assertEqual(old_file.read_bytes(), original_bytes)
+        self.assertEqual(self.action('save_import', save=saved)[0], 200)
+        self.assertEqual(self.guide_state(), previous)
+        self.assertEqual(self.payload['progress']['completed'], ['a'])
+        self.assertEqual(self.action('save_create', label='Text only')[0], 200)
         save_id = self.payload['saves'][0]['id']
         for route in ('/api/save/export', f'/api/saves/{save_id}/download'):
             status, _, body = self.call('GET', route)
             self.assertEqual(status, 200)
-            exported = json.loads(body)
-            self.assertEqual(exported['progress']['levels']['a']['messages'][2], step)
+            self.assertEqual(json.loads(body)['progress']['levels']['a'], previous)
         self.stop()
         self.start()
-        self.assertEqual(self.guide_state()['messages'][2], step)
-        self.stop()
-        original_root = self.root
-        self.root = original_root/'clean-install'
-        self.root.mkdir()
-        for name in ('server.mjs', *RUNTIME_MODULES, 'index.html', 'app.js', 'style.css', 'game.json'):
-            shutil.copyfile(original_root/name, self.root/name)
-        shutil.copytree(original_root/'snapshot', self.root/'snapshot')
-        shutil.copyfile(original_root/'fake-codex', self.root/'fake-codex')
-        (self.root/'fake-codex').chmod(0o700)
-        self.env['PROOF2GAME_CODEX'] = str(self.root/'fake-codex')
-        self.start()
-        self.assertEqual(self.payload['progress']['levels'], {})
-        self.assertEqual(self.action('save_import', save=exported)[0], 200)
-        self.assertEqual(self.guide_state()['messages'][2], step)
-        self.assertFalse((self.root/'calls.jsonl').exists(), 'restoring the picture needs no new tutor call')
-
-    def test_regular_chat_renders_requested_drawing_and_saves_it(self):
-        self.assertEqual(self.action('mode', mode='chat')[0], 200)
-        self.assertEqual(self.action('message', mode='chat', message='Draw a blueberry.')[0], 200)
-        step = self.guide_state()['chat']['messages'][-1]
-        self.assertEqual(step['content'], '')
-        self.assertEqual(step['image']['alt'], 'A blueberry.')
-        self.assertIn('<circle ', step['image']['svg'])
-        self.assertNotIn('step_goal', step)
-        self.assertEqual(self.payload['progress']['completed'], [])
-        status, _, body = self.call('GET', '/api/save/export')
-        self.assertEqual(status, 200)
-        exported = json.loads(body)
-        self.stop()
-        self.start()
-        self.assertEqual(self.guide_state()['chat']['messages'][-1], step)
-        self.assertEqual(self.action('save_import', save=exported)[0], 200)
-        self.assertEqual(self.guide_state()['chat']['messages'][-1], step)
-
-    def test_invalid_guide_diagram_and_unsafe_import_preserve_progress(self):
-        self.action('start')
-        original = self.get()['progress']
-        self.assertEqual(self.action('message', message='Invalid diagram.')[0], 500)
-        self.assertEqual(self.get()['progress'], original)
-        self.action('message', message='Show this with a diagram.')
-        original = self.get()['progress']
-        unsafe = json.loads(json.dumps(original))
-        image = unsafe['levels']['a']['messages'][2]['image']
-        image['svg'] = image['svg'].replace('</svg>', '<script>alert(1)</script></svg>')
-        self.assertEqual(self.action('save_import', save=unsafe)[0], 400)
-        self.assertEqual(self.get()['progress'], original)
+        self.assertEqual(self.guide_state(), previous)
+        self.assertEqual(self.payload['progress']['completed'], ['a'])
 
     def test_current_download_preserves_previous_release_save_format(self):
         self.assertEqual(self.action('understand_all')[0], 200)

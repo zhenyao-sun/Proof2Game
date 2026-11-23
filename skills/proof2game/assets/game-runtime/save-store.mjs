@@ -1,5 +1,18 @@
 // The progress record and its manual/recovery snapshots change in one transaction.
-// Keep immutable snapshots separate so reading the map does not load every illustration.
+// Keep snapshots separate so reading the map only loads the current conversation.
+export function stripLegacyMessageImages(message) {
+  if (!message || typeof message !== 'object' ||
+      !['images', 'image', 'image_retry'].some(key => Object.hasOwn(message, key))) return false;
+  if (message.role === 'assistant' && typeof message.content === 'string' && !message.content.trim()) {
+    const captions = [message.image, ...(Array.isArray(message.images) ? message.images : [])]
+      .map(item => item?.alt).filter(alt => typeof alt === 'string' && alt.trim());
+    if (captions.length) message.content = captions.join('\n\n');
+  }
+  delete message.image;
+  delete message.images;
+  delete message.image_retry;
+  return true;
+}
 const changed = () => Object.assign(new Error('Progress changed in another tab. Refresh and retry.'), {
   status:409, publicCode:'progressChanged'
 });
@@ -12,7 +25,7 @@ export function createSaveStore(key, storage, blankProgress, validate, database 
     if (!raw) return {state:empty(), files:{}};
     const old = JSON.parse(raw);
     if (old.storage_version === 2) return old;
-    validate(old.progress);
+    validate(structuredClone(old.progress));
     if (!old.saves || Array.isArray(old.saves) || !Array.isArray(old.recovery) || !Number.isSafeInteger(old.generation)) {
       throw new Error('Invalid browser save. Existing data was preserved.');
     }
@@ -72,7 +85,7 @@ export function createSaveStore(key, storage, blankProgress, validate, database 
         if (current) return;
         const raw = storage.getItem(key);
         const legacy = migrate(raw);
-        validate(legacy.state.progress);
+        validate(structuredClone(legacy.state.progress));
         games.put(legacy.state, key);
         for (const [id, value] of Object.entries(legacy.files)) snapshots.put(value, [key, id]);
         migrated = Boolean(raw);

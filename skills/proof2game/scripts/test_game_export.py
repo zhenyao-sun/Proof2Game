@@ -190,9 +190,12 @@ class GameExportTests(unittest.TestCase):
         self.assertEqual(manifest['launch_mode'], 'browser')
         for filename in game.BROWSER_FILES:
             self.assertTrue((site / filename).is_file(), filename)
-        for filename in ('ai-connection.mjs', 'illustration-tools.mjs', 'save-store.mjs'):
+        for filename in ('ai-connection.mjs', 'save-store.mjs'):
             self.assertTrue(any('./' + filename + '?v=' + manifest['connector'] in module.read_text()
                                 for module in site.glob('*.mjs')), filename)
+        for retired_asset in ('illustration-tools.mjs', 'guide-diagram.mjs'):
+            self.assertFalse((site / retired_asset).exists())
+            self.assertNotIn(retired_asset, manifest['files'])
         portrait = Path(game.__file__).resolve().parents[3] / 'docs/agents/tutor.webp'
         self.assertEqual((site / 'tutor.webp').read_bytes(), portrait.read_bytes())
         self.assertFalse((site / 'server.mjs').exists())

@@ -21,8 +21,7 @@ from state import default_models
 TUTOR_MODEL, TUTOR_REASONING = default_models()["tutor"]
 BROWSER_FILES = (
     'app.js', 'style.css', 'browser-entry.mjs', 'browser-engine.mjs',
-    'guide-diagram.mjs', 'level-tree.mjs', 'ai-connection.mjs', 'illustration-tools.mjs',
-    'save-store.mjs',
+    'level-tree.mjs', 'ai-connection.mjs', 'save-store.mjs',
 )
 
 
@@ -678,8 +677,8 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
            model=TUTOR_MODEL, reasoning=TUTOR_REASONING, *, paper=None):
     if sys.platform != 'darwin':
         raise Rejected('Proof2Game generation is supported on macOS.')
-    if model != 'deepseek-flash':
-        raise Rejected('Use deepseek-flash for a tutor that supports both tool calls and image review.')
+    if model != TUTOR_MODEL:
+        raise Rejected(f'Browser games use the {TUTOR_MODEL} tutor model.')
     output = Path(output).resolve()
     if output.suffix.lower() == '.zip':
         raise Rejected('Output must be a new directory for the hosted game.')

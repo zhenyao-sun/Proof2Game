@@ -10,32 +10,41 @@ class MemoryStorage{
 const game=()=>({schema:1,id:'synthetic',snapshot_digest:'synthetic',model:'deepseek-flash',reasoning_effort:'medium',project_type:'unpublished',references:[],snapshot_files:{'snapshot/main.tex':'fixture'},manuscript:{files:['snapshot/main.tex']},levels:[{id:'result',type:'statement',paired:'proof',parent:null,text:'A synthetic statement',source_file:'snapshot/main.tex'},{id:'proof',type:'proof',paired:'result',parent:'result',text:'Synthetic proof',source_file:'snapshot/main.tex'}],chinese:{files:['translation/zh/main.tex'],levels:{result:{title:'结论',text:'合成结论'},proof:{title:'证明',text:'合成证明'}}}});
 function fixtureGame(){const value=game();value.snapshot_files['translation/zh/main.tex']='fixture';return value;}
 const none={kind:'none',scope:'partial',description:'',quote:'',level_id:null};
-const answer=(extra={})=>({message:'A short explanation.',illustrations:[],step_goal:'Understand this passage',phase:'step',understanding:none,...extra});
+const answer=(extra={})=>({message:'A short explanation.',step_goal:'Understand this passage',phase:'step',understanding:none,...extra});
 function tutorReply(fields) {
   return Response.json({choices:[{finish_reason:'stop', message:{content:JSON.stringify(answer(fields))}}]});
 }
+function finalResponse(content) {
+  return Response.json({choices:[{finish_reason:'stop',message:{content}}]});
+}
+function promptText(body) {
+  const content=body.messages[0].content;
+  return typeof content==='string' ? content : content[0].text;
+}
 async function setup(options={}){
  const {createBrowserGame}=await import(moduleURL);const storage=options.storage||new MemoryStorage();const calls=[];
- const tutorFetch=options.fetcher||async function(url,options){calls.push({url,options});const result=answer();if(JSON.parse(options.body).messages[0].content[0].text.startsWith('Respond to')){delete result.phase;delete result.step_goal;}return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(result)}}]})};};
+ const tutorFetch = options.fetcher || (async (url, init) => {
+   calls.push({url,options:init});
+   const result=answer();
+   if (promptText(JSON.parse(init.body)).startsWith('Respond to')) {
+     delete result.phase;
+     delete result.step_goal;
+   }
+   return finalResponse(JSON.stringify(result));
+ });
  const verificationCalls = [];
  const fetcher = async (url, init) => {
-   const body = init?.body ? JSON.parse(init.body) : {};
-   const service = body.messages?.[0]?.content === 'Reply with OK.' ? 'deepseek'
-     : body.input?.messages?.[0]?.content?.[0]?.text === 'A single blue dot on a white background.' ? 'bailian' : null;
-   if (!service) return tutorFetch(url,init);
-   verificationCalls.push({service,url,init});
-   const response = await options.verify?.(service,init);
-   if (response) return response;
-   const data = service === 'deepseek' ? {choices:[{message:{content:'OK'}}]}
-     : {output:{choices:[{message:{content:[{image:'https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/test.png'}]}}]}};
-   return {ok:true,json:async()=>data};
+   assert.equal(url,'https://api.deepseek.com/chat/completions');
+   const body = JSON.parse(init.body);
+   if (body.messages[0].content !== 'Reply with OK.') return tutorFetch(url,init);
+   verificationCalls.push({url,init});
+   const response = await options.verify?.(init);
+   return response || Response.json({choices:[{message:{content:'OK'}}]});
  };
  const engine=createBrowserGame(options.game||fixtureGame(),[{file:'snapshot/main.tex',text:'Synthetic source'}],{storage,fetcher,onMissingKey:options.onMissingKey});
  if(options.authenticated!==false){
-   for(const [provider,key] of [['deepseek','synthetic-key-never-a-real-credential'],['bailian','synthetic-key-for-images']]){
-     if(engine.connection().providers[provider].state==='missing')engine.setKey(provider,key);
-     await engine.verifyKey(provider);
-   }
+   if (engine.connection().providers.deepseek.state==='missing') engine.setKey('deepseek','synthetic-key-never-a-real-credential');
+   await engine.verifyKey('deepseek');
  }
  async function act(action,extras={}){const value=await engine.request('/api/game');return engine.request('/api/action',{action,level_id:'result',mode:'guide',expected_revision:value.progress.revision,request_id:crypto.randomUUID(),...extras});}
  return {engine,storage,calls,verificationCalls,act};
@@ -53,7 +62,7 @@ test('opening a numbered theorem scopes its lesson even when the next convention
   ];
   value.internal_references={'ms:previous':{level_id:'previous'}};
   const f=await setup({game:value});
-  const prompt=()=>JSON.parse(f.calls.at(-1).options.body).messages[0].content[0].text;
+  const prompt=()=>promptText(JSON.parse(f.calls.at(-1).options.body));
   const context=()=>JSON.parse(prompt().split('CONTEXT DATA:\n')[1].split('\nReturn ONLY')[0]);
   await f.act('start',{level_id:'previous'});
   await f.act('understand_all',{level_id:'previous'});
@@ -89,49 +98,47 @@ test('key goes only to official API; exports, payloads and manual saves exclude 
  const restored=await setup({storage:f.storage});assert.equal((await restored.engine.request('/api/game')).progress.levels.result.messages.length,1);
  restored.engine.setKey('deepseek','');assert.equal(restored.engine.connection().providers.deepseek.state,'missing');assert.equal((await restored.engine.request('/api/game')).progress.levels.result.messages.length,1);
 });
-test('each key is checked against its own model and successful checks survive reopening',async()=>{
-  const wait = Promise.withResolvers();
-  let delayed = true;
-  const f = await setup({authenticated:false,verify:service => service === 'bailian' && delayed ? wait.promise : undefined});
-  f.engine.setKey('bailian','fixture-drawing-key');
-  const first = f.engine.verifyKey('bailian'), second = f.engine.verifyKey('bailian');
-  assert.equal(f.engine.connection().providers.bailian.state,'verifying');
-  await assert.rejects(f.act('understand_all'),/both API keys/);
-  wait.resolve(); await Promise.all([first,second]); delayed = false;
-  assert.deepEqual(f.verificationCalls.map(item=>item.service),['bailian']);
-  assert.equal(f.engine.connection().authenticated,false);
+test('a single DeepSeek verification unlocks the game and survives reopening',async()=>{
+  const storage=new MemoryStorage();
+  storage.setItem('proof2game:ai:bailian',JSON.stringify({key:'obsolete-service-key',models:['z-image-turbo']}));
+  const wait=Promise.withResolvers();
+  const f=await setup({storage,authenticated:false,verify:()=>wait.promise});
+  assert.equal(storage.getItem('proof2game:ai:bailian'),null);
+  assert.deepEqual(Object.keys(f.engine.connection().providers),['deepseek']);
   f.engine.setKey('deepseek','fixture-tutor-key');
-  await assert.rejects(f.act('start'),/both API keys/);
-  await f.engine.verifyKey('deepseek');
+  await assert.rejects(f.act('start'),/API key/i);
+  const checks=[f.engine.verifyKey('deepseek'),f.engine.verifyKey('deepseek')];
+  assert.equal(f.engine.connection().providers.deepseek.state,'verifying');
+  wait.resolve();
+  await Promise.all(checks);
   assert.equal(f.engine.connection().authenticated,true);
-  for (const call of f.verificationCalls) {
-    assert.equal(new URL(call.url).hostname,call.service==='bailian'?'dashscope.aliyuncs.com':'api.deepseek.com');
-    assert.equal(call.init.headers.Authorization,'Bearer '+(call.service==='bailian'?'fixture-drawing-key':'fixture-tutor-key'));
-    assert.equal(call.init.credentials,'omit');
-    assert.equal(call.init.redirect,'error');
-    assert.equal(JSON.parse(call.init.body).model,call.service==='bailian'?'z-image-turbo':'deepseek-flash');
-  }
-  const restored=await setup({storage:f.storage});
+  assert.equal(f.verificationCalls.length,1);
+  const {init}=f.verificationCalls[0];
+  assert.equal(init.headers.Authorization,'Bearer fixture-tutor-key');
+  assert.equal(init.credentials,'omit');
+  assert.equal(init.redirect,'error');
+  assert.equal(JSON.parse(init.body).model,'deepseek-flash');
+
+  const restored=await setup({storage});
   assert.equal(restored.verificationCalls.length,0);
-  assert.equal(restored.engine.connection().authenticated,true);
-  restored.engine.setKey('bailian','replacement-key');
-  assert.deepEqual(Object.values(restored.engine.connection().providers).map(p=>p.state),['verified','unverified']);
-  await restored.engine.verifyKey('bailian');
-  assert.deepEqual(restored.verificationCalls.map(c=>c.service),['bailian']);
-  restored.engine.setKey('bailian','');
-  assert.equal(restored.engine.connection().providers.bailian.state,'missing');
-  const exported=JSON.stringify(await restored.engine.request('/api/save/export'));
-  for (const value of ['fixture-drawing-key','fixture-tutor-key','replacement-key','test.png'])assert(!exported.includes(value));
+  await restored.act('start');
+  const exported=await restored.engine.request('/api/save/export');
+  assert.doesNotMatch(JSON.stringify(exported),/fixture-tutor-key|obsolete-service-key/);
+  restored.engine.setKey('deepseek','replacement-key');
+  assert.equal(restored.engine.connection().providers.deepseek.state,'unverified');
+  await restored.engine.verifyKey('deepseek');
+  assert.equal(restored.verificationCalls.length,1);
+  restored.engine.setKey('deepseek','');
+  assert.equal(restored.engine.connection().authenticated,false);
 });
-test('explicit revalidation calls just the selected service and a rejection removes its previous success',async()=>{
+test('explicit revalidation revokes a previously accepted key on rejection',async()=>{
   let expired=false;
-  const f=await setup({verify:service=>expired && service==='deepseek' ? new Response(null,{status:401}) : undefined});
+  const f=await setup({verify:()=>expired ? new Response(null,{status:401}) : undefined});
   expired=true;
   await assert.rejects(f.engine.verifyKey('deepseek',{force:true}));
-  assert.deepEqual(f.verificationCalls.map(c=>c.service),['deepseek','bailian','deepseek']);
+  assert.equal(f.verificationCalls.length,2);
   assert.equal(f.engine.connection().providers.deepseek.state,'invalid_key');
-  assert.equal(f.engine.connection().providers.bailian.state,'verified');
-  await assert.rejects(f.act('understand_all'),/both API keys/);
+  await assert.rejects(f.act('understand_all'),/API key/i);
 });
 test('a late verification response cannot approve a replacement or resurrect a cleared key',async()=>{
   for (const replacement of ['another-key','']) {
@@ -150,11 +157,11 @@ test('a rejected tutor key pauses the original question and resumes it once afte
   const keys=[];
   const f=await setup({
     onMissingKey:reason=>interrupted.resolve(reason),
-    verify:service=>service==='deepseek'&&rejectVerification ? new Response(null,{status:401}) : undefined,
+    verify:()=>rejectVerification ? new Response(null,{status:401}) : undefined,
     fetcher:async (url,options)=>{
       keys.push(options.headers.Authorization);
       if(keys.length===1)return new Response(null,{status:401});
-      return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({message:'Confirmed receipt.',illustrations:[],understanding:none})}}]});
+      return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({message:'Confirmed receipt.',understanding:none})}}]});
     }
   });
   await f.act('mode',{mode:'chat'});
@@ -164,14 +171,13 @@ test('a rejected tutor key pauses the original question and resumes it once afte
   f.engine.setKey('deepseek','new-key');
   rejectVerification=true;
   await assert.rejects(f.engine.verifyKey('deepseek'));
-  assert.equal(f.engine.connection().providers.bailian.state,'verified');
   assert.equal(keys.length,1);
   rejectVerification=false;
   await f.engine.verifyKey('deepseek');
   const result=await pending;
   assert.deepEqual(keys,['Bearer synthetic-key-never-a-real-credential','Bearer new-key']);
   assert.deepEqual(result.progress.levels.result.chat.messages.map(row=>row.content),['Explain this formula.','Confirmed receipt.']);
-  assert.deepEqual(f.verificationCalls.map(call=>call.service),['deepseek','bailian','deepseek','deepseek']);
+  assert.equal(f.verificationCalls.length,3);
 });
 test('completion order, undo and snapshot validation survive browser saves',async()=>{
  const f=await setup();let result=await f.act('understand_all');assert.equal(result.level_status.proof,'open');
@@ -389,157 +395,6 @@ test('undo cancels a pending passage without committing its late reply or starti
   }
 });
 
-const testImage='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9cAAAAASUVORK5CYII=';
-const resultUrl='https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/candidate.png';
-function drawReply(number){
-  return Response.json({choices:[{finish_reason:'tool_calls',message:{role:'assistant',content:null,reasoning_content:'provider context',
-    tool_calls:[{id:'call-'+number,type:'function',function:{name:'draw_math_illustration',arguments:JSON.stringify({topic:'A unit circle',prompt:'Draw circle '+number})}}]}}]});
-}
-function imageReply(){return Response.json({output:{choices:[{message:{content:[{image:resultUrl}]}}]}});}
-
-test('Bailian downloads the generated PNG with a Safari-compatible fetch receiver',async()=>{
-  const {generateBailianImage}=await import(new URL('illustration-tools.mjs',moduleURL));
-  const requests=[];
-  async function nativeFetch(url,init){
-    'use strict';
-    if(this!==undefined && this!==globalThis)throw new TypeError('Can only call Window.fetch on instances of Window');
-    requests.push(url);
-    if(init.method==='POST')return imageReply();
-    assert.equal(init.headers,undefined);
-    return new Response(Buffer.from(testImage,'base64'));
-  }
-  const image=await generateBailianImage({fetcher:nativeFetch,key:'fixture',signal:new AbortController().signal,prompt:'Draw a circle.'});
-  assert.deepEqual(requests,['https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',resultUrl]);
-  assert.equal(image,'data:image/png;base64,'+testImage);
-});
-
-test('prefetch only plans, actual review receives image bytes, and selected placements survive export',async()=>{
-  let deep=0,draws=0,downloads=0;const drawsWhenPaused=[];
-  const f=await setup({onMissingKey:()=>drawsWhenPaused.push(draws),fetcher:async(url,options)=>{
-    if(url===resultUrl){
-      downloads++;
-      assert.equal(options.headers,undefined);
-      return new Response(Uint8Array.from(atob(testImage),c=>c.charCodeAt(0)));
-    }
-    const body=JSON.parse(options.body);
-    if(url.startsWith('https://dashscope.')){
-      assert.equal(body.model,'z-image-turbo');assert.equal(body.input.messages.length,1);
-      const prompt=body.input.messages[0].content[0].text;assert.match(prompt,/^Draw circle [123]$/);
-      draws++;
-      if(draws===1)return Response.json({code:'Throttling'},{status:429,headers:{'Retry-After':'0'}});
-      if(draws===3)return Response.json({code:'Arrearage'},{status:400});
-      return imageReply();
-    }
-    assert.equal(url,'https://api.deepseek.com/chat/completions');
-    const reviewed=body.messages.filter(m=>m.role==='tool');
-    assert.equal(reviewed.length,deep++);
-    for(const tool of reviewed)assert.equal(tool.content[1].image_url.url,'data:image/png;base64,'+testImage);
-    if(reviewed.length<3){assert.equal(body.tools[0].function.name,'draw_math_illustration');return drawReply(reviewed.length+1);}
-    assert.equal(body.tools,undefined);
-    return tutorReply({message:'First relation.\n\nSecond relation.',illustrations:[
-      {candidate:3,after_paragraph:1,alt:'Third diagram'},{candidate:1,after_paragraph:0,alt:'First diagram'}]});
-  }});
-  await f.act('prefetch');await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(deep,1);assert.equal(draws,0);
-  const pending=f.act('start');
-  for(let i=0;i<100&&!drawsWhenPaused.length;i++)await new Promise(resolve=>setImmediate(resolve));
-  assert.deepEqual(drawsWhenPaused,[3]);
-  await f.engine.verifyKey('bailian');
-  const state=await pending,reply=state.progress.levels.result.messages[0];
-  assert.equal(draws,5);assert.equal(downloads,3);assert.equal(deep,4);
-  assert.deepEqual(reply.images.map(x=>[x.after_paragraph,x.alt]),[[0,'First diagram'],[1,'Third diagram']]);
-  const save=await f.engine.request('/api/save/export');
-  assert(!JSON.stringify(save).includes(resultUrl));assert(!JSON.stringify(save).includes('provider context'));
-  const restored=await setup();await restored.act('save_import',{save});
-  assert.deepEqual((await restored.engine.request('/api/game')).progress.levels.result.messages[0].images,reply.images);
-  save.progress.levels.result.messages[0].images[0].data_url='https://example.test/unsafe';
-  await assert.rejects(restored.act('save_import',{save}),/illustration/);
-});
-
-test('failed drawing retries once, text remains playable and manual retry updates just that reply',async()=>{
-  let deep=0,draws=0;
-  const f=await setup({fetcher:async(url,options)=>{
-    if(url===resultUrl)return new Response(Uint8Array.from(atob(testImage),c=>c.charCodeAt(0)));
-    if(url.startsWith('https://dashscope.')){
-      if(++draws<=2)return Response.json({code:'Throttling'},{status:429,headers:{'Retry-After':'0'}});
-      return imageReply();
-    }
-    const body=JSON.parse(options.body);deep++;
-    if(!body.messages.some(m=>m.role==='tool'))return drawReply(1);
-    const success=Array.isArray(body.messages.at(-1).content);
-    if(!success)assert.equal(body.tools,undefined);
-    if(success)return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({illustrations:[{candidate:1,after_paragraph:0,alt:'Circle'}]})}}]});
-    return tutorReply({message:'Keep this passage.',illustrations:[{candidate:1,after_paragraph:0,alt:'Missing candidate'}]});
-  }});
-  const first=await f.act('start');
-  assert.equal(first.progress.levels.result.messages[0].image_retry,true);assert.equal(draws,2);
-  const updated=await f.act('retry_image',{message_index:0});
-  const [reply]=updated.progress.levels.result.messages;
-  assert.equal(updated.progress.levels.result.messages.length,1);
-  assert.equal(reply.image_retry,undefined);assert.equal(reply.content,'Keep this passage.');assert.equal(reply.images[0].alt,'Circle');
-  assert.equal(draws,3);assert.equal(deep,4);
-});
-
-test('manual retry distinguishes a failed download from a reviewed but unselected image',async()=>{
-  let downloadWorks=false;
-  const f=await setup({fetcher:async(url,init)=>{
-    if(url===resultUrl){
-      if(!downloadWorks)throw new TypeError('Load failed');
-      return new Response(Buffer.from(testImage,'base64'));
-    }
-    if(url.startsWith('https://dashscope.'))return imageReply();
-    const {messages}=JSON.parse(init.body);
-    if(!messages.some(m=>m.role==='tool'))return drawReply(1);
-    return tutorReply({illustrations:[]});
-  }});
-  const first=await f.act('start');
-  const retry=()=>f.act('retry_image',{message_index:0});
-  await assert.rejects(retry,/browser could not download/);
-  downloadWorks=true;
-  await assert.rejects(retry,/reviewed the generated images and selected none/);
-  const current=await f.engine.request('/api/game');
-  assert.deepEqual(current.progress,first.progress);
-});
-
-test('placement repair reuses the reviewed pixels and cannot change the lesson or the player’s progress',async()=>{
-  let draws=0,corrections=0;
-  const f=await setup({fetcher:async(url,init)=>{
-    if(url===resultUrl)return new Response(Buffer.from(testImage,'base64'));
-    if(url.startsWith('https://dashscope.')){draws++;return imageReply();}
-    const {messages,tools}=JSON.parse(init.body);
-    if(!messages.some(m=>m.role==='tool'))return drawReply(1);
-    if(messages.at(-1).role==='user'){
-      corrections++;
-      assert.equal(tools,undefined);
-      assert.ok(messages.some(m=>m.role==='tool' && m.content[1].image_url.url==='data:image/png;base64,'+testImage));
-      return tutorReply({message:'Replacement lesson.',understanding:{kind:'confirm'},illustrations:[{candidate:1,after_paragraph:1,alt:'Two cells'}]});
-    }
-    return tutorReply({message:'One paragraph.',illustrations:[{candidate:7,after_paragraph:0,alt:'Nonexistent image'}]});
-  }});
-  const {progress}=await f.act('start');
-  const reply=progress.levels.result.messages[0];
-  assert.equal(draws,1);assert.equal(corrections,1);
-  assert.equal(reply.content,'One paragraph.');assert.deepEqual(progress.completed,[]);
-  assert.deepEqual(reply.images,[{after_paragraph:0,alt:'Two cells',data_url:'data:image/png;base64,'+testImage}]);
-});
-
-test('an explicit image retry can redraw a simpler example after review rejects the first candidate',async()=>{
-  const {finishIllustratedTurn}=await import(new URL('illustration-tools.mjs',moduleURL));
-  let draws=0;
-  const images=['data:image/png;base64,first','data:image/png;base64,second'];
-  const result=await finishIllustratedTurn({
-    messages:[],first:(await drawReply(1).json()).choices[0],signal:new AbortController().signal,
-    placementText:'Existing lesson.',report:()=>{},draw:async()=>images[draws++],
-    ask:async history=>{
-      if(history.at(-1).role==='user')return (await drawReply(2).json()).choices[0];
-      const placements=draws===1?[]:[{candidate:2,after_paragraph:0,alt:'Simpler example'}];
-      return {finish_reason:'stop',message:{content:JSON.stringify({illustrations:placements})}};
-    },
-  });
-  assert.equal(draws,2);assert.equal(result.answer.message,'Existing lesson.');
-  assert.deepEqual(result.images,[{after_paragraph:0,alt:'Simpler example',data_url:images[1]}]);
-});
-
 test('repeated save imports use bounded, content-free action receipts',async()=>{
  const f=await setup();await f.act('understand_all');
  for(let count=0;count<5;count++){
@@ -620,102 +475,126 @@ test('legacy browser manual saves migrate and invalid imports preserve progress 
   assert.deepEqual(await opened.engine.request('/api/saves/'+id+'/download'),original);
 });
 
-test('drawing deadline, review expiry and Retry-After use available candidates without further draws',async t=>{
-  const {finishIllustratedTurn,selectIllustrations}=await import(new URL('illustration-tools.mjs',moduleURL));
-  const first=(await drawReply(1).json()).choices[0];
-  t.mock.timers.enable({apis:['Date'],now:10_000});
-  for(const scenario of ['first-sufficient','retry-after','review-timeout','budget-before-retry','no-suitable']){
-    let draws=0,reviews=0;
-    const report=[];
-    const {answer,candidates}=await finishIllustratedTurn({
-      messages:[],first,signal:new AbortController().signal,roundMs:100,
-      report:(stage,topic)=>report.push([stage,topic]),
-      draw:async()=>{
-        draws++;
-        if(scenario==='retry-after')throw Object.assign(new Error('Rate limit'),{delay:101});
-        if(scenario==='budget-before-retry'&&draws===2){t.mock.timers.tick(101);throw new Error('Timed out');}
-        return 'data:image/png;base64,'+testImage;
-      },
-      ask:async(history,allowed)=>{
-        reviews++;
-        if(reviews===1 && scenario==='review-timeout'){t.mock.timers.tick(100);throw new DOMException('Timed out','TimeoutError');}
-        if(reviews===1 && scenario==='budget-before-retry')return first;
-        if(['retry-after','budget-before-retry','review-timeout'].includes(scenario))assert.equal(allowed,false);
-        const acceptable=!['retry-after','no-suitable'].includes(scenario);
-        return {finish_reason:'stop',message:{content:JSON.stringify({message:'The line.',illustrations:acceptable?[{candidate:1,after_paragraph:0,alt:'Line'}]:[]})}};
-      },
-    });
-    assert.equal(selectIllustrations(answer,candidates).length,['retry-after','no-suitable'].includes(scenario)?0:1);
-    assert.equal(draws,scenario==='budget-before-retry'?2:1);
-    assert.equal(report.some(([stage])=>stage==='review'),scenario!=='retry-after');
-  }
-});
-
-test('public topic updates precede a regular-chat illustration without adding player messages',async()=>{
-  const planning=Promise.withResolvers(),continuation=Promise.withResolvers();
-  let calls=0;
-  const f=await setup({fetcher:async(url,options)=>{
-    if(url===resultUrl)return new Response(Uint8Array.from(atob(testImage),c=>c.charCodeAt(0)));
-    if(url.startsWith('https://dashscope.'))return imageReply();
-    const body=JSON.parse(options.body);
-    if(++calls===1)return Response.json({choices:[{finish_reason:'tool_calls',message:{
-      tool_calls:[{id:'status',type:'function',function:{name:'update_learning_topic',arguments:JSON.stringify({topic:'The normal to the tangent'})}}]}}]});
-    if(calls===2){planning.resolve();await continuation.promise;return drawReply(1);}
-    assert.equal(body.messages.at(-1).content[1].image_url.url,'data:image/png;base64,'+testImage);
-    return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({message:'The normal.',understanding:none,illustrations:[{candidate:1,after_paragraph:0,alt:'Tangent and normal'}]})}}]});
-  }});
-  await f.act('mode',{mode:'chat'});
-  const pending=f.act('message',{mode:'chat',message:'Draw the tangent and normal.'});
-  await planning.promise;
-  const snapshot=await f.engine.request('/api/game');
-  assert.deepEqual(snapshot.pending_topic,{level_id:'result',mode:'chat',stage:'think',topic:'The normal to the tangent'});
-  continuation.resolve();
-  const result=await pending;
-  assert.equal(result.progress.levels.result.chat.messages.length,2);
-  assert.equal(result.progress.levels.result.chat.messages[1].images.length,1);
-  assert.equal(result.pending_topic,null);
-});
-
-test('an invalid Bailian key resumes the same Chat drawing without duplicating the question',async()=>{
-  let drawings=0,reviews=0;
-  const paused=Promise.withResolvers(),requests=[];
-  const f=await setup({onMissingKey:()=>paused.resolve(),fetcher:async(url,options)=>{
-    if(url===resultUrl)return new Response(Uint8Array.from(atob(testImage),c=>c.charCodeAt(0)));
-    if(url.startsWith('https://dashscope.')){
-      requests.push(options.headers.Authorization);
-      if(++drawings===2)return Response.json({code:'InvalidApiKey'},{status:401});
-      return imageReply();
-    }
-    const body=JSON.parse(options.body),seen=body.messages.filter(m=>m.role==='tool').length;
-    if(seen<2)return drawReply(++reviews);
-    return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({message:'Both circles.',understanding:none,
-      illustrations:[{candidate:1,after_paragraph:0,alt:'Original'},{candidate:2,after_paragraph:0,alt:'Additional'}]})}}]});
-  }});
-  await f.act('mode',{mode:'chat'});
-  const pending=f.act('message',{mode:'chat',message:'Draw these circles.'});
-  await paused.promise;
-  const state=await f.engine.request('/api/game');
-  assert.equal(state.pending_message.message,'Draw these circles.');
-  f.engine.setKey('bailian','replacement-key');
-  await f.engine.verifyKey('bailian');
-  const messages=(await pending).progress.levels.result.chat.messages;
-  assert.equal(messages.length,2);assert.equal(messages[0].content,'Draw these circles.');
-  assert.equal(messages[1].images.length,2);assert.equal(drawings,3);
-  assert.deepEqual(requests.slice(1),['Bearer synthetic-key-for-images','Bearer replacement-key']);
-});
-
-test('older portable SVG illustrations still import without making a model request',async()=>{
-  const {renderGuideDiagram}=await import(new URL('guide-diagram.mjs',moduleURL));
+test('Guide and Chat use text replies, including when the player requests a drawing',async()=>{
   const f=await setup();
-  const save=await f.engine.request('/api/save/export');
-  const image=renderGuideDiagram({alt:'Existing blue circle',elements:[{kind:'circle',color:'blue',x:100,y:100,radius:40}]});
-  save.progress.levels.result={messages:[{role:'assistant',content:'',image,phase:'step',step_goal:'Clear?'}],phase:'step'};
-  const imported=await f.act('save_import',{save});
-  assert.deepEqual(imported.progress.levels.result.messages[0].image,image);
-  assert.equal(f.calls.length,0);
+  await f.act('start');
+  await f.act('mode',{mode:'chat'});
+  const question='Draw a unit circle.';
+  const state=await f.act('message',{mode:'chat',message:question});
+  const {messages,chat}=state.progress.levels.result;
+  assert.equal(messages[0].content,'A short explanation.');
+  assert.deepEqual(chat.messages.map(message=>message.content),[question,'A short explanation.']);
+  assert.equal(f.calls.length,2);
+  for(const {options} of f.calls){
+    const body=JSON.parse(options.body);
+    assert.deepEqual(body.tools.map(tool=>tool.function.name),['update_learning_topic']);
+    const schema=JSON.parse(promptText(body).split('Return ONLY a JSON object matching this schema: ')[1]);
+    assert(!Object.hasOwn(schema.properties,'illustrations'));
+  }
+  const beforeRetry=(await f.engine.request('/api/game')).progress;
+  await assert.rejects(f.act('retry_image',{mode:'chat',message_index:1}),/Unknown action/);
+  assert.deepEqual((await f.engine.request('/api/game')).progress,beforeRetry);
+  assert.equal(f.calls.length,2);
 });
 
-test('illustrated saves larger than the old 16 MiB limit load on a fresh device',async()=>{
+test('a stale request for the retired drawing tool is rejected without changing progress',async()=>{
+  let calls=0;
+  const f=await setup({fetcher:async()=>{
+    calls++;
+    return Response.json({choices:[{finish_reason:'tool_calls',message:{
+      tool_calls:[{id:'old-call',type:'function',function:{name:'draw_math_illustration',arguments:'{}'}}]}}]});
+  }});
+  const before=(await f.engine.request('/api/game')).progress;
+  await assert.rejects(f.act('start'),/Unknown tutor tool/);
+  assert.equal(calls,1);
+  assert.deepEqual((await f.engine.request('/api/game')).progress,before);
+});
+
+test('the public topic update precedes a Chat answer without adding player messages',async()=>{
+  const sent=Promise.withResolvers(),finish=Promise.withResolvers();
+  let calls=0;
+  const f=await setup({fetcher:async()=>{
+    if(++calls===1) return Response.json({choices:[{finish_reason:'tool_calls',message:{
+      tool_calls:[{id:'status',type:'function',function:{name:'update_learning_topic',arguments:JSON.stringify({topic:'The tangent relation'})}}]}}]});
+    sent.resolve(); await finish.promise;
+    return finalResponse(JSON.stringify({message:'Here is the relation.',understanding:none}));
+  }});
+  await f.act('mode',{mode:'chat'});
+  const pending=f.act('message',{mode:'chat',message:'Which lines are perpendicular?'});
+  await sent.promise;
+  const snapshot=await f.engine.request('/api/game');
+  assert.deepEqual(snapshot.pending_topic,{level_id:'result',mode:'chat',stage:'think',topic:'The tangent relation'});
+  finish.resolve();
+  const state=await pending;
+  assert.equal(state.progress.levels.result.chat.messages.length,2);
+  assert.equal(state.pending_topic,null);
+});
+
+test('old illustrated conversations load as text while original manual and recovery snapshots retain their attachments',async()=>{
+  const original=await setup();
+  await original.act('start');
+  await original.act('mode',{mode:'chat'});
+  await original.act('message',{mode:'chat',message:'What is the relation?'});
+  await original.act('mode',{mode:'guide'});
+  await original.act('understand_all');
+  const legacy=await original.engine.request('/api/save/export');
+  const guide=legacy.progress.levels.result;
+  const guideText=guide.messages[0].content;
+  const oldPng='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9cAAAAASUVORK5CYII=';
+  guide.messages[0].images=[{after_paragraph:0,alt:'Old diagram',data_url:oldPng}];
+  guide.messages[0].image_retry=true;
+  guide.chat.messages[1].content='';
+  guide.chat.messages[1].image={
+    alt:'A blue circle',
+    svg:'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400"><rect width="640" height="400" fill="#fff"/><circle cx="100" cy="100" r="40" fill="none" stroke="#366f9a" stroke-width="2.5"/></svg>',
+  };
+  const id=crypto.randomUUID(), recoveryId=crypto.randomUUID();
+  const storage=new MemoryStorage();
+  const key=original.engine.storageKey;
+  const oldRecord=JSON.stringify({
+    storage_version:2,
+    state:{progress:legacy.progress,generation:1,
+      saves:{[id]:{id,label:legacy.label,created_at:legacy.created_at,completed_count:1,sequence:legacy.progress.revision}},
+      recovery:{[recoveryId]:{id:recoveryId,action:'save_import',created_at:legacy.created_at}}},
+    files:{[id]:legacy,[recoveryId]:legacy},
+  });
+  storage.setItem(key,oldRecord);
+  const reopened=await setup({storage});
+  const fresh=await setup();
+  function check(progress) {
+    const level=progress.levels.result;
+    assert.deepEqual(progress.completed,['result']);
+    assert.deepEqual(level.understanding,guide.understanding);
+    assert.equal(level.messages.length,guide.messages.length);
+    assert.equal(level.messages[0].content,guideText);
+    assert.equal(level.chat.messages.length,2);
+    assert.match(level.chat.messages[1].content,/A blue circle/);
+    assert.doesNotMatch(JSON.stringify(progress),/data:image|"(?:image|images|image_retry)":/);
+  }
+  check((await reopened.engine.request('/api/game')).progress);
+  check((await reopened.engine.request('/api/saves/'+id+'/download')).progress);
+  check((await reopened.engine.request('/api/save/export')).progress);
+  assert.equal(storage.getItem(key),oldRecord,'reading old snapshots must preserve the original data');
+  const loaded=await reopened.act('save_load',{save_id:id});
+  check(loaded.progress);
+  const recovered=await reopened.act('save_recover',{recovery_id:recoveryId});
+  check(recovered.progress);
+  const saved=await reopened.act('save_create');
+  const newId=saved.saves.find(record=>record.id!==id).id;
+  const {files}=JSON.parse(storage.getItem(key));
+  assert.deepEqual(files[id],legacy);
+  assert.deepEqual(files[recoveryId],legacy);
+  check(files[newId].progress);
+  check(files[loaded.save_recovery.id].progress);
+  const undone=await reopened.act('undo_action',{target_id:recovered.undo.id});
+  assert.deepEqual(undone.progress.completed,[]);
+  assert.doesNotMatch(JSON.stringify(undone.progress),/data:image|"(?:image|images|image_retry)":/);
+  check((await fresh.act('save_import',{save:legacy})).progress);
+  check((await fresh.engine.request('/api/save/export')).progress);
+  assert.equal(reopened.calls.length+fresh.calls.length,0);
+});
+
+test('a legacy portable save exceeding 16 MiB imports as a compact text save',async()=>{
   // A valid PNG with a large ancillary text chunk, independent of any image provider.
   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMwNjYGAAE2AJp53qClAAAAAElFTkSuQmCC','base64');
   const data=Buffer.alloc(4600000,97);data.write('Comment\0');
@@ -724,28 +603,37 @@ test('illustrated saves larger than the old 16 MiB limit load on a fresh device'
   const image='data:image/png;base64,'+Buffer.concat([png.subarray(0,-12),chunk,png.subarray(-12)]).toString('base64');
   const f=await setup();
   const save=await f.engine.request('/api/save/export');
-  save.progress.levels.result={phase:'step',messages:[{role:'assistant',content:'First.\n\nSecond.\n\nThird.',
+  const passage='First.\n\nSecond.\n\nThird.';
+  save.progress.levels.result={phase:'step',messages:[{role:'assistant',content:passage,
     images:[0,1,2].map(after_paragraph=>({data_url:image,alt:'Example '+after_paragraph,after_paragraph}))}]};
   assert(Buffer.byteLength(JSON.stringify(save))>16*1024*1024);
   await f.act('save_import',{save});
-  const manual=(await f.act('save_create')).saves[0];
-  const exported=await f.engine.request('/api/saves/'+manual.id+'/download');
-  const second=await setup();
-  const imported=await second.act('save_import',{save:exported});
-  assert.deepEqual(imported.progress.levels.result.messages,save.progress.levels.result.messages);
+  const id=(await f.act('save_create')).saves[0].id;
+  const compact=await f.engine.request('/api/saves/'+id+'/download');
+  assert(Buffer.byteLength(JSON.stringify(compact))<16*1024);
+  const device=await setup();
+  const restored=await device.act('save_import',{save:compact});
+  assert.deepEqual(restored.progress.levels.result.messages,[{role:'assistant',content:passage}]);
+  assert.equal(f.calls.length+device.calls.length,0);
 });
 
-test('JSON mode blank or malformed finals retry once without repeating tools',async()=>{
-  const {finishIllustratedTurn}=await import(new URL('illustration-tools.mjs',moduleURL));
-  for(const content of ['   ','{"message":"bad \\q"}']){
-    let calls=0,draws=0;
-    const result=await finishIllustratedTurn({messages:[],first:{finish_reason:'stop',message:{content}},signal:new AbortController().signal,report:()=>{},draw:()=>{draws++;},ask:async(history,tools)=>{calls++;assert.equal(tools,false);return {finish_reason:'stop',message:{content:JSON.stringify(answer())}};}});
-    assert.equal(result.answer.message,'A short explanation.');assert.equal(calls,1);assert.equal(draws,0);
+test('JSON mode retries an empty or malformed reply once without tools',async()=>{
+  for(const malformed of ['   ','{"message":}']){
+    let calls=0;
+    const f=await setup({fetcher:async(url,init)=>{
+      if(++calls===1) return finalResponse(malformed);
+      assert.equal(JSON.parse(init.body).tools,undefined);
+      return tutorReply();
+    }});
+    assert.equal((await f.act('start')).progress.levels.result.messages[0].content,'A short explanation.');
+    assert.equal(calls,2);
   }
 });
 test('persistent blank JSON fails with a specific error after one retry',async()=>{
-  const {finishIllustratedTurn}=await import(new URL('illustration-tools.mjs',moduleURL));let calls=0;
-  await assert.rejects(finishIllustratedTurn({messages:[],first:{finish_reason:'stop',message:{content:' '}},signal:new AbortController().signal,report:()=>{},ask:async()=>{calls++;return {finish_reason:'stop',message:{content:' '}};}}),/empty or invalid JSON after one retry/);assert.equal(calls,1);
+  let calls=0;
+  const f=await setup({fetcher:async()=>{calls++;return finalResponse(' ');}});
+  await assert.rejects(f.act('start'),/empty or invalid JSON after one retry/);
+  assert.equal(calls,2);
 });
 test('JSON retry still rejects fabricated confirmation and leaves progress unchanged',async()=>{
   let calls=0;const f=await setup({fetcher:async()=>{if(++calls===1)return Response.json({choices:[{finish_reason:'stop',message:{content:' '}}]});return tutorReply({understanding:{kind:'confirm',scope:'level',description:'invented',quote:'yes',level_id:'result'}});}});
@@ -755,7 +643,12 @@ test('JSON retry still rejects fabricated confirmation and leaves progress uncha
 
 
 test('fenced JSON final replies parse without a second provider call',async()=>{
-  const {finishIllustratedTurn}=await import(new URL('illustration-tools.mjs',moduleURL));
-  const result=await finishIllustratedTurn({messages:[],first:{finish_reason:'stop',message:{content:'```json\n'+JSON.stringify(answer())+'\n```'}},signal:new AbortController().signal,ask:()=>{throw new Error('Unexpected retry');}});
-  assert.equal(result.answer.message,'A short explanation.');
+  let calls=0;
+  const f=await setup({fetcher:async()=>{
+    calls++;
+    return finalResponse('```json\n'+JSON.stringify(answer())+'\n```');
+  }});
+  const result=await f.act('start');
+  assert.equal(calls,1);
+  assert.equal(result.progress.levels.result.messages[0].content,'A short explanation.');
 });

@@ -147,8 +147,8 @@
     changedSnapshot:'稿件文件有改动，请恢复原始游戏文件。',changedReference:'参考文献 PDF 有改动，请恢复原件。',
     progressChanged:'进度已更新，请重试。',checkConnectionError:'无法连接 DeepSeek，请检查网络、API key 和账户余额。'
   };
-  Object.assign(en,{ask:'Ask',retryPassage:'Retry next passage',retry:'Retry',retryImage:'Retry illustration',imageFailed:'No illustration is available for this reply.',zoom:'Zoom in',fit:'Fit to screen',confirmStep:'Do you understand this passage?',confirmLevel:'Do you understand this level?',thinkTopic:'Thinking about',drawTopic:'Drawing',reviewTopic:'Checking the illustration for'});
-  Object.assign(zh,{ask:'提问',retryPassage:'重试下一段',retry:'重试',retryImage:'重试出图',imageFailed:'这条回复暂时没有插图。',zoom:'放大',fit:'适应屏幕',confirmStep:'你理解这一段了吗？',confirmLevel:'你理解这一关了吗？',thinkTopic:'正在梳理',drawTopic:'正在绘制',reviewTopic:'正在审看插图'});
+  Object.assign(en,{ask:'Ask',retryPassage:'Retry next passage',retry:'Retry',confirmStep:'Do you understand this passage?',confirmLevel:'Do you understand this level?',thinkTopic:'Thinking about'});
+  Object.assign(zh,{ask:'提问',retryPassage:'重试下一段',retry:'重试',confirmStep:'你理解这一段了吗？',confirmLevel:'你理解这一关了吗？',thinkTopic:'正在梳理'});
   function language(){return state?.game?.chinese&&state.progress.language==='中文'?'中文':'English';}
   function words(){return language()==='中文'?zh:en;}
   function t(key){return words()[key]??en[key]??key;}
@@ -435,13 +435,6 @@
     const sourceLevel=(state?.game?.levels||[]).find(level=>level.id===(options.levelId||options.macroLevelId));
     const namespace=sourceLevel?.reference_namespace||'';
     text=String(text || '');
-    // Images are anchored in the saved message. TeX list formatting may create
-    // extra display paragraphs, while a single equation can span blank lines.
-    const imageMarker=/\uE104(\d+)\uE105/g;
-    if(options.images?.length){
-      const paragraphs=text.trim().split(/\n\s*\n/);
-      text=paragraphs.map((paragraph,index)=>paragraph+'\uE104'+index+'\uE105').join('\n\n');
-    }
     text=text.replace(/\\begin\{(Theorem|Lemma|Proposition|Corollary|Claim)\}(?:\[([^\]]*)\])?\s*\\label\{([^}]+)\}/g,(_,kind,title,key)=>
       '\n\n### '+kindName(kind)+' '+(referenceTarget(sourceReferenceKey(key,namespace))?.number||'')+(title?' · '+title:'')+'\\label{'+key+'}\n\n')
       .replace(/\\(?:begin|end)\{enumerate\}/g,'\n\n')
@@ -455,26 +448,16 @@
     const prose=mathSegments(text,namespace).map(part=>{
       if(part.type==='text')return part.text;
       if(part.display){equationIndex++;part.equation=options.levelId?sourceLevel?.equations?.find(eq=>eq.index===equationIndex):undefined;}
-      const markers=part.text.match(imageMarker)||[];
-      if(markers.length)part.text=part.text.replace(imageMarker,'');
-      return '\uE000'+(tokens.push(part)-1)+'\uE001'+markers.join('');
+      return '\uE000'+(tokens.push(part)-1)+'\uE001';
     }).join('').replace(/It\\\^o/g,'Itô').replace(/L\\'evy/g,'Lévy');
     for(const [index,chunk] of proseMarkup(prose).split(/\n\s*\n/).entries()) {
       if(index)el.append(element('div','paragraph-break'));
       const block=element('span','prose-run');
-      const placements=new Set(Array.from(chunk.matchAll(imageMarker),match=>Number(match[1])));
-      const joined=chunk.replace(imageMarker,'').replace(/\n/g,' ');
+      const joined=chunk.replace(/\n/g,' ');
       const heading=joined.match(/^\s*#{1,6}\s+(.*)$/);
       if(heading) {const h=element('h4');inlineText(h,heading[1],tokens);block.append(h);}
       else inlineText(block,joined,tokens);
       el.append(block);
-      for(const image of options.images||[]){
-        if(placements.has(image.after_paragraph)){
-          const figure=element('figure','reply-illustration'),caption=element('figcaption','math-content');
-          renderRich(caption,image.alt,{macroLevelId:options.macroLevelId});
-          figure.append(illustrationButton(image.data_url,image.alt),caption);el.append(figure);
-        }
-      }
     }
   }
   function notice(target, message) { $(target).textContent = message || ''; $(target).hidden = !message; }
@@ -792,33 +775,13 @@
     document.querySelector('.composer-hint').textContent = t(mode === 'chat' ? 'chatHint' : 'composerHint');
     requestAnimationFrame(sizeComposerInput);
   }
-  function showIllustration(src,alt){
-    const viewer=$('illustration-viewer'),image=$('illustration-full');
-    viewer.dataset.zoomed='false';
-    image.src=src;image.alt=alt;
-    renderRich($('illustration-caption'),alt,{macroLevelId:currentLevel});
-    $('illustration-close').setAttribute('aria-label',language()==='中文'?'关闭插图':'Close illustration');
-    $('illustration-zoom').textContent=t('zoom');
-    viewer.showModal();
-  }
-  function illustrationButton(src,alt){
-    const button=element('button','illustration-button');button.type='button';
-    const image=element('img','guide-illustration');image.alt=alt;image.src=src;
-    button.append(image);button.addEventListener('click',()=>showIllustration(src,alt));
-    return button;
-  }
-  $('illustration-close').addEventListener('click',()=>$('illustration-viewer').close());
-  $('illustration-zoom').addEventListener('click',()=>{
-    const viewer=$('illustration-viewer'),zoom=viewer.dataset.zoomed!=='true';
-    viewer.dataset.zoomed=String(zoom);$('illustration-zoom').textContent=t(zoom?'fit':'zoom');
-  });
   function taskVisible(){
     return pendingTask?.levelId===currentLevel && pendingTask.mode===chatMode();
   }
   function topicText(){
     const level=levels().find(item=>item.id===currentLevel);
     const topic=pendingTopic?.topic || (level && levelHeading(level)) || '';
-    return t(({draw:'drawTopic',review:'reviewTopic'})[pendingTopic?.stage]||'thinkTopic')+' '+topic;
+    return t('thinkTopic')+' '+topic;
   }
   function updateTopic(){
     const text=taskVisible()&&pendingLabel!=='saving'?topicText():'',banner=$('tutor-progress');
@@ -910,18 +873,10 @@
         if (displayedContent==='[Confirmed understanding of the entire level goal]') displayedContent=chinese?'我理解了整关。':'I understand the complete goal of this level.';
         if (displayedContent==='[Understood the preceding explanatory passage]') displayedContent=chinese?'我理解了这一段。':'I understand this passage.';
       }
-      if(displayedContent || message.images?.length){
+      if(displayedContent){
         const content=element('div','message-body math-content');
-        renderRich(content,displayedContent.trim(),{macroLevelId:level.id,images:message.images});
+        renderRich(content,displayedContent.trim(),{macroLevelId:level.id});
         article.append(content);
-      }
-      if(message.role==='assistant'&&message.image){
-        article.append(illustrationButton('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(message.image.svg),message.image.alt));
-      }
-      if(message.image_retry && window.proof2gameBrowser){
-        const retry=element('button','plain-button',t('retryImage'));retry.type='button';retry.disabled=busy||saveBusy;
-        retry.addEventListener('click',()=>act('retry_image',{message_index:messageIndex}));
-        article.append(element('small','',t('imageFailed')),retry);
       }
       if(!regular && message.role==='assistant')article.append(guideConfirmation(message,messageIndex,saved,done,level));
       const undo=undoMessages()?.[currentLevel];

@@ -35,9 +35,9 @@ The Summary opens with one sentence stating the paper’s main contribution. The
 ## What it's like to play
 
 - **Explore the proof village.** Follow the roads between convention stations, statement halls and proof workshops. Completed houses light up. Use **Continue learning** to find your next house, then tap it to enter.
-- **Work through one idea at a time.** In English or Chinese, read a Guide passage, ask a question or confirm that you understand. The tutor can request a mathematical illustration, inspect it and place the selected image beside the explanation. Regular chat follows your questions.
+- **Work through one idea at a time.** In English or Chinese, read a Guide passage, ask a question or confirm that you understand. In Chat, ask follow-up questions about the proof and its formulas.
 - **See the source.** Follow citations to the DOI or official source and use the displayed locator.
-- **Pick up where you left off.** Save a checkpoint in one click, restore the progress you had before a load or import, or download a save with the illustrations to continue the same game on another device.
+- **Pick up where you left off.** Save a checkpoint in one click, restore the progress you had before a load or import, or download your conversations and progress to continue the same game on another device.
 
 ## Meet the team
 
@@ -94,9 +94,9 @@ One Codex session coordinates the work. Each specialist takes a different part o
 
 Open the shared GitHub Pages link to enter the game directly in your browser. No Codex installation or local server is needed to play.
 
-You can explore the map and locate the next house immediately. To enter a level, open **AI Connection** and verify both of your keys. DeepSeek runs the tutor and reviews candidate images. Alibaba Cloud Model Studio (Bailian, Beijing region) generates illustrations with `z-image-turbo`. Each service bills your own account. Verifying Bailian generates one test image and may incur a charge.
+You can explore the map and locate the next house immediately. To enter a level, open **AI Connection** and verify your DeepSeek API key. DeepSeek handles Guide and Chat requests and bills your account.
 
-The browser remembers each verified connection independently. You can change or clear either key in **AI Connection**. Keys go only to their respective services and are excluded from game saves. Download a save to transfer conversations, selected illustrations and progress to another device.
+The browser remembers your verified connection. You can change or clear the key in **AI Connection**. The browser sends the key only to DeepSeek. Save files contain your conversations and progress and can be transferred to another device.
 
 Authors can [export and publish a game directory to GitHub Pages](skills/proof2game/references/game.md#publish-the-website) from the approved bilingual snapshot. Existing published games keep their original runtime until their author explicitly requests a new export.
 
@@ -110,15 +110,15 @@ After Writer delivers a paper, ask Proof2Game to revise it and share your feedba
 
 ## Manual setup
 
-Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Pandoc for checking Markdown referee reports, Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. To play a newly exported game, players need a browser and personal DeepSeek and Bailian API keys. The PDF navigation check uses `pdftotext` or `pypdf`. Writer revision comparisons also need `PyMuPDF>=1.24.11,<2` in the Writer environment.
+Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Pandoc for checking Markdown referee reports, Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. To play a newly exported game, players need a browser and a personal DeepSeek API key. The PDF navigation check uses `pdftotext` or `pypdf`. Writer revision comparisons also need `PyMuPDF>=1.24.11,<2` in the Writer environment.
 
 If you already have a verified release checkout, use it and let Proof2Game check for updates. For a fresh setup, run:
 
 ```sh
 proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.2.1 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.2.1"
-python3 "$proof2game_releases/v0.2.1/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch v0.3.0 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.3.0"
+python3 "$proof2game_releases/v0.3.0/skills/proof2game/scripts/release.py" verify
 ```
 
 Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)

@@ -22,7 +22,6 @@
 .prose-run{margin:0}.paragraph-break{height:.8em}
 
 .local-step-goal{margin-top:14px;padding:10px 13px;border-left:3px solid #a6ba86;background:#f0f4e8;border-radius:0 7px 7px 0;font-size:12px;line-height:1.8}
-.guide-illustration{display:block;width:640px;max-width:100%;height:auto;margin:12px 0;border-radius:8px;border:1px solid var(--line)}
 
 .chat-message.user{position:relative}.chat-message.user.with-undo{padding-bottom:37px}
 .undo-message-button{position:absolute;right:11px;bottom:7px;display:inline-flex;align-items:center;justify-content:center;width:29px;height:27px;border:0;border-radius:6px;background:transparent;color:#7a8d6d}
@@ -267,17 +266,6 @@
 .tutor-progress { flex-shrink: 0; margin: 0; padding: 5px 14px; color: var(--green); background: #eff3e9; }
 .tutor-progress[hidden] { display: none; }
 .tutor-progress, .guide-actions .pending-message { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
-.reply-illustration { max-width: 100%; margin: .7em 0; }
-.reply-illustration figcaption { margin: .25em 0; color: var(--muted); font: 13px/1.55 var(--sans); }
-.illustration-button { display: block; max-width: 100%; border: 0; padding: 0; margin: .6em 0; background: transparent; cursor: zoom-in; }
-.illustration-button .guide-illustration { width: auto; max-width: 100%; max-height: min(40dvh, 390px); margin: 0; object-fit: contain; }
-.illustration-viewer[open] { position: fixed; inset: 0; margin: 0; width: 100%; height: 100dvh; max-width: none; max-height: none; border: 0; display: flex; flex-direction: column; background: var(--paper); }
-.illustration-viewer header { display: flex; align-items: center; gap: 8px; padding: max(8px, env(safe-area-inset-top)) 12px 8px; }
-.illustration-viewer header p { flex: 1; margin: 0; font-size: 14px; }
-.illustration-viewer header button { min-width: 44px; min-height: 44px; }
-.illustration-canvas { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
-.illustration-canvas img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.illustration-viewer[data-zoomed="true"] .illustration-canvas img { width: 200%; max-width: none; height: auto; }
 .reference-target { animation: reference-fade 3s ease-out forwards; }
 @keyframes reference-fade { 0%, 45% { background: #e8efd9; outline-color: #a4b783; } 100% { background: transparent; outline-color: transparent; } }
 
@@ -286,9 +274,8 @@
 #ai-description {font-size:.88rem;line-height:1.6;color:var(--muted)}
 .provider-connection {display:grid;grid-template-columns:1fr auto;align-items:center;gap:.6rem;padding:1rem 0;border-top:1px solid var(--line)}
 .provider-connection label {font-weight:650}
-.provider-connection a,.provider-connection small {font-size:.76rem;color:var(--green)}
+.provider-connection a {font-size:.76rem;color:var(--green)}
 .provider-connection input {grid-column:1/-1;width:100%;padding:.65rem;border:1px solid var(--line);border-radius:.5rem;background:white;font-size:1rem}
-.provider-connection small {grid-column:1/-1}
 .provider-connection .save-tools {justify-self:end}
 .provider-status {font-size:.8rem;overflow-wrap:anywhere}
 .provider-status[data-state="invalid_key"],.provider-status[data-state="balance"],.provider-status[data-state="failed"] {color:#924b36}

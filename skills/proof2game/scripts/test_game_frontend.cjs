@@ -138,20 +138,11 @@ for(const text of ['See $x+y$.',String.raw`See \[x+y\].`]){
 }
 phone=false;
 checkScrollHint(220,false);
-// Stored paragraph indices refer to the original reply, including when TeX
-// lists expand into multiple display blocks or a formula spans blank lines.
-context.illustrationButton=(url,alt)=>Object.assign(new Node('button',alt),{url});
-const imageAt=(after_paragraph,alt)=>({after_paragraph,alt,data_url:'data:image/png;base64,AA=='});
-const mixed=render('\n  '+String.raw`\begin{enumerate}\item Up\item Down\end{enumerate}`+'\n\nThe shared point $z$.\n\nConclusion.',{
- images:[imageAt(0,'Directions'),imageAt(1,'Intersection $z$')],
-});
-const order=mixed.children.filter(node=>node.tag==='figure'||node.tag==='span'&&node.textContent.trim()).map(node=>node.tag==='figure'?node.children[0].textContent:node.textContent.trim());
-assert.deepEqual(order,['1. Up','2. Down','Directions','The shared point .','Intersection $z$','Conclusion.']);checks++;
-assert.equal(all(mixed,node=>node.tag==='figcaption').length,2);checks++;
-const equationPictures=render('\\[x\n\n+y\\]\n\nEnd.',{images:[imageAt(0,'x plus y')]});
-assert.equal(all(equationPictures,node=>node.tag==='figure').length,1);
-assert(all(equationPictures,node=>Boolean(node.math))[0].math.includes('x'));
-assert(!/[\uE104\uE105]/.test(equationPictures.textContent));checks++;
-const imageOnly=render('',{images:[imageAt(0,'An orbit')]});
-assert.equal(all(imageOnly,node=>node.tag==='figure').length,1);checks++;
+// A multi-part explanation keeps lists and display math in reading order.
+const mixed=render(String.raw`\begin{enumerate}\item Up\item Down\end{enumerate}`+'\n\nThe shared point $z$.\n\nConclusion.');
+const paragraphs=mixed.children.filter(node=>node.tag==='span' && node.textContent.trim());
+assert.deepEqual(paragraphs.map(node=>node.textContent.trim()),['1. Up','2. Down','The shared point .','Conclusion.']);checks++;
+const spanningFormula=render('\\[x\n\n+y\\]\n\nEnd.');
+assert(all(spanningFormula,node=>Boolean(node.math))[0].math.includes('x'));
+assert(spanningFormula.textContent.includes('End.'));checks++;
 console.log(JSON.stringify({ok:true,rendering_cases:checks,actual_katex_fragments:formulaCount}));

@@ -56,7 +56,7 @@ test('a real Pages export opens directly and restores browser progress', {
   const website=path.join(root,'website');
   execFileSync('python3',['-c',buildFixture,website],{cwd:__dirname,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'},timeout:45000});
   for(const name of ['.nojekyll','index.html','browser-engine.mjs','browser-entry.mjs','level-tree.mjs','app.js'])assert.ok((await fs.stat(path.join(website,name))).isFile());
-  for(const name of ['server.mjs','launch.js','references','approval.json','player-save.json'])await assert.rejects(fs.stat(path.join(website,name)),{code:'ENOENT'});
+  for(const name of ['server.mjs','launch.js','references','approval.json','player-save.json','illustration-tools.mjs','guide-diagram.mjs'])await assert.rejects(fs.stat(path.join(website,name)),{code:'ENOENT'});
   globalThis.location=new URL('https://games.example.test/proof/demo/');
   const fakeFetch=async(target,options)=>{
     assert.equal(target.origin,location.origin);assert.equal(options.redirect,'error');

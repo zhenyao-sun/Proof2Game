@@ -500,10 +500,8 @@ async function exerciseChatInput(mode) {
  const pendingConfirmation=stepButton().click();await settle();
  assert.equal(passageButtons().at(-1).textContent,'已理解 ✓');
  assert.equal(passageButtons().at(-1).disabled,true);
- for(const [stage,label] of [['think','正在梳理'],['draw','正在绘制'],['review','正在审看插图']]){
-   await window.fire('proof2game-topic',{detail:{level_id:'one',mode:'guide',stage,topic:'两条曲线的交点'}});
-   assert.equal(nodes.get('tutor-progress').textContent,label+' 两条曲线的交点');
- }
+ await window.fire('proof2game-topic',{detail:{level_id:'one',mode:'guide',stage:'think',topic:'两条曲线的交点'}});
+ assert.equal(nodes.get('tutor-progress').textContent,'正在梳理 两条曲线的交点');
  assert.equal(nodes.get('undo-level').disabled,false);
  await nodes.get('undo-level').click();await settle();
  assert.equal(passageUndo,null,'undo targets the active confirmation while the next passage loads');
@@ -600,33 +598,25 @@ async function exerciseChatInput(mode) {
  await nodes.get('chat-form').fire('submit',{preventDefault:()=>{}});await settle();
  assert.equal(nodes.get('level-dialog').open,true,'completed follow-up does not force the player back to the map');
  assert(!calls.some(call=>call.action==='start'),'saved guide history is not restarted on revisit');
- const image={alt:'An arrow from x to y.',svg:'<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L5 5"/></svg>'};
- progress.levels['entry'].messages.push({role:'assistant',content:'',image,step_goal:'Do you understand this step?',phase:'step'});
+ // Old conversations can include references to generated images. Reading them must show the
+ // original text and learning controls without offering to redraw or opening an image viewer.
+ const oldAttachment={alt:'Two points.',svg:'<svg></svg>'};
+ progress.levels.entry.messages.push({role:'assistant',content:'Two marked points.',image:oldAttachment,
+   step_goal:'Do you understand this step?',phase:'step'});
  await nodes.get('connection-check').fire('click');await settle();
  await nodes.get('close-level').fire('click');await settle();
  window.history.pushState(null,'','/?level=entry');await window.fire('popstate');await settle();
- const illustrated=nodes.get('messages').children.filter(article=>article.querySelector('img.guide-illustration'));
- assert.equal(illustrated.length,1);
- const picture=illustrated[0].querySelector('img.guide-illustration');
- assert.equal(picture.alt,image.alt);
- assert.equal(decodeURIComponent(picture.src.split(',')[1]),image.svg);
- const transcript=nodes.get('messages');transcript.scrollTop=67;
- await illustrated[0].querySelector('button.illustration-button').click();
- assert.equal(nodes.get('illustration-viewer').open,true);
- assert.equal(nodes.get('illustration-full').src,picture.src);
- await nodes.get('illustration-zoom').click();assert.equal(nodes.get('illustration-viewer').dataset.zoomed,'true');
- await nodes.get('illustration-close').click();assert.equal(nodes.get('illustration-viewer').open,false);
- assert.equal(transcript.scrollTop,67,'closing a zoomed illustration preserves the explanation position');
- assert(!illustrated[0].children.some(node=>node.className?.startsWith('message-body')));
- assert(illustrated[0].textContent.includes('Do you understand this step?'));
+ assert(nodes.get('messages').textContent.includes('Two marked points.'));
+ assert(nodes.get('messages').textContent.includes('Do you understand this step?'));
+ assert.equal(nodes.get('messages').querySelector('img.guide-illustration'),null);
+ assert.equal(nodes.get('messages').querySelector('button.retry-illustration'),null);
+ assert.equal(nodes.has('illustration-viewer'),false);
  await nodes.get('mode-chat').fire('click');await settle();assert.equal(nodes.get('mode-chat').attrs['aria-pressed'],'true');
  await exerciseChatInput('chat');
- assert(!descendants(nodes.get('messages')).some(node=>node.tag==='img'));
- progress.levels.entry.chat.messages.push({role:'assistant',content:'',image});
+ progress.levels.entry.chat.messages.push({role:'assistant',content:'The two points lie on the line.',image:oldAttachment});
  await nodes.get('connection-check').fire('click');await settle();
- const chatPicture=nodes.get('messages').querySelector('img.guide-illustration');
- assert.equal(chatPicture.alt,image.alt);
- assert.equal(decodeURIComponent(chatPicture.src.split(',')[1]),image.svg);
+ assert(nodes.get('messages').textContent.includes('The two points lie on the line.'));
+ assert.equal(nodes.get('messages').querySelector('img.guide-illustration'),null);
  assert(!nodes.get('messages').textContent.includes('Do you understand this step?'));
  await nodes.get('close-level').fire('click');await settle();locate('/?level=convention');await window.fire('popstate');await settle();assert.equal(nodes.get('mode-guide').attrs['aria-pressed'],'true','a prior level chat choice cannot change a fresh level default');
  await nodes.get('close-level').fire('click');await settle();locate('/?level=entry');await window.fire('popstate');await settle();assert.equal(nodes.get('mode-chat').attrs['aria-pressed'],'true','each saved mode is remembered');
