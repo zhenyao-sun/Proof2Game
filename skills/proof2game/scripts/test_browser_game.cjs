@@ -523,6 +523,23 @@ test('placement repair reuses the reviewed pixels and cannot change the lesson o
   assert.deepEqual(reply.images,[{after_paragraph:0,alt:'Two cells',data_url:'data:image/png;base64,'+testImage}]);
 });
 
+test('an explicit image retry can redraw a simpler example after review rejects the first candidate',async()=>{
+  const {finishIllustratedTurn}=await import(new URL('illustration-tools.mjs',moduleURL));
+  let draws=0;
+  const images=['data:image/png;base64,first','data:image/png;base64,second'];
+  const result=await finishIllustratedTurn({
+    messages:[],first:(await drawReply(1).json()).choices[0],signal:new AbortController().signal,
+    placementText:'Existing lesson.',report:()=>{},draw:async()=>images[draws++],
+    ask:async history=>{
+      if(history.at(-1).role==='user')return (await drawReply(2).json()).choices[0];
+      const placements=draws===1?[]:[{candidate:2,after_paragraph:0,alt:'Simpler example'}];
+      return {finish_reason:'stop',message:{content:JSON.stringify({illustrations:placements})}};
+    },
+  });
+  assert.equal(draws,2);assert.equal(result.answer.message,'Existing lesson.');
+  assert.deepEqual(result.images,[{after_paragraph:0,alt:'Simpler example',data_url:images[1]}]);
+});
+
 test('repeated save imports use bounded, content-free action receipts',async()=>{
  const f=await setup();await f.act('understand_all');
  for(let count=0;count<5;count++){

@@ -376,7 +376,8 @@ async function askTutor(next,level,action,message,control={},mode='guide',{prepa
     let prompt;
     if(retryMessage){
       const paragraphs=retryMessage.message.trim().split(/\n\s*\n/);
-      prompt=`The player pressed Retry illustration on an existing reply. Draw one concrete visual relationship from that passage. Keep the drawing prompt brief and the geometry simple. If the exact object is abstract, use a clearly identified schematic or elementary example and state its limits in the caption. Leave formulas and long labels for the caption. ${diagramInstructions} If the candidate misrepresents the idea, try a simpler drawing within the available budget. Reply in ${languageOf(next)}. Return only a JSON object with an illustrations array. The existing reply is already on screen. Its paragraph indices start at 0. Original paragraphs: `+JSON.stringify(paragraphs);
+      const focus=retryMessage.step_goal||'';
+      prompt=`The player pressed Retry illustration on an existing reply. Use the passage question to pick one visual relationship. Prefer its simplest exact special case. Depict the relation with a few unlabeled shapes in a flat diagram. If the object is abstract, explain the scope of the schematic in the caption. Leave formulas and long labels for the caption. ${diagramInstructions} A picture that illustrates one relation can be suitable even if it omits other parts of the passage. Reply in ${languageOf(next)}. Return only a JSON object with an illustrations array. The existing reply is already on screen. Its paragraph indices start at 0. Original passage: `+JSON.stringify({question:focus,paragraphs});
     }else{
       prompt=makePrompt(next,level,action,message,mode)+'\nReturn ONLY a JSON object matching this schema: '+JSON.stringify(turnSchema);
     }

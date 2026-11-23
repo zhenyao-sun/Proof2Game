@@ -85,6 +85,7 @@ export async function timedRequest(signal,ms,operation) {
 export async function finishIllustratedTurn({messages,first,ask,draw,signal,report,placementText,roundMs=IMAGE_ROUND_MS}) {
   const candidates=[];
   let choice=first, deadline=0, pausedAt=0, failure='', finalOnly=false, topic='', statusUpdates=0;
+  let offeredSimplerDrawing=false;
   function paused(value) {
     if(value)pausedAt=Date.now();
     else if(pausedAt){deadline+=Date.now()-pausedAt;pausedAt=0;}
@@ -162,6 +163,17 @@ export async function finishIllustratedTurn({messages,first,ask,draw,signal,repo
     if(remaining()>0){
       try {
         choice=await ask(messages,!finalOnly,paused,remaining,statusUpdates<2);
+        if(placementText!==undefined && !finalOnly && !offeredSimplerDrawing && candidates.length && choice?.finish_reason==='stop' && remaining()>0){
+          let selection;
+          try{selection=parseFinal(choice)?.illustrations;}catch{/* The final JSON recovery handles this below. */}
+          if(Array.isArray(selection) && !selection.length){
+            offeredSimplerDrawing=true;
+            messages.push({role:'assistant',content:choice.message.content,
+              ...(typeof choice.message.reasoning_content==='string'?{reasoning_content:choice.message.reasoning_content}:{})},
+              {role:'user',content:'The player explicitly asked to retry the illustration. If a simpler correct example is possible, use the drawing tool for just one relation from the original passage with a few shapes and no text. Put the qualifications in the caption. Keep rejected candidates excluded. If no honest diagram is possible, return {"illustrations":[]}.'});
+            choice=await ask(messages,true,paused,remaining,statusUpdates<2);
+          }
+        }
         continue;
       }catch(error){
         if(signal.aborted || !(remaining()<=0||error.name==='TimeoutError'))throw error;
@@ -196,10 +208,13 @@ export async function finishIllustratedTurn({messages,first,ask,draw,signal,repo
       throw new Error('The tutor returned empty or invalid JSON after one retry.');
     }
   }
-  if(placementText!==undefined)answer.message=placementText;
+  if(placementText!==undefined)answer={message:placementText,illustrations:answer?.illustrations};
   let images=[];
   if(candidates.length){
-    try{images=selectIllustrations(answer,candidates);}
+    try{
+      if(!Array.isArray(answer?.illustrations))throw new Error('Invalid illustration selection.');
+      images=selectIllustrations(answer,candidates);
+    }
     catch{
       // Only let the correction choose among pixels already reviewed. The original
       // lesson, explanation and confirmation remain the authoritative response.
