@@ -487,7 +487,8 @@ test('browser loader bounds parallel downloads and rejects modified manuscript f
  for(const [name,bytes] of files)records[name]={size:bytes.length,sha256:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('')};
  const manifest=encoder.encode(JSON.stringify({schema:1,launch_mode:'browser',game_id:value.id,files:records}));
  let active=0,peak=0,corrupt=false;
- const fetcher=async target=>{
+ const fetcher=async (target,options)=>{
+  assert.equal(options.credentials,'same-origin','private hosting must retain same-origin authentication');
   const name=new URL(target).pathname.replace('/games/paper/','');
   if(name==='proof2game.json')return new Response(manifest);
   active++;peak=Math.max(peak,active);
@@ -655,4 +656,29 @@ test('illustrated saves larger than the old 16 MiB limit load on a fresh device'
   const second=await setup();
   const imported=await second.act('save_import',{save:exported});
   assert.deepEqual(imported.progress.levels.result.messages,save.progress.levels.result.messages);
+});
+
+test('JSON mode blank or malformed finals retry once without repeating tools',async()=>{
+  const {finishIllustratedTurn}=await import(new URL('illustration-tools.mjs',moduleURL));
+  for(const content of ['   ','{"message":"bad \\q"}']){
+    let calls=0,draws=0;
+    const result=await finishIllustratedTurn({messages:[],first:{finish_reason:'stop',message:{content}},signal:new AbortController().signal,report:()=>{},draw:()=>{draws++;},ask:async(history,tools)=>{calls++;assert.equal(tools,false);return {finish_reason:'stop',message:{content:JSON.stringify(answer())}};}});
+    assert.equal(result.answer.message,'A short explanation.');assert.equal(calls,1);assert.equal(draws,0);
+  }
+});
+test('persistent blank JSON fails with a specific error after one retry',async()=>{
+  const {finishIllustratedTurn}=await import(new URL('illustration-tools.mjs',moduleURL));let calls=0;
+  await assert.rejects(finishIllustratedTurn({messages:[],first:{finish_reason:'stop',message:{content:' '}},signal:new AbortController().signal,report:()=>{},ask:async()=>{calls++;return {finish_reason:'stop',message:{content:' '}};}}),/empty or invalid JSON after one retry/);assert.equal(calls,1);
+});
+test('JSON retry still rejects fabricated confirmation and leaves progress unchanged',async()=>{
+  let calls=0;const f=await setup({fetcher:async()=>{if(++calls===1)return Response.json({choices:[{finish_reason:'stop',message:{content:' '}}]});return tutorReply({understanding:{kind:'confirm',scope:'level',description:'invented',quote:'yes',level_id:'result'}});}});
+  const before=(await f.engine.request('/api/game')).progress;
+  await assert.rejects(f.act('start'),/Confirmation/);assert.deepEqual((await f.engine.request('/api/game')).progress,before);
+});
+
+
+test('fenced JSON final replies parse without a second provider call',async()=>{
+  const {finishIllustratedTurn}=await import(new URL('illustration-tools.mjs',moduleURL));
+  const result=await finishIllustratedTurn({messages:[],first:{finish_reason:'stop',message:{content:'```json\n'+JSON.stringify(answer())+'\n```'}},signal:new AbortController().signal,ask:()=>{throw new Error('Unexpected retry');}});
+  assert.equal(result.answer.message,'A short explanation.');
 });

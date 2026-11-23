@@ -74,4 +74,6 @@ Check that each visible road follows the manuscript tree, including branches fro
 
 On portrait iPhone Safari and Android Chrome, check map gestures, wide formulas, inline illustrations and the keyboard. Verify that returning to a level restores its panel, reading position and Chat draft for the current page session. Check both languages, passage confirmations, manual save, delete/undo, restore after load/import and cross-device image placement. Same-origin tabs share browser storage; reject stale writes. Different browsers and devices use separate storage and can transfer progress through a downloaded save. Imports of existing same-snapshot local-runtime saves remain supported. No credentials are transferred.
 
+JSON mode may return blank content even with `finish_reason=stop`. Keep the runtime’s bounded JSON recovery and exact post-reply validation; distinguish provider/format failures from network failures without logging keys or reply content. Same-origin snapshot reads must retain login cookies on private hosting.
+
 Test the real deployed URL and an actual tutor request when credentials are available. Unit tests and synthetic API responses do not establish live provider availability. Record precisely which checks ran. Existing published games and their saves are left intact; re-export or deployment of a specific game requires its author's authorization.

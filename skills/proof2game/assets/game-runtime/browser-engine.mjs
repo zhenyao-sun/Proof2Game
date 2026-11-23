@@ -411,7 +411,9 @@ async function askTutor(next,level,action,message,control={},mode='guide',{prepa
       ...(images.length?{images}:{}),...(failed&&!images.length?{image_retry:true}:{})};
   }catch(error){
     if(error.status)throw error;
-    fail(error.name==='AbortError'?'The tutor request was cancelled or timed out. Your progress is unchanged.':'Could not obtain a valid DeepSeek reply. Check your connection and retry; your progress is unchanged.',503);
+    const known=['Unexpected illustration tool call.','Unexpected repeated topic update.','Unknown tutor tool.','The tutor response was incomplete.','The tutor returned empty or invalid JSON after one retry.','Invalid illustration selection.','Invalid illustration placement.'];
+    const detail=error.name==='SyntaxError'?'Invalid JSON in the provider response.':known.includes(error.message)?error.message:error.name==='TypeError'?'Network or browser request failure.':error.name==='TimeoutError'?'Tutor response timed out.':'Unexpected tutor runtime failure ('+error.name+').';
+    fail(error.name==='AbortError'?'The tutor request was cancelled or timed out. Your progress is unchanged.':detail+' Your progress is unchanged.',503);
   }finally{activeTutors.delete(control);control.cancel=null;if(!background)pendingTopic=null;}
 }
 const activeTutors=new Set();
@@ -653,7 +655,7 @@ return {
 }
 
 export async function loadBrowserGame({fetcher=fetch,storage=localStorage,onMissingKey,onConnectionChange}={}){
-  const read=async file=>{const response=await fetcher(new URL(file,location.href),{credentials:'omit',redirect:'error'});if(!response.ok)throw new Error('Game file could not be loaded. Reload to retry.');return new Uint8Array(await response.arrayBuffer());};
+  const read=async file=>{const response=await fetcher(new URL(file,location.href),{credentials:'same-origin',redirect:'error'});if(!response.ok)throw new Error('Game file could not be loaded. Reload to retry.');return new Uint8Array(await response.arrayBuffer());};
   const checksum=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
   const manifest=JSON.parse(new TextDecoder().decode(await read('proof2game.json')));
   if(manifest.schema!==1||manifest.launch_mode!=='browser'||!manifest.files?.['game.json'])throw new Error('Unsupported browser game manifest.');

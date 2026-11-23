@@ -157,8 +157,30 @@ export async function finishIllustratedTurn({messages,first,ask,draw,signal,repo
     messages.push({role:'user',content:'The illustration time budget has expired. Return the final JSON now using any suitable candidates already available.'});
     choice=await ask(messages,false,paused);
   }
-  if(choice?.finish_reason!=='stop')throw new Error('The tutor response was incomplete.');
-  return {answer:JSON.parse(choice.message.content),candidates,failed};
+  function parseFinal(value) {
+    if(value?.finish_reason!=='stop')throw new Error('The tutor response was incomplete.');
+    const content=value.message?.content;
+    if(typeof content!=='string'||!content.trim())throw new Error('The tutor returned empty JSON.');
+    // Some compatible endpoints wrap otherwise valid JSON in a Markdown fence.
+    const text=content.trim().replace(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i,'$1');
+    return JSON.parse(text);
+  }
+  let answer;
+  try {answer=parseFinal(choice);}
+  catch(error) {
+    if(error.name!=='SyntaxError'&&error.message!=='The tutor returned empty JSON.')throw error;
+    signal.throwIfAborted();
+    // JSON mode can return spaces with finish_reason=stop. Retry once, without
+    // rerunning tools or accepting any state from the rejected response.
+    messages.push({role:'user',content:'The last response was empty or invalid JSON. Return the final answer to the original request now as one nonempty JSON object matching the supplied schema. Escape all LaTeX backslashes as JSON requires. Do not call tools, repeat drawings, or invent player confirmations.'});
+    choice=await ask(messages,false,paused);
+    try {answer=parseFinal(choice);}
+    catch(retryError) {
+      if(retryError.name!=='SyntaxError'&&retryError.message!=='The tutor returned empty JSON.')throw retryError;
+      throw new Error('The tutor returned empty or invalid JSON after one retry.');
+    }
+  }
+  return {answer,candidates,failed};
 }
 
 export function selectIllustrations(answer,candidates) {
