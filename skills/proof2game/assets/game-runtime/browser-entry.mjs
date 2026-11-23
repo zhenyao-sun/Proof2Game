@@ -51,22 +51,27 @@ function makeRow(service) {
   if (service === 'bailian') form.append(warning);
   $('ai-providers').append(form);
   const engine = window.proof2gameBrowser;
-  function saveInput() {
+  function storeInput(clearAfter = false) {
     const value = input.value.trim();
-    if (!value) return true;
     try {
-      engine.setKey(service, value);
-      input.value = '';
+      // An empty submitted field rechecks the saved key.
+      if (value || !clearAfter) engine.setKey(service, value);
+      if (clearAfter) input.value = '';
       return true;
     } catch {
-      input.setCustomValidity(words().invalid); input.reportValidity(); return false;
+      input.setCustomValidity(words().invalid);
+      return false;
     }
   }
-  input.addEventListener('input', () => input.setCustomValidity(''));
-  input.addEventListener('change', saveInput);
+  // Keep blur free of DOM updates. On touch WebKit, changing the form as
+  // focus leaves the key field can consume the first tap on Verify.
+  input.addEventListener('input', () => {
+    input.setCustomValidity('');
+    storeInput();
+  });
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!saveInput()) return;
+    if (!storeInput(true)) {input.reportValidity(); return;}
     if (engine.connection().providers[service].state === 'missing') {
       input.setCustomValidity(words().enter); input.reportValidity(); return;
     }

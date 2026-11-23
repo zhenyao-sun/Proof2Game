@@ -15,12 +15,31 @@ const noUnderstanding = {kind:'none', scope:'partial', description:'', quote:'',
 
 async function check(browserType, device) {
   const browser = await browserType.launch();
+  let page, stage = 'Create browser context';
+  const pageErrors = [], unexpected = [], failedRequests = [];
+  const verification = {deepseek:0, bailian:0};
+  const requests = {tutor:0, preflight:0};
   try {
     const context = await browser.newContext({...device, locale:'en-US', reducedMotion:'reduce', serviceWorkers:'block'});
-    const page = await context.newPage();
-    const pageErrors = [], unexpected = [];
-    const verification = {deepseek:0, bailian:0};
+    page = await context.newPage();
     page.on('pageerror', error => pageErrors.push(String(error)));
+    page.on('requestfailed', request => {
+      const url = new URL(request.url());
+      failedRequests.push([request.method(), url.origin+url.pathname, request.failure()?.errorText]);
+    });
+    // Keep only control names and event order from the two credential forms.
+    await page.addInitScript(() => {
+      window.verificationEvents = [];
+      for (const type of ['touchend','pointerup','change','focusout','click','submit']) {
+        document.addEventListener(type, event => {
+          const form = event.target.closest?.('.provider-connection');
+          if (!form) return;
+          const control = event.target.closest('button,input') || form;
+          window.verificationEvents.push([form.querySelector('input').id, type, control.id || control.type || control.tagName]);
+          if (window.verificationEvents.length > 32) window.verificationEvents.shift();
+        }, {capture:true, passive:true});
+      }
+    });
     await context.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url());
       if (url.origin === base.origin && url.pathname.startsWith(base.pathname)) {
@@ -33,13 +52,16 @@ async function check(browserType, device) {
           return route.fulfill({status:404, body:'Missing test fixture asset'});
         }
       }
-      if (['api.deepseek.com', 'dashscope.aliyuncs.com'].includes(url.hostname) && request.method() === 'OPTIONS')
+      if (['api.deepseek.com', 'dashscope.aliyuncs.com'].includes(url.hostname) && request.method() === 'OPTIONS') {
+        requests.preflight++;
         return route.fulfill({status:204, headers:cors});
+      }
       if (url.href === 'https://api.deepseek.com/chat/completions') {
         const prompt = request.postDataJSON().messages[0].content;
         let content;
         if (prompt === 'Reply with OK.') { verification.deepseek++; content = 'OK'; }
         else {
+          requests.tutor++;
           assert(Array.isArray(prompt));
           const reply = {message:'A synthetic guided explanation.', illustrations:[], understanding:noUnderstanding};
           if (!prompt[0].text.startsWith('Respond to')) Object.assign(reply, {phase:'step', step_goal:'Is the convention clear?'});
@@ -63,6 +85,7 @@ async function check(browserType, device) {
     const focused = house.locator('.node-title');
     const progress = page.locator('#progress-count');
     const verify = service => keys.locator('form').filter({has:page.locator('#'+service+'-key')});
+    stage = 'Browse the map and focus the first level';
     await page.goto(base.href);
     await expect(house).toBeVisible();
     await expect(page.locator('.level-node')).toHaveCount(1);
@@ -71,18 +94,22 @@ async function check(browserType, device) {
     await page.locator('#next-level').tap();
     await expect(focused).toBeVisible();
     await expect(keys).toBeHidden();
+    stage = 'Open AI Connection at the level entrance';
     await house.tap();
     await expect(keys).toBeVisible();
     await expect(guide).toBeHidden();
+    stage = 'Verify Bailian by touch';
     await keys.locator('#bailian-key').fill('synthetic-bailian');
     await verify('bailian').getByRole('button',{name:'Verify', exact:true}).tap();
     await expect(verify('bailian').locator('.provider-status')).toHaveAttribute('data-state','verified');
     assert.deepEqual(verification, {deepseek:0,bailian:1});
     await expect(keys.locator('img')).toHaveCount(0);
+    stage = 'Verify DeepSeek by touch and resume entry';
     await keys.locator('#deepseek-key').fill('synthetic-deepseek');
     await verify('deepseek').getByRole('button',{name:'Verify', exact:true}).tap();
     await expect(keys).toBeHidden();
     await expect(guide).toHaveAttribute('data-panel','guide');
+    stage = 'Read the first Guide passage';
     const avatar = guide.locator('.guide-confirmation .guide-avatar').first();
     await expect(avatar).toBeVisible();
     await avatar.evaluate(image=>image.decode());
@@ -90,12 +117,14 @@ async function check(browserType, device) {
     await expect(guide.locator('#messages')).toContainText('Is the convention clear?');
     await expect(guide.locator('.understand-button').first()).toBeInViewport({ratio:1});
     await expect(guide.locator('#chat-form')).toBeHidden();
+    stage = 'Ask a Guide question';
     await guide.locator('.guide-ask').first().tap();
     await expect(guide.locator('#chat-input')).toBeVisible();
     await guide.locator('#chat-input').fill('Please explain this convention.');
     await guide.locator('#send-message').tap();
     await expect(guide.locator('#chat-form')).toBeHidden();
     await expect(guide.locator('.guide-confirmation')).toHaveCount(2);
+    stage = 'Restore a Chat draft after a map visit';
     await guide.locator('#mobile-chat').tap();
     await expect(guide).toHaveAttribute('data-panel','chat');
     await guide.locator('#chat-input').fill('A draft for this level');
@@ -106,6 +135,7 @@ async function check(browserType, device) {
     await expect(guide.locator('#chat-input')).toHaveValue('A draft for this level');
 
     await guide.locator('#close-level-small').tap();
+    stage = 'Save and reopen the game';
     await page.locator('#save-game').tap();
     await expect(page.locator('#save-toast')).toContainText(/save/i);
     await page.reload();
@@ -114,6 +144,7 @@ async function check(browserType, device) {
     await expect(guide).toHaveAttribute('data-panel','guide');
     await guide.locator('#mobile-chat').tap();
     await expect(guide.locator('#chat-input')).toHaveValue('');
+    stage = 'Complete the first level and restore its earlier save';
     await guide.locator('#mobile-content').tap();
     await guide.locator('#understand-all').tap();
     await expect(guide).toBeHidden();
@@ -127,6 +158,19 @@ async function check(browserType, device) {
     assert.deepEqual(unexpected, []);
     assert.deepEqual(pageErrors, []);
     console.log(browserType.name()+' '+browser.version()+': exported phone layout, credentials, Guide, draft and saves passed');
+  } catch (error) {
+    const screen = page && await page.evaluate(() => ({
+      dialogs: [...document.querySelectorAll('dialog[open]')].map(dialog=>dialog.id),
+      panel: document.querySelector('#level-dialog')?.dataset.panel,
+      providers: [...document.querySelectorAll('.provider-connection')].map(form=>({
+        input:form.querySelector('input').id, state:form.querySelector('.provider-status').dataset.state
+      })),
+      errors: [...document.querySelectorAll('[role="alert"]:not([hidden])')].map(node=>node.textContent),
+      verificationEvents: window.verificationEvents
+    })).catch(diagnosticError=>({error:String(diagnosticError)}));
+    console.error(JSON.stringify({browser:browserType.name(), version:browser.version(), stage, verification,
+      requests, pageErrors, unexpected, failedRequests, screen}, null, 2));
+    throw error;
   } finally {
     await browser.close();
   }
