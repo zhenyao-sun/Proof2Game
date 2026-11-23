@@ -21,6 +21,7 @@ export async function generateBailianUrl({fetcher, key, signal, prompt}) {
     throw Object.assign(error, {provider:'bailian', status:response.status, reason, delay:Math.max(0,delay||0)});
   }
   const raw = body.output?.choices?.[0]?.message?.content?.find(part=>typeof part.image==='string')?.image;
+  if (!URL.canParse(raw)) throw new Error('Unexpected Bailian image location.');
   const url = new URL(raw);
   if (url.protocol!=='https:' || url.username || url.password || url.port ||
       !/^dashscope-[a-z0-9-]+\.oss-(?:accelerate|cn-[a-z0-9-]+)\.aliyuncs\.com$/.test(url.hostname))
@@ -32,9 +33,15 @@ export async function generateBailianImage(options) {
   // Safari's native fetch rejects an options object as its receiver.
   const {fetcher, signal} = options;
   const url = await generateBailianUrl(options);
-  const response = await fetcher(url,{credentials:'omit',redirect:'error',referrerPolicy:'no-referrer',signal});
-  if (!response.ok) throw new Error('The generated image could not be downloaded.');
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  let bytes;
+  try {
+    const response = await fetcher(url,{credentials:'omit',redirect:'error',referrerPolicy:'no-referrer',signal});
+    if (!response.ok) throw new Error();
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } catch {
+    signal?.throwIfAborted();
+    throw new Error('The generated image could not be downloaded.');
+  }
   // z-image-turbo supplies PNG. Never admit executable documents or a remote URL into a save.
   if (bytes.length>8*1024*1024 || bytes.length<24 || ![137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v))
     throw new Error('Bailian returned an unsupported image.');
@@ -75,9 +82,9 @@ export async function timedRequest(signal,ms,operation) {
 }
 
 // A prepared choice can contain a tool request. Only a foreground turn calls this function.
-export async function finishIllustratedTurn({messages,first,ask,draw,signal,report,roundMs=IMAGE_ROUND_MS}) {
+export async function finishIllustratedTurn({messages,first,ask,draw,signal,report,placementText,roundMs=IMAGE_ROUND_MS}) {
   const candidates=[];
-  let choice=first, deadline=0, pausedAt=0, failed=false, finalOnly=false, topic='', statusUpdates=0;
+  let choice=first, deadline=0, pausedAt=0, failure='', finalOnly=false, topic='', statusUpdates=0;
   function paused(value) {
     if(value)pausedAt=Date.now();
     else if(pausedAt){deadline+=Date.now()-pausedAt;pausedAt=0;}
@@ -90,6 +97,7 @@ export async function finishIllustratedTurn({messages,first,ask,draw,signal,repo
     messages.push({role:'assistant',content:request.content||null,tool_calls:request.tool_calls,
       ...(typeof request.reasoning_content==='string'?{reasoning_content:request.reasoning_content}:{})});
     let drew=false;
+    const beforeDraw=candidates.length;
     for(const call of request.tool_calls){
       let result='Use the available results and return the final JSON.';
       let args;
@@ -110,7 +118,7 @@ export async function finishIllustratedTurn({messages,first,ask,draw,signal,repo
         // Review a candidate before generating another even for batched calls.
         drew=true;
         if(typeof args?.prompt!=='string'||!args.prompt.trim()||[...args.prompt].length>800) {
-          failed=true;
+          failure='prompt';
           result='The drawing prompt was invalid. Give the final text explanation.';
         }else{
           topic=typeof args.topic==='string'?args.topic.replace(/[\r\n]+/g,' ').slice(0,110):'';
@@ -119,14 +127,19 @@ export async function finishIllustratedTurn({messages,first,ask,draw,signal,repo
             try{
               const data=await draw(args.prompt,paused,remaining);
               candidates.push(data);
-              result=[{type:'text',text:'Candidate '+candidates.length+'. Inspect the actual image for mathematical accuracy and phone legibility.'},
+              result=[{type:'text',text:'Candidate '+candidates.length+'. Inspect the actual image for mathematical accuracy and phone legibility. If selected, use candidate '+candidates.length+' and after_paragraph 0 for the first or only paragraph.'},
                 {type:'image_url',image_url:{url:data}}];
               break;
             }catch(error){
               if(signal.aborted)throw signal.reason;
               const delay=Math.max(0,error.delay||0);
               if(attempt===1 || delay>=remaining()){
-                failed=true;
+                if(error.message==='The generated image could not be downloaded.')failure='download';
+                else if(error.message==='Unexpected Bailian image location.')failure='location';
+                else if(error.message==='Bailian returned an unsupported image.')failure='format';
+                else if(error.name==='TimeoutError'||remaining()<=0)failure='timeout';
+                else if(error.status===429)failure='rate';
+                else failure='generation';
                 result='Image generation failed. Select any suitable earlier results and summarize.';
                 break;
               }
@@ -143,8 +156,9 @@ export async function finishIllustratedTurn({messages,first,ask,draw,signal,repo
       choice=await ask(messages,true,undefined,undefined,statusUpdates<2);
       continue;
     }
-    finalOnly=failed||candidates.length>=3||remaining()<=0;
-    if(drew)report('review',topic);
+    finalOnly=Boolean(failure)||candidates.length>=3||remaining()<=0;
+    if(candidates.length>beforeDraw)report('review',topic);
+    else if(drew)report('think',topic);
     if(remaining()>0){
       try {
         choice=await ask(messages,!finalOnly,paused,remaining,statusUpdates<2);
@@ -182,7 +196,24 @@ export async function finishIllustratedTurn({messages,first,ask,draw,signal,repo
       throw new Error('The tutor returned empty or invalid JSON after one retry.');
     }
   }
-  return {answer,candidates,failed};
+  if(placementText!==undefined)answer.message=placementText;
+  let images=[];
+  if(candidates.length){
+    try{images=selectIllustrations(answer,candidates);}
+    catch{
+      // Only let the correction choose among pixels already reviewed. The original
+      // lesson, explanation and confirmation remain the authoritative response.
+      const paragraphs=String(answer.message??'').trim().split(/\n\s*\n/);
+      messages.push({role:'user',content:'Correct only the illustration placement metadata for the reply below. Return a JSON object with only an illustrations array. Use a distinct candidate number from 1 to '+candidates.length+', an integer after_paragraph from 0 to '+(paragraphs.length-1)+', and a short nonempty alt caption. Select only suitable images already reviewed, or return an empty array. Do not call any tools. Reply paragraphs: '+JSON.stringify(paragraphs)});
+      const correction=await ask(messages,false,paused);
+      try{
+        const metadata=parseFinal(correction);
+        if(!Array.isArray(metadata?.illustrations))throw new Error('Invalid illustration selection.');
+        images=selectIllustrations({message:answer.message,illustrations:metadata.illustrations},candidates);
+      }catch{failure='placement';}
+    }
+  }
+  return {answer,candidates,images,failure};
 }
 
 export function selectIllustrations(answer,candidates) {
@@ -192,9 +223,11 @@ export function selectIllustrations(answer,candidates) {
   const seen=new Set();
   return placements.map(item=>{
     if(!item||!Number.isSafeInteger(item.candidate)||!candidates[item.candidate-1]||seen.has(item.candidate)||
-      !Number.isSafeInteger(item.after_paragraph)||item.after_paragraph<0||item.after_paragraph>=paragraphs||
+      !Number.isSafeInteger(item.after_paragraph)||item.after_paragraph<0||
       typeof item.alt!=='string'||!item.alt.trim()||item.alt.length>500)throw new Error('Invalid illustration placement.');
     seen.add(item.candidate);
-    return {after_paragraph:item.after_paragraph,alt:item.alt,data_url:candidates[item.candidate-1]};
+    // The tutor can count the first paragraph as 1 or refer past the end. Keep
+    // the selected image with the last available paragraph in that case.
+    return {after_paragraph:Math.min(item.after_paragraph,paragraphs-1),alt:item.alt,data_url:candidates[item.candidate-1]};
   }).sort((a,b)=>a.after_paragraph-b.after_paragraph);
 }

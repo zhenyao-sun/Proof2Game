@@ -468,7 +468,8 @@ test('failed drawing retries once, text remains playable and manual retry update
     if(!body.messages.some(m=>m.role==='tool'))return drawReply(1);
     const success=Array.isArray(body.messages.at(-1).content);
     if(!success)assert.equal(body.tools,undefined);
-    return tutorReply({message:success?'Different text.':'Keep this passage.',illustrations:success?[{candidate:1,after_paragraph:0,alt:'Circle'}]:[]});
+    if(success)return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({illustrations:[{candidate:1,after_paragraph:0,alt:'Circle'}]})}}]});
+    return tutorReply({message:'Keep this passage.',illustrations:[{candidate:1,after_paragraph:0,alt:'Missing candidate'}]});
   }});
   const first=await f.act('start');
   assert.equal(first.progress.levels.result.messages[0].image_retry,true);assert.equal(draws,2);
@@ -477,6 +478,49 @@ test('failed drawing retries once, text remains playable and manual retry update
   assert.equal(updated.progress.levels.result.messages.length,1);
   assert.equal(reply.image_retry,undefined);assert.equal(reply.content,'Keep this passage.');assert.equal(reply.images[0].alt,'Circle');
   assert.equal(draws,3);assert.equal(deep,4);
+});
+
+test('manual retry distinguishes a failed download from a reviewed but unselected image',async()=>{
+  let downloadWorks=false;
+  const f=await setup({fetcher:async(url,init)=>{
+    if(url===resultUrl){
+      if(!downloadWorks)throw new TypeError('Load failed');
+      return new Response(Buffer.from(testImage,'base64'));
+    }
+    if(url.startsWith('https://dashscope.'))return imageReply();
+    const {messages}=JSON.parse(init.body);
+    if(!messages.some(m=>m.role==='tool'))return drawReply(1);
+    return tutorReply({illustrations:[]});
+  }});
+  const first=await f.act('start');
+  const retry=()=>f.act('retry_image',{message_index:0});
+  await assert.rejects(retry,/browser could not download/);
+  downloadWorks=true;
+  await assert.rejects(retry,/reviewed the generated images and selected none/);
+  const current=await f.engine.request('/api/game');
+  assert.deepEqual(current.progress,first.progress);
+});
+
+test('placement repair reuses the reviewed pixels and cannot change the lesson or the player’s progress',async()=>{
+  let draws=0,corrections=0;
+  const f=await setup({fetcher:async(url,init)=>{
+    if(url===resultUrl)return new Response(Buffer.from(testImage,'base64'));
+    if(url.startsWith('https://dashscope.')){draws++;return imageReply();}
+    const {messages,tools}=JSON.parse(init.body);
+    if(!messages.some(m=>m.role==='tool'))return drawReply(1);
+    if(messages.at(-1).role==='user'){
+      corrections++;
+      assert.equal(tools,undefined);
+      assert.ok(messages.some(m=>m.role==='tool' && m.content[1].image_url.url==='data:image/png;base64,'+testImage));
+      return tutorReply({message:'Replacement lesson.',understanding:{kind:'confirm'},illustrations:[{candidate:1,after_paragraph:1,alt:'Two cells'}]});
+    }
+    return tutorReply({message:'One paragraph.',illustrations:[{candidate:7,after_paragraph:0,alt:'Nonexistent image'}]});
+  }});
+  const {progress}=await f.act('start');
+  const reply=progress.levels.result.messages[0];
+  assert.equal(draws,1);assert.equal(corrections,1);
+  assert.equal(reply.content,'One paragraph.');assert.deepEqual(progress.completed,[]);
+  assert.deepEqual(reply.images,[{after_paragraph:0,alt:'Two cells',data_url:'data:image/png;base64,'+testImage}]);
 });
 
 test('repeated save imports use bounded, content-free action receipts',async()=>{
@@ -586,7 +630,7 @@ test('drawing deadline, review expiry and Retry-After use available candidates w
     });
     assert.equal(selectIllustrations(answer,candidates).length,['retry-after','no-suitable'].includes(scenario)?0:1);
     assert.equal(draws,scenario==='budget-before-retry'?2:1);
-    assert.ok(report.some(([stage])=>stage==='review'));
+    assert.equal(report.some(([stage])=>stage==='review'),scenario!=='retry-after');
   }
 });
 

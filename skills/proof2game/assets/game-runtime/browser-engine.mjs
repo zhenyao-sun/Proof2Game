@@ -2,7 +2,7 @@ import {createSaveStore, saveSummary} from './save-store.mjs';
 import {createConnections} from './ai-connection.mjs';
 import {createLevelTree} from './level-tree.mjs';
 import {validGuideImage, validSavedIllustrations} from './guide-diagram.mjs';
-import {drawTool, topicTool, finishIllustratedTurn, generateBailianImage, generateBailianUrl, selectIllustrations, timedRequest} from './illustration-tools.mjs';
+import {drawTool, topicTool, finishIllustratedTurn, generateBailianImage, generateBailianUrl, timedRequest} from './illustration-tools.mjs';
 export function createBrowserGame(sourceGame, fullManuscript, {storage=localStorage, fetcher=fetch, onMissingKey=()=>{}, onConnectionChange=()=>{}}={}) {
 const game={...sourceGame};
 const byteLength=value=>new TextEncoder().encode(value).byteLength;
@@ -373,8 +373,13 @@ async function askTutor(next,level,action,message,control={},mode='guide',{prepa
   try{
     const regular=mode==='chat';
     const turnSchema=regular?regularSchema:action==='understand'?passageSchema:schema;
-    let prompt=makePrompt(next,level,action,message,mode)+'\nReturn ONLY a JSON object matching this schema: '+JSON.stringify(turnSchema);
-    if(retryMessage)prompt+='\nThe player pressed Retry illustration for this existing reply. Draw and inspect a suitable image now. Place it in the original paragraphs, and keep the original message text, phase and learning state exactly as given: '+JSON.stringify(retryMessage);
+    let prompt;
+    if(retryMessage){
+      const paragraphs=retryMessage.message.trim().split(/\n\s*\n/);
+      prompt=`The player pressed Retry illustration on an existing reply. Draw one concrete visual relationship from that passage. Keep the drawing prompt brief and the geometry simple. If the exact object is abstract, use a clearly identified schematic or elementary example and state its limits in the caption. Leave formulas and long labels for the caption. ${diagramInstructions} If the candidate misrepresents the idea, try a simpler drawing within the available budget. Reply in ${languageOf(next)}. Return only a JSON object with an illustrations array. The existing reply is already on screen. Its paragraph indices start at 0. Original paragraphs: `+JSON.stringify(paragraphs);
+    }else{
+      prompt=makePrompt(next,level,action,message,mode)+'\nReturn ONLY a JSON object matching this schema: '+JSON.stringify(turnSchema);
+    }
     const content=[{type:'text',text:prompt},...imageFiles.map(file=>({type:'image_url',image_url:{url:new URL(file,location.href).href}}))];
     const messages=[{role:'user',content}];
     async function ask(history,toolsEnabled,onPause,remaining=()=>600_000,allowTopic=true){
@@ -398,9 +403,24 @@ async function askTutor(next,level,action,message,control={},mode='guide',{prepa
     if(background)return first;
     const draw=(prompt,onPause,remaining)=>withVerifiedService('bailian',key=>
       timedRequest(signal,Math.min(45_000,remaining()),imageSignal=>generateBailianImage({key,signal:imageSignal,fetcher,prompt})),signal,false,onPause);
-    const {answer,candidates,failed}=await finishIllustratedTurn({messages,first,ask,draw,report,signal});
-    if(retryMessage)answer.message=retryMessage.message;
-    const images=selectIllustrations(answer,candidates);
+    const {answer,candidates,images,failure}=await finishIllustratedTurn({messages,first,ask,draw,report,signal,placementText:retryMessage?.message});
+    if(retryMessage){
+      if(images.length)return {images};
+      const reasons={
+        prompt:['The drawing instructions were empty, invalid or longer than 800 characters.','绘图指令为空、格式有误或超过了 800 字符。'],
+        generation:['Bailian did not return a generated image.','百炼未能返回生成的图片。'],
+        download:['Bailian generated the image, but the browser could not download it.','百炼已经出图，浏览器未能下载图片。'],
+        location:['Bailian did not return a supported image download address.','百炼未返回可用的图片下载地址。'],
+        format:['The downloaded file was not a supported PNG.','下载的文件不符合 PNG 图片要求。'],
+        placement:['The tutor could not place the reviewed image in the reply.','导师未能把已审看的图片放入回复。'],
+        rate:['Bailian is rate limiting image requests.','百炼当前限制了出图请求频率。'],
+        timeout:['The drawing request timed out.','绘图请求超时。'],
+        rejected:['The tutor reviewed the generated images and selected none.','导师审看了候选图，这次没有选中可用的插图。'],
+        skipped:['The tutor did not request an image for this reply.','导师这次没有为该回复调用绘图工具。'],
+      };
+      const reason=failure||(candidates.length?'rejected':'skipped');
+      fail(reasons[reason][languageOf(next)===CHINESE?1:0],503);
+    }
     if(action==='understand')delete answer.understanding;
     if(Object.keys(answer).some(key=>!Object.hasOwn(turnSchema.properties,key)))fail('Unexpected tutor response field.');
     const u=action==='understand'?{kind:'none',scope:'passage',description:'',quote:'',level_id:null}:answer.understanding;
@@ -408,7 +428,7 @@ async function askTutor(next,level,action,message,control={},mode='guide',{prepa
     if(u.kind!=='none'&&(!byId.has(u.level_id)||action!=='message'||!message||!u.quote.trim()||!message.includes(u.quote)||!u.description.trim()))fail('Confirmation is not bound to the current player message.');
     if(u.kind==='none'&&(u.quote||u.description||u.level_id!==null))fail('Unconfirmed response contains confirmation evidence.');
     return {message:answer.message,step_goal:answer.step_goal,phase:answer.phase,understanding:u,
-      ...(images.length?{images}:{}),...(failed&&!images.length?{image_retry:true}:{})};
+      ...(images.length?{images}:{}),...(!images.length&&(failure||candidates.length)?{image_retry:true}:{})};
   }catch(error){
     if(error.status)throw error;
     const known=['Unexpected illustration tool call.','Unexpected repeated topic update.','Unknown tutor tool.','The tutor response was incomplete.','The tutor returned empty or invalid JSON after one retry.','Invalid illustration selection.','Invalid illustration placement.'];

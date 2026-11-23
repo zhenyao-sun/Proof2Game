@@ -147,8 +147,8 @@
     changedSnapshot:'稿件文件有改动，请恢复原始游戏文件。',changedReference:'参考文献 PDF 有改动，请恢复原件。',
     progressChanged:'进度已更新，请重试。',checkConnectionError:'无法连接 DeepSeek，请检查网络、API key 和账户余额。'
   };
-  Object.assign(en,{ask:'Ask',retryPassage:'Retry next passage',retry:'Retry',retryImage:'Retry illustration',imageFailed:'The illustration could not be generated.',zoom:'Zoom in',fit:'Fit to screen',confirmStep:'Do you understand this passage?',confirmLevel:'Do you understand this level?',thinkTopic:'Thinking about',drawTopic:'Drawing',reviewTopic:'Checking the illustration for'});
-  Object.assign(zh,{ask:'提问',retryPassage:'重试下一段',retry:'重试',retryImage:'重试出图',imageFailed:'图片未生成。',zoom:'放大',fit:'适应屏幕',confirmStep:'你理解这一段了吗？',confirmLevel:'你理解这一关了吗？',thinkTopic:'正在梳理',drawTopic:'正在绘制',reviewTopic:'正在审看插图'});
+  Object.assign(en,{ask:'Ask',retryPassage:'Retry next passage',retry:'Retry',retryImage:'Retry illustration',imageFailed:'No illustration is available for this reply.',zoom:'Zoom in',fit:'Fit to screen',confirmStep:'Do you understand this passage?',confirmLevel:'Do you understand this level?',thinkTopic:'Thinking about',drawTopic:'Drawing',reviewTopic:'Checking the illustration for'});
+  Object.assign(zh,{ask:'提问',retryPassage:'重试下一段',retry:'重试',retryImage:'重试出图',imageFailed:'这条回复暂时没有插图。',zoom:'放大',fit:'适应屏幕',confirmStep:'你理解这一段了吗？',confirmLevel:'你理解这一关了吗？',thinkTopic:'正在梳理',drawTopic:'正在绘制',reviewTopic:'正在审看插图'});
   function language(){return state?.game?.chinese&&state.progress.language==='中文'?'中文':'English';}
   function words(){return language()==='中文'?zh:en;}
   function t(key){return words()[key]??en[key]??key;}

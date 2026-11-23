@@ -76,4 +76,6 @@ On portrait iPhone Safari and Android Chrome, check map gestures, wide formulas,
 
 JSON mode may return blank content even with `finish_reason=stop`. Keep the runtime’s bounded JSON recovery and exact post-reply validation; distinguish provider/format failures from network failures without logging keys or reply content. Same-origin snapshot reads must retain login cookies on private hosting.
 
+On Safari, test the signed PNG download and an actual illustrated reply after key verification. Check that a reviewed image opens in the viewer and survives a refresh. A retry can report that the browser could not download an image or that the tutor selected none. If the tutor supplies unusable placement metadata, correct only that metadata using the same candidates and preserve the original lesson and learning state.
+
 Test the real deployed URL and an actual tutor request when credentials are available. Unit tests and synthetic API responses do not establish live provider availability. Record precisely which checks ran. Existing published games and their saves are left intact; re-export or deployment of a specific game requires its author's authorization.
