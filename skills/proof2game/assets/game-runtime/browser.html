@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.deepseek.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.deepseek.com https://dashscope.aliyuncs.com https://*.aliyuncs.com; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="light">
   <title>Proof2Game</title>
@@ -25,16 +25,18 @@
       <p id="paper-byline" class="paper-byline"></p>
     </section>
     <section class="intro">
-      <div><p class="eyebrow" data-i18n="eyebrow">A LITTLE CURIOSITY. A GROWING FOREST.</p><h1 data-i18n="map">Level map</h1><p id="intro-copy" class="intro-copy">Begin with an idea. Follow the branches of its proof. Explore the mathematics one goal at a time.</p></div>
-      <div class="progress-card" aria-live="polite"><span class="progress-label" data-i18n="journey">YOUR JOURNEY</span><strong id="progress-count">—</strong><div class="progress-track"><span id="progress-fill"></span></div><span id="progress-caption" data-i18n="loadingProgress" class="progress-caption">Loading Proof2Game…</span></div>
+      <div><h1 data-i18n="map">Level map</h1></div>
+      <div class="progress-card" aria-live="polite"><span class="progress-label" data-i18n="journey">Levels completed</span><strong id="progress-count">—</strong><div class="progress-track"><span id="progress-fill"></span></div></div>
     </section>
     <div id="global-error" role="alert" class="notice error" hidden></div>
     <section class="garden" data-i18n-label="map" aria-label="Level map">
-      <div class="map-toolbar"><div class="map-legend"><span><i class="legend-dot current"></i><span data-i18n="available">Ready to explore</span></span><span><i class="legend-dot done"></i><span data-i18n="cleared">Understood</span></span><span><i class="legend-dot locked"></i><span data-i18n="locked">Not open yet</span></span></div><button id="next-level" class="primary-button" type="button" disabled>Begin exploring <span aria-hidden="true">↗</span></button></div>
+      <div class="map-toolbar">
+        <p id="garden-hint"></p>
+        <button id="next-level" class="primary-button" type="button" disabled>Continue learning</button>
+        <strong id="map-complete" role="status" hidden>Manuscript complete</strong>
+      </div>
       <div class="map-scroll" id="map-scroll" tabindex="0"><div class="forest" id="forest"><p class="loading-copy" id="loading-copy" data-i18n="loading">Loading the map…</p></div></div>
-      <div class="garden-footer"><span class="sprout" aria-hidden="true">❧</span><p id="garden-hint">Every step of understanding reveals a little more. No quizzes. Just your own pace.</p><span class="seed" aria-hidden="true">✧</span></div>
     </section>
-    <footer class="page-footer"><span>Proof2Game</span><p data-i18n="footer">Curiosity is the beginning. Understanding is the journey.</p></footer>
   </main>
   <dialog id="level-dialog" class="level-dialog" data-panel="guide" aria-labelledby="level-title">
     <div class="mobile-level-toolbar">
@@ -55,8 +57,12 @@
     <div id="level-error" class="notice error" role="alert" hidden></div>
     <div class="level-layout">
       <aside id="component-panel" class="goal-panel component-panel"><div class="component-heading"><nav class="level-navigation" data-i18n-label="history" aria-label="Level history"><button id="level-back" data-i18n-title="back" data-i18n-label="back" class="plain-button" type="button" aria-label="Back" title="Back">←</button><button id="level-forward" data-i18n-title="forward" data-i18n-label="forward" class="plain-button" type="button" aria-label="Forward" title="Forward">→</button></nav><p id="mobile-level-meta" class="mobile-level-meta"></p><h2 id="level-title"></h2></div><div class="component-scroll"><div id="level-original" class="original-text math-content"></div><div id="level-images" class="level-images"></div></div><div class="component-footer"><button id="understand-all" class="whole-button component-confirmation" type="button"></button></div></aside>
-      <section id="chat-panel" class="chat-panel" data-i18n-label="conversation" aria-label="AI conversation"><header class="chat-header"><div><div class="chat-modes" data-i18n-label="conversationMode" role="group" aria-label="Conversation mode"><button id="mode-guide" data-i18n="guideMode" class="chat-mode" type="button" aria-pressed="true">Step by step guide</button><button id="mode-chat" data-i18n="chatMode" class="chat-mode" type="button" aria-pressed="false">Regular chat</button></div><select id="language-level" class="plain-button language-menu" aria-label="Language" hidden><option value="English" lang="en">English</option><option value="中文" lang="zh-CN">中文</option></select><div class="save-tools level-save-tools"><button id="undo-level" data-i18n="undo" class="plain-button" type="button" disabled>Undo last action</button><button id="save-game-level" data-i18n="saveGame" class="plain-button" type="button">Save game</button><button id="open-saves-level" data-i18n="savedGames" class="plain-button" type="button">Saved games</button></div><span id="level-save-status" class="save-inline-status" role="status"></span></div><button class="close-button" id="close-level" type="button" aria-label="Close level">×</button></header><div class="messages" id="messages" aria-live="polite" aria-relevant="additions text"></div><div id="step-controls" class="step-controls"></div><form id="chat-form" class="chat-form"><label class="sr-only" for="chat-input" data-i18n="inputLabel">Tell the AI what is on your mind</label><div class="composer"><textarea id="chat-input" rows="2" placeholder="What feels unclear? Or tell me we can take bigger steps…" maxlength="20000"></textarea><button id="send-message" class="send-button" type="submit" aria-label="Send message">↑</button></div><p class="composer-hint" data-i18n="composerHint">Ask anything. If it feels easy, ask your guide to take bigger steps.</p></form></section>
+      <section id="chat-panel" class="chat-panel" data-i18n-label="conversation" aria-label="AI conversation"><header class="chat-header"><div><div class="chat-modes" data-i18n-label="conversationMode" role="group" aria-label="Conversation mode"><button id="mode-guide" data-i18n="guideMode" class="chat-mode" type="button" aria-pressed="true">Step by step guide</button><button id="mode-chat" data-i18n="chatMode" class="chat-mode" type="button" aria-pressed="false">Regular chat</button></div><select id="language-level" class="plain-button language-menu" aria-label="Language" hidden><option value="English" lang="en">English</option><option value="中文" lang="zh-CN">中文</option></select><div class="save-tools level-save-tools"><button id="undo-level" data-i18n="undo" class="plain-button" type="button" disabled>Undo last action</button><button id="save-game-level" data-i18n="saveGame" class="plain-button" type="button">Save game</button><button id="open-saves-level" data-i18n="savedGames" class="plain-button" type="button">Saved games</button></div><span id="level-save-status" class="save-inline-status" role="status"></span></div><button class="close-button" id="close-level" type="button" aria-label="Close level">×</button></header><div class="messages" id="messages" aria-live="polite" aria-relevant="additions text"></div><div id="tutor-progress" class="tutor-progress" role="status" hidden></div><div id="step-controls" class="step-controls"></div><form id="chat-form" class="chat-form"><label class="sr-only" for="chat-input" data-i18n="inputLabel">Tell the AI what is on your mind</label><div class="composer"><textarea id="chat-input" rows="2" placeholder="What feels unclear? Or tell me we can take bigger steps…" maxlength="20000"></textarea><button id="send-message" class="send-button" type="submit" aria-label="Send message">↑</button></div><p class="composer-hint" data-i18n="composerHint">Ask anything. If it feels easy, ask your guide to take bigger steps.</p></form></section>
     </div>
+  </dialog>
+  <dialog id="illustration-viewer" class="illustration-viewer" aria-labelledby="illustration-caption">
+    <header><p id="illustration-caption"></p><button id="illustration-zoom" class="plain-button" type="button"></button><button id="illustration-close" class="mobile-icon" type="button" aria-label="Close">×</button></header>
+    <div class="illustration-canvas"><img id="illustration-full" alt=""></div>
   </dialog>
   <dialog id="save-dialog" class="save-dialog" aria-labelledby="save-title">
     <header class="save-dialog-header"><h2 id="save-title" data-i18n="savedGames">Saved games</h2><button id="close-saves" data-i18n-label="closeSaves" class="close-button" type="button" aria-label="Close saved games">×</button></header>
@@ -68,10 +74,9 @@
   </dialog>
   <dialog id="ai-dialog" class="save-dialog" aria-labelledby="ai-title">
     <header class="save-dialog-header"><h2 id="ai-title">AI Connection · AI 连接</h2><button id="close-ai" class="close-button" type="button" aria-label="Close">×</button></header>
-    <p>Your API key is saved only in this browser. Tutor requests go directly to DeepSeek. Usage is billed to your DeepSeek account. The key is excluded from game saves and downloads.</p>
-    <p>API key 仅保存在当前浏览器。导师请求直连 DeepSeek，费用由你的 DeepSeek 账户承担。Key 不进入游戏存档或下载文件。</p>
-    <form id="ai-key-form"><label for="deepseek-key">DeepSeek API key</label><input id="deepseek-key" type="password" autocomplete="off" spellcheck="false" maxlength="1024" style="display:block;width:100%;margin:1rem 0;padding:.7rem"><div class="save-tools"><button class="primary-button" type="submit">Save key · 保存</button><button id="forget-key" class="plain-button" type="button">Forget key · 清除</button></div></form>
-    <p id="ai-error" class="notice error" role="alert"></p>
+    <p id="ai-description"></p>
+    <div id="ai-providers"></div>
+    <p id="ai-error" class="notice error" role="alert" hidden></p>
   </dialog>
 </body>
 </html>

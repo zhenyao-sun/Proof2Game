@@ -26,5 +26,12 @@ jobs:
           sudo /Library/TeX/texbin/tlmgr install amsrefs geometry latexmk mathtools
           printf '%s\n' /Library/TeX/texbin >> "$GITHUB_PATH"
       - run: python3 -m pip install "PyMuPDF>=1.24.11,<2"
+      - name: Install browsers for the exported game
+        run: |
+          npm install --prefix "$RUNNER_TEMP/browser-check" --no-package-lock --no-audit --no-fund playwright@1.62.1
+          "$RUNNER_TEMP/browser-check/node_modules/.bin/playwright" install chromium webkit
       - run: python3 -m unittest discover -s skills/proof2game/scripts
+        env:
+          PROOF2GAME_CHECK_BROWSERS: '1'
+          NODE_PATH: ${{ runner.temp }}/browser-check/node_modules
       - run: node --test skills/proof2game/scripts/*.cjs

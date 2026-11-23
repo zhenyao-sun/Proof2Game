@@ -99,3 +99,16 @@ export function validGuideImage(image){
   }
   return count>0 && elementPattern.lastIndex===stop;
 }
+
+export function validSavedIllustrations(message){
+  if(message.image_retry!==undefined && (message.role!=='assistant'||message.image_retry!==true))return false;
+  if(message.images===undefined)return true;
+  if(message.role!=='assistant'||!Array.isArray(message.images)||message.images.length>3)return false;
+  const paragraphs=Math.max(1,message.content.trim().split(/\n\s*\n/).length);
+  return message.images.every(image=>image && Object.keys(image).length===3 &&
+    validText(image.alt,500) && Number.isSafeInteger(image.after_paragraph) &&
+    image.after_paragraph>=0 && image.after_paragraph<paragraphs &&
+    typeof image.data_url==='string' && image.data_url.length<=11200000 &&
+    /^data:image\/png;base64,iVBORw0KGgo[A-Za-z0-9+/]+=*$/.test(image.data_url) &&
+    (image.data_url.length-'data:image/png;base64,'.length)%4===0);
+}

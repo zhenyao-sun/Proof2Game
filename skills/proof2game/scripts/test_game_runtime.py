@@ -298,11 +298,11 @@ class GameRuntimeTests(unittest.TestCase):
         self.assertEqual(len(self.calls()),count+1)
         self.assertEqual(self.guide_state()['messages'][0],old['levels']['a']['messages'][0])
 
-    def test_visibility_follows_manuscript_order_and_proof_preview(self):
-        self.assertEqual(self.payload['level_status'], {'a': 'open', 'b': 'hidden', 'pa': 'locked', 'pb': 'hidden'})
+    def test_village_reveals_only_unlocked_manuscript_components(self):
+        self.assertEqual(self.payload['level_status'], {'a': 'open', 'b': 'hidden', 'pa': 'hidden', 'pb': 'hidden'})
         self.choose_guide()
         self.finish('a')
-        self.assertEqual(self.payload['level_status'], {'a': 'complete', 'b': 'open', 'pa': 'locked', 'pb': 'locked'})
+        self.assertEqual(self.payload['level_status'], {'a': 'complete', 'b': 'open', 'pa': 'hidden', 'pb': 'hidden'})
         self.assertEqual(self.action('start', 'pa')[0], 403)
         self.finish('b')
         self.assertEqual(self.payload['level_status']['pa'], 'open')
@@ -560,7 +560,7 @@ class GameRuntimeTests(unittest.TestCase):
         message='The entire Proof of Two even integers level is clear to me. I am confirming only that proof level. I am not confirming this Settings and Conventions level.'
         self.assertEqual(self.action('message',message=message)[0],200)
         self.assertEqual(self.payload['progress']['completed'],[])
-        self.assertEqual(self.payload['level_status']['pa'],'locked')
+        self.assertEqual(self.payload['level_status']['pa'],'hidden')
         event=self.guide_state()['chat']['understanding'][-1]
         self.assertEqual(event['level_id'],'pa');self.assertEqual(event['quote'],message)
         self.assertIn({'id':'pa','type':'proof','title':'Proof A'},self.calls()[-1]['level_index'])
@@ -909,6 +909,27 @@ class GameRuntimeTests(unittest.TestCase):
         count=len(self.calls());self.action('prefetch');self.wait_for(lambda:len(self.calls())>count)
         self.action('save_load',save_id=saved_id);restored=self.get()['progress'];time.sleep(.1)
         self.assertEqual(self.get()['progress'],restored)
+
+    def test_restore_previous_load_import_and_undo_manual_deletion(self):
+        self.action('save_create')
+        initial = self.payload['saves'][0]
+        self.action('understand_all')
+        self.action('save_load', save_id=initial['id'])
+        self.assertEqual(self.payload['progress']['completed'], [])
+        self.action('save_recover', recovery_id=self.payload['save_recovery']['id'])
+        self.assertEqual(self.payload['progress']['completed'], ['a'])
+        saved = json.loads(self.call('GET', '/api/saves/'+initial['id']+'/download')[2])
+        self.action('save_import', save=saved)
+        recovery = self.payload['save_recovery']['id']
+        self.stop()
+        self.start()
+        self.assertEqual(self.action('save_recover', recovery_id=recovery)[0], 200)
+        self.assertEqual(self.payload['progress']['completed'], ['a'])
+        self.action('save_delete', save_id=initial['id'])
+        self.assertFalse(self.payload['saves'])
+        self.action('save_undelete', recovery_id=self.payload['save_recovery']['id'])
+        self.assertEqual(self.payload['saves'], [initial])
+        self.assertEqual(json.loads(self.call('GET', '/api/saves/'+initial['id']+'/download')[2]), saved)
 
     def test_corrupt_manual_record_does_not_block_current_game_and_can_be_deleted(self):
         self.action('save_create');save_id=self.payload['saves'][0]['id'];before=self.get()['progress']

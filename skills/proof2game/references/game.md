@@ -43,8 +43,8 @@ reviewed snapshot. Correct a translation-only defect in the game translation.
    ```
 
    Omit `--paper-metadata` for an unpublished project. Omit `--source-bindings`
-   when there are no external citations. The default tutor is
-   `deepseek-flash` (DeepSeek API). Use the role configuration for any tutor override.
+   when there are no external citations. The browser tutor uses
+   `deepseek-flash` for tool calls and visual review of candidate images.
 
 ## Publish the website
 
@@ -66,10 +66,12 @@ verified locators retained in the game.
 
 Open the published GitHub Pages link directly in a browser, including when hosted under a repository subpath. For public literature, verify the original title, authors and exact version. The map must load without an API key or a local service.
 
-Use AI Connection to add, replace and clear the player's own DeepSeek key. The key is stored only in the current browser and is sent only to `https://api.deepseek.com/chat/completions`. It is excluded from saves, downloads, deployment files and diagnostics. Usage is billed to the player's account. The default model is `deepseek-flash`, which supports manuscript images. Verify actual official API compatibility before claiming a live tutor test.
+Use AI Connection to verify the player’s DeepSeek and Bailian (Beijing) keys separately. Verification calls the configured tutor and image model. Bailian verification generates one potentially billable test image. Check that a player can focus the next house before verification and enter it once both services succeed. Replace or clear each key independently. A save, download or deployment must contain no credentials.
 
-Trace each statement through its local convention, if present, to its paired proof. Check that branches from that proof lead to its directly introduced child statements. Restore earlier progress and check that the next playable level still follows manuscript order.
+When a Guide passage needs a drawing, or a player requests one in Regular chat, the tutor sends the drawing instructions to Bailian. DeepSeek inspects the returned image before choosing which candidates appear with the explanation. Background preparation may plan a drawing. Only a player-triggered reply can start generation. The initial timing budget is 45 seconds per image request and 120 seconds for the drawing and review round. The 120-second value is provisional pending live measurements. In a live check, record image quality and elapsed time for a first usable drawing, a redraw and an ordinary failure followed by retry. Check key recovery and insufficient balance separately.
 
-Check formulas and links, both languages and conversation modes, Guide and Regular chat diagrams, undo, reload, manual save downloads and imports. Same-origin tabs share browser storage; reject stale writes. Different browsers and devices use separate storage and can transfer progress through a downloaded save. Imports of existing same-snapshot local-runtime saves remain supported. No credentials are transferred.
+Check that each visible road follows the manuscript tree, including branches from a proof to its direct child statements. Verify the first house, the reveal of a new road and house, and the full village after the final level. Restore earlier progress and check that Continue learning focuses the next open house in manuscript order.
+
+On portrait iPhone Safari and Android Chrome, check map gestures, wide formulas, inline illustrations and the keyboard. Verify that returning to a level restores its panel, reading position and Chat draft for the current page session. Check both languages, passage confirmations, manual save, delete/undo, restore after load/import and cross-device image placement. Same-origin tabs share browser storage; reject stale writes. Different browsers and devices use separate storage and can transfer progress through a downloaded save. Imports of existing same-snapshot local-runtime saves remain supported. No credentials are transferred.
 
 Test the real deployed URL and an actual tutor request when credentials are available. Unit tests and synthetic API responses do not establish live provider availability. Record precisely which checks ran. Existing published games and their saves are left intact; re-export or deployment of a specific game requires its author's authorization.

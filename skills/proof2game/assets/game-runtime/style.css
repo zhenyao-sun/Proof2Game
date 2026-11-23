@@ -231,22 +231,128 @@
 }
 
 
-.equation-frame { min-width: 0; }
+/* Keep each formula intact and use a local viewport when it exceeds the pane. */
+.equation-frame { position: relative; min-width: 0; max-width: 100%; }
+.inline-equation-frame { display: inline-block; vertical-align: middle; }
+.equation-frame:focus-within { outline-offset: -2px; }
 @media (max-width: 760px) {
-  /* KaTeX groups safe breakpoints into inline-block bases, leaving matrices and
-     stacked structures intact. Explicit equation tags need their original row. */
-  .rendered-equation .katex-display > .katex:not(:has(.katex-tag)) {
-    white-space: normal;
-    text-wrap: balance;
-  }
+  .equation-frame .rendered-inline { display: block; overflow-x: auto; overflow-y: hidden; }
+  .equation-frame .rendered-inline .katex { white-space: nowrap; }
   .message-body .rendered-equation .katex { font-size: 1.16em; }
-  .equation-frame[data-scroll-hint]::after {
-    content: attr(data-scroll-hint);
-    display: block;
-    margin: -.45em 0 .75em;
-    color: var(--muted);
-    font: 12px/1.45 var(--sans);
+  .equation-frame::before, .equation-frame::after {
+    position: absolute; z-index: 1; top: 0; bottom: 0; width: 15px; pointer-events: none;
   }
-  .numbered-equation .equation-frame[data-scroll-hint]::after { margin: .15em 0 0; }
-  .equation-frame .rendered-equation:focus-visible { outline-offset: -2px; }
+  .equation-frame[data-fade-left="true"]::before {
+    content: ''; left: 0; background: linear-gradient(to right, var(--formula-edge, #fffef9), transparent);
+  }
+  .equation-frame[data-fade-right="true"]::after {
+    content: ''; right: 0; background: linear-gradient(to left, var(--formula-edge, #fffef9), transparent);
+  }
+  .component-scroll { --formula-edge: var(--paper); }
+  .chat-message.user { --formula-edge: #e5eddf; }
+  .level-dialog[data-panel="guide"]:not([data-asking="true"]) .chat-form { display: none; }
+}
+.guide-confirmation {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 10px;
+  align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
+}
+.guide-avatar { width: 44px; height: 44px; object-fit: contain; }
+.guide-confirmation .local-step-goal {
+  padding: 0; margin: 0; background: transparent; border: 0; font: inherit; font-size: 14px;
+}
+.guide-actions { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px; }
+.guide-actions button { min-height: 40px; }
+.guide-ask { display: none; }
+@media (max-width: 760px) { .guide-ask { display: inline-flex; align-items: center; } }
+.tutor-progress { flex-shrink: 0; margin: 0; padding: 5px 14px; color: var(--green); background: #eff3e9; }
+.tutor-progress[hidden] { display: none; }
+.tutor-progress, .guide-actions .pending-message { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.reply-illustration { max-width: 100%; margin: .7em 0; }
+.reply-illustration figcaption { margin: .25em 0; color: var(--muted); font: 13px/1.55 var(--sans); }
+.illustration-button { display: block; max-width: 100%; border: 0; padding: 0; margin: .6em 0; background: transparent; cursor: zoom-in; }
+.illustration-button .guide-illustration { width: auto; max-width: 100%; max-height: min(40dvh, 390px); margin: 0; object-fit: contain; }
+.illustration-viewer[open] { position: fixed; inset: 0; margin: 0; width: 100%; height: 100dvh; max-width: none; max-height: none; border: 0; display: flex; flex-direction: column; background: var(--paper); }
+.illustration-viewer header { display: flex; align-items: center; gap: 8px; padding: max(8px, env(safe-area-inset-top)) 12px 8px; }
+.illustration-viewer header p { flex: 1; margin: 0; font-size: 14px; }
+.illustration-viewer header button { min-width: 44px; min-height: 44px; }
+.illustration-canvas { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.illustration-canvas img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.illustration-viewer[data-zoomed="true"] .illustration-canvas img { width: 200%; max-width: none; height: auto; }
+.reference-target { animation: reference-fade 3s ease-out forwards; }
+@keyframes reference-fade { 0%, 45% { background: #e8efd9; outline-color: #a4b783; } 100% { background: transparent; outline-color: transparent; } }
+
+
+#ai-dialog {width:min(32rem,calc(100vw - 2rem))}
+#ai-description {font-size:.88rem;line-height:1.6;color:var(--muted)}
+.provider-connection {display:grid;grid-template-columns:1fr auto;align-items:center;gap:.6rem;padding:1rem 0;border-top:1px solid var(--line)}
+.provider-connection label {font-weight:650}
+.provider-connection a,.provider-connection small {font-size:.76rem;color:var(--green)}
+.provider-connection input {grid-column:1/-1;width:100%;padding:.65rem;border:1px solid var(--line);border-radius:.5rem;background:white;font-size:1rem}
+.provider-connection small {grid-column:1/-1}
+.provider-connection .save-tools {justify-self:end}
+.provider-status {font-size:.8rem;overflow-wrap:anywhere}
+.provider-status[data-state="invalid_key"],.provider-status[data-state="balance"],.provider-status[data-state="failed"] {color:#924b36}
+#connection-state {display:block;line-height:1.35}
+
+.save-notice-action{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}
+.save-notice-action .plain-button{font:inherit}
+
+/* Map coordinates belong to the manuscript. Only the camera moves on a gesture. */
+.garden{background:#e4ecd4;border-color:#c7d2b6}
+.intro{padding:25px 0 19px;align-items:center}
+.intro h1{margin:0}
+.intro .progress-card{border:0;padding:0;flex:0 1 145px}
+.intro .progress-card strong{font:600 19px/1.2 var(--sans);margin:4px 0 7px;font-variant-numeric:tabular-nums}
+.map-toolbar{background:#f8f9ed;border-bottom:1px solid #cbd5bd;padding:11px 20px}
+#garden-hint{margin:0;color:#566b55;font-size:13px}
+#next-level[hidden],#map-complete[hidden]{display:none}
+#map-complete{font-size:14px;color:#396547}
+#map-scroll{position:relative;isolation:isolate;overflow:hidden;overflow:clip;touch-action:none;height:clamp(380px,67svh,800px);
+  background-color:#deead0;background-image:
+  radial-gradient(ellipse at 72% 56%,#f5f0d3aa,transparent 55%),
+  radial-gradient(ellipse at 12% 22%,#bad4b9aa,transparent 52%),
+  repeating-linear-gradient(34deg,transparent 0 22px,#8da77a08 23px 25px,transparent 26px 47px)}
+#forest{position:absolute;inset:0 auto auto 0;margin:0;width:0;height:0;min-width:0;transform-origin:0 0;overflow:visible}
+.village-roads{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.village-road path{fill:none;stroke-linecap:round}
+.road-border{stroke:#bda97f;stroke-width:12}
+.road-bed{stroke:#efe1b9;stroke-width:8.6}
+.road-opening path{animation:open-village-road .36s ease-out 1}
+@keyframes open-village-road{from{stroke-dasharray:1;stroke-dashoffset:1}to{stroke-dasharray:1;stroke-dashoffset:0}}
+.level-node.village-house,.level-node.village-house:hover:enabled{
+  position:absolute;z-index:2;width:100px;height:100px;min-height:0;padding:0;overflow:visible;
+  border:0;border-radius:26%;box-shadow:none;background:none;transform:translate(-50%,-50%);transition:none;
+  text-align:center;cursor:pointer;touch-action:none}
+.village-house[data-focused="true"]{z-index:4}
+.village-house:focus-visible{outline:3px dashed #497357;outline-offset:4px}
+.house-icon{display:block;width:100%;height:100%;overflow:visible}
+.house-window{fill:#638882}
+.done .house-window{fill:#ffe28b;filter:drop-shadow(0 0 3px #ffb635)}
+.final-house .house-window{animation:light-last-house .75s ease-in}
+@keyframes light-last-house{from{fill:#648a80;filter:none}65%{fill:#fff7b1;filter:drop-shadow(0 0 7px #f9a121)}}
+.next-marker,.village-house .node-title{position:absolute;left:50%;text-align:center;pointer-events:none}
+.next-marker{bottom:95%;transform-origin:50% 100%;transform:translateX(-50%) scale(var(--inverse-zoom,1));font:700 12px/1.3 var(--sans);color:#fffef2;background:#315d4c;border:1px solid #f6fbeb;padding:4px 9px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 6px #384c3033}
+.next-marker:after{content:"";position:absolute;left:calc(50% - 4px);bottom:-4px;width:7px;height:7px;background:#315d4c;transform:rotate(45deg);border-bottom:1px solid #f6fbeb;border-right:1px solid #f6fbeb}
+.village-house .node-title{top:97%;transform-origin:50% 0;transform:translateX(-50%) scale(var(--inverse-zoom,1)) translateX(var(--caption-shift,0px));
+  width:max-content;max-width:var(--label-width,230px);margin:0;padding:8px 13px;border:1px solid #afbea0;border-radius:10px;
+  color:#234535;background:#fffff4f5;box-shadow:0 3px 8px #3b523318;line-height:1.35;overflow-wrap:anywhere;white-space:normal}
+.village-house .node-title:not([hidden]){display:block}
+.village-house .node-title[hidden]{display:none}
+.village-house .node-title:after{content:attr(data-status);display:block;color:#47604a;font:500 11px/1.5 var(--sans);margin-top:3px}
+.village-house .node-reference{display:block;margin:0;color:#536d54;font:600 12px/1.4 var(--sans)}
+.village-house .node-description{display:block;margin:0;font:600 16px/1.35 var(--serif);letter-spacing:0;white-space:normal}
+.village-house .node-title[data-above="true"]{top:auto;bottom:calc(100% + 31px * var(--inverse-zoom,1));transform-origin:50% 100%}
+@media(max-width:760px){
+  main{padding:0 max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left))}
+  .topbar{padding:8px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left));align-items:flex-start;flex-wrap:wrap;gap:8px}
+  .header-tools{gap:5px;flex:1 1 250px;align-items:center}
+  .header-tools .save-tools{gap:4px}
+  .header-tools button,.header-tools select{min-height:36px}
+  .intro{padding:12px 0;gap:10px}
+  .intro h1{font-size:23px}.intro .progress-card{flex-basis:88px;margin:0}
+  .intro .progress-card strong{font-size:16px}.intro .progress-label{font-size:10px}
+  .paper-credit{margin-top:12px}.paper-title{font-size:19px;line-height:1.25}.paper-byline{margin:4px 0 0;font-size:12px;line-height:1.35}
+  .map-toolbar{padding:7px 10px;gap:8px}#garden-hint{font-size:11px;max-width:52%}
+  .map-toolbar .primary-button{font-size:13px;min-height:42px;padding:7px 15px}
+  #map-scroll{height:clamp(320px,64svh,740px)}
 }

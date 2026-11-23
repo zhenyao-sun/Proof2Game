@@ -23,17 +23,42 @@
   const unsentChatMessages=new Map();
   let editingDuringUndo=null;
   let openingMode=null;
+  let pendingViewMode=null;
+  let deferredOpening=null;
+  let pendingTask=null;
+  let pendingTopic=null;
+  let guideAsking=false;
+  const levelViews=new Map();
+  let alignedPassage=null;
+  function panelName(){return contentPanel?'content':chatMode();}
+  function rememberView(){
+    if(!currentLevel || !$('level-dialog').open)return;
+    conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
+    if(!mobileLayout())return;
+    const view=levelViews.get(currentLevel)||{positions:{}};
+    const panel=panelName();
+    view.panel=panel;
+    view.positions[panel]=panel==='content'?document.querySelector('.component-scroll').scrollTop:$('messages').scrollTop;
+    levelViews.set(currentLevel,view);
+  }
+  function restorePanelScroll(){
+    if(!mobileLayout()||!currentLevel)return;
+    const panel=panelName(),view=levelViews.get(currentLevel);
+    const scroller=panel==='content'?document.querySelector('.component-scroll'):$('messages');
+    scroller.scrollTop=view?.positions[panel]||0;
+  }
   function chatMode(id=currentLevel){
+    if(pendingViewMode?.levelId===id)return pendingViewMode.mode;
     if(openingMode && openingMode.levelId===id)return openingMode.mode;
     return state?.progress?.levels?.[id]?.mode||'guide';
   }
   function conversationState(id=currentLevel){return chatMode(id)==='chat'?(levelState(id).chat||{messages:[],phase:null}):levelState(id);}
   function undoMessages(){return chatMode()==='chat'?state.chat_undoable_messages:state.undoable_messages;}
   const en={
-    local:'Saved on this device',eyebrow:'A LITTLE CURIOSITY. A GROWING FOREST.',journey:'YOUR JOURNEY',
+    local:'Saved on this device',eyebrow:'A LITTLE CURIOSITY. A GROWING FOREST.',journey:'Levels completed',
     available:'Ready to explore',cleared:'Understood',locked:'Not open yet',footer:'Curiosity is the beginning. Understanding is the journey.',
     composerHint:'Ask anything. If it feels easy, ask your guide to take bigger steps.',statement:'Statement',proof:'Proof',
-    start:'Begin exploring',continue:'Keep exploring',revisit:'Revisit the grove',understand:'I understand this passage · Continue',
+    nextHouse:'Next level',continue:'Continue learning',manuscriptComplete:'Manuscript complete',villageHint:'Drag to explore · Zoom to see the village',understand:'I understand this passage · Continue',
     continueGuide:'Continue to the next passage',passageSaved:'Your confirmation is saved.',
     nextPassageFailed:'The next passage could not be loaded. Please try again.',
     nextPassageKey:'Check your DeepSeek API key in AI Connection.',
@@ -70,15 +95,18 @@
     emptySaves:'No manual saves yet. Save a progress point to return to it later.',
     levelsComplete:(count,total)=>count+' / '+total+' levels complete',
     savedCount:count=>'Progress saved · '+count+' manual saves',
-    saveDeleted:'Saved game deleted. Your current progress is unchanged.',
-    saveListError:'Could not load saved games.',saveTooLarge:'This save is larger than the supported 16 MB limit.',
+    saveDeleted:'Deleted',saveUndeleted:'Save restored',undoDelete:'Undo',undoExpired:'The time to undo this deletion has expired.',
+    saveLoaded:'Loaded',saveImported:'Imported',saveRecovered:'Previous progress restored',
+    recoverLoad:'Restore progress from before loading',recoverImport:'Restore progress from before importing',
+    saveQuota:'This device is out of save storage. Download your progress and free space.',
+    saveListError:'Could not load saved games.',
     invalidJsonSave:'This is not a valid JSON save file. Your current progress is unchanged.',
     apiError:'The game could not complete this action. Please try again.'
   });
   const zh={
-    local:'已保存在此设备',eyebrow:'循着证明理解数学',journey:'学习进度',available:'可进入',cleared:'已理解',locked:'尚未开放',
+    local:'已保存在此设备',eyebrow:'循着证明理解数学',journey:'已完成关卡',available:'可进入',cleared:'已理解',locked:'尚未开放',
     footer:'按自己的节奏读懂数学。',composerHint:'随时提问，也可以请引导讲快一点或慢一点。',
-    statement:'陈述',proof:'证明',start:'开始学习',continue:'继续学习',revisit:'重访关卡',
+    statement:'陈述',proof:'证明',nextHouse:'下一关',continue:'继续学习',manuscriptComplete:'全稿已通关',villageHint:'拖动看村落 · 缩放看全景',
     understand:'我理解了这一段 · 继续',doneNote:'本关已完成，仍可继续提问。',
     continueGuide:'继续下一段',passageSaved:'已保存你对本段的确认。',
     nextPassageFailed:'下一段暂时无法加载，请重试。',
@@ -109,14 +137,18 @@
     unreadableSave:'无法读取的存档（已保留）',emptySaves:'还没有手动存档。',
     levelsComplete:(count,total)=>'已完成 '+count+' / '+total+' 关',
     savedCount:count=>'已保存进度 · '+count+' 个手动存档',
-    saveDeleted:'已删除该存档。当前进度未改变。',
-    saveListError:'无法读取存档列表。',saveTooLarge:'存档超过 16 MB。',
+    saveDeleted:'已删除',saveUndeleted:'已恢复存档',undoDelete:'撤销',undoExpired:'撤销删除的时间已过。',
+    saveLoaded:'已载入',saveImported:'已导入',saveRecovered:'已恢复原进度',
+    recoverLoad:'恢复载入前的进度',recoverImport:'恢复导入前的进度',saveQuota:'设备存储空间已满。请下载进度并腾出空间。',
+    saveListError:'无法读取存档列表。',
     invalidJsonSave:'这不是有效的 JSON 存档，当前进度未改变。',
     apiError:'游戏未能完成这项操作，请重试。',
     saveMismatch:'此存档与当前游戏版本不匹配，当前进度未改变。',saveMissing:'找不到该存档。',
     changedSnapshot:'稿件文件有改动，请恢复原始游戏文件。',changedReference:'参考文献 PDF 有改动，请恢复原件。',
     progressChanged:'进度已更新，请重试。',checkConnectionError:'无法连接 DeepSeek，请检查网络、API key 和账户余额。'
   };
+  Object.assign(en,{ask:'Ask',retryPassage:'Retry next passage',retry:'Retry',retryImage:'Retry illustration',imageFailed:'The illustration could not be generated.',zoom:'Zoom in',fit:'Fit to screen',confirmStep:'Do you understand this passage?',confirmLevel:'Do you understand this level?',thinkTopic:'Thinking about',drawTopic:'Drawing',reviewTopic:'Checking the illustration for'});
+  Object.assign(zh,{ask:'提问',retryPassage:'重试下一段',retry:'重试',retryImage:'重试出图',imageFailed:'图片未生成。',zoom:'放大',fit:'适应屏幕',confirmStep:'你理解这一段了吗？',confirmLevel:'你理解这一关了吗？',thinkTopic:'正在梳理',drawTopic:'正在绘制',reviewTopic:'正在审看插图'});
   function language(){return state?.game?.chinese&&state.progress.language==='中文'?'中文':'English';}
   function words(){return language()==='中文'?zh:en;}
   function t(key){return words()[key]??en[key]??key;}
@@ -133,7 +165,6 @@
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-label]').forEach(el => { el.setAttribute('aria-label',t(el.dataset.i18nLabel)); });
     document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title=t(el.dataset.i18nTitle); });
-    $('intro-copy').textContent = t('intro');
     $('chat-input').placeholder = t('placeholder');
     document.querySelector('.garden').setAttribute('aria-label', t('map'));
     ['close-level','close-level-small'].forEach(id => $(id).setAttribute('aria-label', t('close')));
@@ -349,8 +380,9 @@
             catch(error) {
               const details=element('details','formula-fallback');details.append(element('summary','',t('formulaSource')),element('pre','',part.text));details.title=String(error.message);node.append(details);
             }
-            const frame=part.display?element('div','equation-frame'):node;
-            if(part.display)frame.append(node);
+            const frame=part.display?element('div','equation-frame'):element('span','equation-frame inline-equation-frame');
+            frame.append(node);
+            node.addEventListener('scroll',()=>updateFormulaEdges(frame,node),{passive:true});
             if(part.equation){
               const row=element('div','numbered-equation'),numbers=element('div','equation-numbers');
               for(const key of part.equation.references){
@@ -402,7 +434,15 @@
     let item=0;
     const sourceLevel=(state?.game?.levels||[]).find(level=>level.id===(options.levelId||options.macroLevelId));
     const namespace=sourceLevel?.reference_namespace||'';
-    text=String(text || '').replace(/\\begin\{(Theorem|Lemma|Proposition|Corollary|Claim)\}(?:\[([^\]]*)\])?\s*\\label\{([^}]+)\}/g,(_,kind,title,key)=>
+    text=String(text || '');
+    // Images are anchored in the saved message. TeX list formatting may create
+    // extra display paragraphs, while a single equation can span blank lines.
+    const imageMarker=/\uE104(\d+)\uE105/g;
+    if(options.images?.length){
+      const paragraphs=text.trim().split(/\n\s*\n/);
+      text=paragraphs.map((paragraph,index)=>paragraph+'\uE104'+index+'\uE105').join('\n\n');
+    }
+    text=text.replace(/\\begin\{(Theorem|Lemma|Proposition|Corollary|Claim)\}(?:\[([^\]]*)\])?\s*\\label\{([^}]+)\}/g,(_,kind,title,key)=>
       '\n\n### '+kindName(kind)+' '+(referenceTarget(sourceReferenceKey(key,namespace))?.number||'')+(title?' · '+title:'')+'\\label{'+key+'}\n\n')
       .replace(/\\(?:begin|end)\{enumerate\}/g,'\n\n')
       .replace(/\\item\s*/g,()=> '\n\n'+(++item)+'. ')
@@ -415,16 +455,26 @@
     const prose=mathSegments(text,namespace).map(part=>{
       if(part.type==='text')return part.text;
       if(part.display){equationIndex++;part.equation=options.levelId?sourceLevel?.equations?.find(eq=>eq.index===equationIndex):undefined;}
-      return '\uE000'+(tokens.push(part)-1)+'\uE001';
+      const markers=part.text.match(imageMarker)||[];
+      if(markers.length)part.text=part.text.replace(imageMarker,'');
+      return '\uE000'+(tokens.push(part)-1)+'\uE001'+markers.join('');
     }).join('').replace(/It\\\^o/g,'Itô').replace(/L\\'evy/g,'Lévy');
     for(const [index,chunk] of proseMarkup(prose).split(/\n\s*\n/).entries()) {
       if(index)el.append(element('div','paragraph-break'));
       const block=element('span','prose-run');
-      const joined=chunk.replace(/\n/g,' ');
+      const placements=new Set(Array.from(chunk.matchAll(imageMarker),match=>Number(match[1])));
+      const joined=chunk.replace(imageMarker,'').replace(/\n/g,' ');
       const heading=joined.match(/^\s*#{1,6}\s+(.*)$/);
       if(heading) {const h=element('h4');inlineText(h,heading[1],tokens);block.append(h);}
       else inlineText(block,joined,tokens);
       el.append(block);
+      for(const image of options.images||[]){
+        if(placements.has(image.after_paragraph)){
+          const figure=element('figure','reply-illustration'),caption=element('figcaption','math-content');
+          renderRich(caption,image.alt,{macroLevelId:options.macroLevelId});
+          figure.append(illustrationButton(image.data_url,image.alt),caption);el.append(figure);
+        }
+      }
     }
   }
   function notice(target, message) { $(target).textContent = message || ''; $(target).hidden = !message; }
@@ -432,137 +482,235 @@
   function completed() { return new Set(state?.progress?.completed || []); }
   function levelState(id) { return state?.progress?.levels?.[id] || {messages:[],phase:null}; }
   function levelStatus() {
-    const done = completed();
-    const queue = levels();
-    const next = queue.find(level => !done.has(level.id));
-    const available = new Set(queue.filter(level => done.has(level.id)).map(level => level.id));
-    if (next) available.add(next.id);
-    const visible = new Set(available);
-    // Prefer server-provided visibility; fallback is presentation only.
-    if (state.level_status && typeof state.level_status === 'object') {
-      available.clear(); visible.clear();
-      queue.forEach(level => {
-        const status=state.level_status[level.id];
-        if (['locked','open','complete'].includes(status)) visible.add(level.id);
-        if (['open','complete'].includes(status)) available.add(level.id);
-      });
-    } else {
-      const byId = new Map(queue.map(level => [level.id,level]));
-      for (const id of available) {
-        const level = byId.get(id);
-        if (level.type === 'statement' && level.paired) visible.add(level.paired);
-      }
-      // Iterating the growing set follows each visible branch back to its root.
-      for (const id of visible) {
-        const parent = byId.get(id)?.parent;
-        if (byId.has(parent)) visible.add(parent);
-      }
-    }
-    // Never trust these display sets as authority: every action is server-validated.
-    return {done,next,available,visible};
+    const done=completed(), queue=levels(), next=queue.find(level=>!done.has(level.id));
+    // Older connectors may advertise locked previews. Only enterable houses appear.
+    const available=new Set(queue.filter(level=>state.level_status
+      ? ['open','complete'].includes(state.level_status[level.id])
+      : done.has(level.id)||level===next).map(level=>level.id));
+    return {done,next,available};
   }
-  function forestLayout(visible) {
-    const visibleLevels = levels().filter(level => visible.has(level.id));
-    const byId = new Map(visibleLevels.map(level => [level.id,level]));
-    const parents = new Map();
-    for (const level of visibleLevels) {
-      const candidate = level.parent || (level.type === 'proof' ? level.paired : null);
-      parents.set(level.id, candidate && byId.has(candidate) && candidate !== level.id ? candidate : null);
+
+  // Fixed manuscript coordinates keep existing roads and houses in place as the village grows.
+  function villageLayout(queue) {
+    const children=new Map(queue.map(level=>[level.id,[]])), roots=[];
+    for (const level of queue) {
+      const siblings=children.get(level.parent);
+      if (siblings) siblings.push(level); else roots.push(level);
     }
-    // Protect rendering against malformed metadata rather than freezing the page.
-    for (const level of visibleLevels) {
-      const visited = new Set([level.id]);
-      let id = parents.get(level.id);
-      while (id) {
-        if (visited.has(id)) { parents.set(level.id,null); break; }
-        visited.add(id); id = parents.get(id);
+    const positions=new Map();
+    let lane=0;
+    function place(level,depth) {
+      const branch=children.get(level.id);
+      const xs=branch.map(child=>place(child,depth+1));
+      const x=xs.length?(xs[0]+xs[xs.length-1])/2:lane++*172+86;
+      positions.set(level.id,{x,y:-depth*158});
+      return x;
+    }
+    for (const root of roots) {place(root,0);lane+=.35;}
+    return positions;
+  }
+  // Each roofline and footprint identifies a manuscript role, even without colour or a label.
+  const houseArt={
+    convention:`<path fill="#ffe2a7" d="m18 49 33-13 26 15v23L46 87 18 72z"/>
+      <path fill="#d1a373" d="M46 63 77 51v23L46 87z"/>
+      <path fill="#cd7554" d="m11 48 13-23 32-12 27 27-36 15-13-18-7 18z"/>
+      <path fill="#e99269" d="m24 25 32-12 27 27-36 15z"/>
+      <path fill="#fff2c6" d="m12 48 12-23 11 13-10 16z"/>
+      <path fill="none" stroke="#a45843" d="m37 23 22 26m-12-29 22 25M22 59l19 8"/>
+      <path fill="#705846" d="M26 73V61q5-7 11 4v13z"/>
+      <path class="house-window" d="m53 63 13-5v11l-13 5z"/>
+      <path fill="#795e4a" d="M79 55h3v27h-3z"/>
+      <path fill="#ffe8ad" d="m72 53 14-6 8 3-6 6-16 6z"/>
+      <path fill="#916348" d="m49 19 3-1V4h-3z"/>
+      <path fill="#e3b657" d="m52 4 13 2-12 6z"/>`,
+    statement:`<path fill="#dac7a4" d="m12 70 40-17 33 17-41 19z"/>
+      <path fill="#fff0cd" d="m17 64 34-15 30 16-36 16z"/>
+      <path fill="#a7b4a2" d="m44 53 34-14v26L44 79z"/>
+      <path fill="#e6d5a8" d="m17 43 28 12v24L17 65z"/>
+      <path fill="#648e7f" d="m8 42 21-23 38-14 22 25-43 19z"/>
+      <path fill="#92b6a0" d="m29 19 38-14 22 25-43 19z"/>
+      <path fill="#f5dc9e" d="m8 42 21-23 17 30z"/>
+      <path fill="#628071" d="m19 39 10-12 8 17z"/>
+      <path fill="#f5dfba" d="m11 44 34 15v5L11 49z"/>
+      <path fill="#fcf2d3" d="m16 51 5 2v15l-5-2zm11 5 5 2v16l-5-2zm10 4 5 2v16l-5-2z"/>
+      <path class="house-window" d="m51 54 6-3v11l-6 3zm12-5 6-3v11l-6 3z"/>
+      <path fill="none" stroke="#4d766b" d="m45 17 17 22m-7-26 17 21"/>`,
+    proof:`<path fill="#f2ce92" d="m14 50 40-16 28 16v24L42 89 14 74z"/>
+      <path fill="#bc9266" d="m42 62 40-15v27L42 89z"/>
+      <path fill="#889daa" d="m8 49 17-23 41-15 18 24-43 19-13-13-7 14z"/>
+      <path fill="#a4b6bd" d="m25 26 41-15 18 24-43 19z"/>
+      <path fill="#e9c58e" d="m9 49 16-23 16 28z"/>
+      <path fill="#ab6e53" d="m58 29 4 3 8-3V9l-5-3-7 3z"/>
+      <path fill="#e8a784" d="m57 8 9-4 7 4-10 5z"/>
+      <path fill="#825642" d="m72 23 4 2 6-3V12l-5-2-5 2z"/>
+      <path class="house-window" d="m18 57 13 6v10l-13-6z"/>
+      <path fill="#755b49" d="m52 84 18-7V60l-18 7z"/>
+      <path stroke="#cba879" d="m57 68 9 8m-10 2 9-13"/>
+      <circle cx="28" cy="44" r="7" fill="#ddb575" stroke="#6e6857" stroke-width="3"/>
+      <circle cx="28" cy="44" r="2.5" fill="#596b73"/>`
+  };
+  function houseIcon(type) {
+    const icon=svgEl('svg',{viewBox:'0 0 100 100',class:'house-icon','aria-hidden':'true',focusable:'false'});
+    // All paths are bundled artwork. No manuscript text enters this SVG markup.
+    icon.innerHTML='<ellipse cx="51" cy="79" rx="43" ry="13" fill="#4a653a" opacity=".13"/>'+
+      '<g stroke="#655c49" stroke-width="1.35" stroke-linejoin="round" stroke-linecap="round">'+houseArt[type]+'</g>';
+    return icon;
+  }
+  const readableZoom=.82, focusZoom=1.16;
+  const camera={x:0,y:0,zoom:focusZoom};
+  let houses=new Map(), roads=[], focusHouse=null, bounds=null, flight=0, villageSignature='';
+  function overviewCamera() {
+    const view=$('map-scroll');
+    return {x:(bounds.left+bounds.right)/2,y:(bounds.top+bounds.bottom)/2,
+      zoom:Math.min(.69,view.clientWidth/(bounds.right-bounds.left+115),view.clientHeight/(bounds.bottom-bounds.top+135))};
+  }
+  function applyCamera() {
+    if(!bounds)return;
+    const view=$('map-scroll'), forest=$('forest');
+    const x=view.clientWidth/2-camera.x*camera.zoom, y=view.clientHeight/2-camera.y*camera.zoom;
+    forest.style.transform='translate('+x+'px,'+y+'px) scale('+camera.zoom+')';
+    forest.style.setProperty?.('--inverse-zoom',String(1/camera.zoom));
+    forest.style.setProperty?.('--label-width',Math.min(330,view.clientWidth-28)+'px');
+    for(const [id,house] of houses) {
+      const focused=focusHouse===id && camera.zoom>=readableZoom;
+      house.button.dataset.focused=String(focused);
+      house.label.hidden=!focused;
+      if(focused){
+        const screenX=x+house.x*camera.zoom,screenY=y+house.y*camera.zoom;
+        const half=Math.min(330,view.clientWidth-28)/2;
+        const center=Math.max(half+7,Math.min(view.clientWidth-half-7,screenX));
+        house.label.style.setProperty?.('--caption-shift',(center-screenX)+'px');
+        house.label.dataset.above=String(screenY>view.clientHeight*.68);
       }
     }
-    const children = new Map(visibleLevels.map(level => [level.id,[]]));
-    visibleLevels.forEach(level => { const parent = parents.get(level.id); if (parent) children.get(parent).push(level.id); });
-    const roots = visibleLevels.filter(level => !parents.get(level.id));
-    const gap = window.innerWidth < 760 ? 219 : 248;
-    const positions = new Map();
-    let cursor = 0;
-    let maxDepth = 0;
-    function place(id, depth) {
-      maxDepth = Math.max(maxDepth,depth);
-      const childIds = children.get(id);
-      const start = cursor;
-      childIds.forEach(child => place(child,depth+1));
-      if (!childIds.length) cursor++;
-      const xs = childIds.map(child => positions.get(child).x);
-      positions.set(id,{x:xs.length ? (Math.min(...xs)+Math.max(...xs))/2 : (start+.5)*gap,depth});
+  }
+  function centerHouse(id,zoom=focusZoom) {
+    const house=houses.get(id);
+    if(!house)return;
+    ++flight;
+    focusHouse=id;Object.assign(camera,{x:house.x,y:house.y,zoom});applyCamera();
+  }
+  function nearestHouse() {
+    let best=null,distance=Infinity;
+    for(const [id,p] of houses){
+      const d=(p.x-camera.x)**2+(p.y-camera.y)**2;
+      if(d<distance){best=id;distance=d;}
     }
-    roots.forEach((level,index) => { if (index) cursor += .5; place(level.id,0); });
-    const width = Math.max($('map-scroll').clientWidth,(cursor+.35)*gap);
-    const actualWidth = cursor*gap;
-    const offset = (width-actualWidth)/2;
-    const height = Math.max(430,$('map-scroll').clientHeight,185+(maxDepth+1)*132);
-    for (const pos of positions.values()) { pos.x += offset; pos.y = height-100-pos.depth*132; }
-    return {positions,roots,parents,width,height,visibleLevels};
+    focusHouse=best;applyCamera();
   }
   function renderForest() {
-    const {done,next,available,visible} = levelStatus();
-    const {positions,roots,parents,width,height,visibleLevels} = forestLayout(visible);
-    const forest = $('forest');
-    forest.replaceChildren();
-    forest.style.width = width+'px'; forest.style.height = height+'px';
-    const svg = svgEl('svg',{width,height,class:'forest-svg','aria-hidden':'true',viewBox:`0 0 ${width} ${height}`});
-    const leavesGroup = svgEl('g',{});
-    const branchGroup = svgEl('g',{});
-    svg.append(leavesGroup,branchGroup);
-    roots.forEach((root,index) => {
-      const point = positions.get(root.id);
-      branchGroup.append(svgEl('path',{d:`M ${point.x} ${height-44} C ${point.x-8} ${height-62},${point.x+5} ${height-69},${point.x} ${point.y}`,class:'tree-branch-halo','stroke-width':22}));
-      branchGroup.append(svgEl('path',{d:`M ${point.x} ${height-43} C ${point.x-8} ${height-62},${point.x+5} ${height-69},${point.x} ${point.y}`,class:'tree-branch','stroke-width':10}));
-      [-1,1].forEach(sign => {
-        branchGroup.append(svgEl('path',{d:`M ${point.x} ${height-48} Q ${point.x+sign*18} ${height-30}, ${point.x+sign*52} ${height-38}`,class:'tree-ground'}));
-        branchGroup.append(svgEl('path',{d:`M ${point.x} ${height-49} Q ${point.x+sign*11} ${height-25}, ${point.x+sign*25} ${height-23}`,class:'tree-ground'}));
-      });
-      const label=svgEl('text',{x:point.x,y:height-8,'text-anchor':'middle',class:'root-tag'});
-      label.textContent=`${String(index+1).padStart(2,'0')} / ${t('seed')}`;
-      svg.append(label);
-    });
-    visibleLevels.forEach((level,index) => {
-      const p = positions.get(level.id); const parent = parents.get(level.id); const q = positions.get(parent);
-      if (q) {
-        const d=`M ${q.x} ${q.y-10} C ${q.x} ${q.y-65}, ${p.x} ${p.y+74}, ${p.x} ${p.y+15}`;
-        branchGroup.append(svgEl('path',{d,class:'tree-branch-halo','stroke-width':17}));
-        branchGroup.append(svgEl('path',{d,class:'tree-branch','stroke-width':Math.max(3,8-p.depth)}));
-        const midx=(q.x+p.x)/2, midy=(q.y+p.y)/2;
-        [-1,1].forEach((sign,n) => leavesGroup.append(svgEl('ellipse',{cx:midx+sign*23,cy:midy-12+n*17,rx:21,ry:9,transform:`rotate(${sign*30} ${midx+sign*23} ${midy-12+n*17})`,class:`tree-leaf${index%2?' dark':''}`})));
+    const {done,next,available}=levelStatus(), queue=levels();
+    const visibleLevels=queue.filter(level=>available.has(level.id));
+    const signature=JSON.stringify([language(),queue.map(level=>[level.id,level.parent]),visibleLevels.map(level=>[level.id,done.has(level.id),levelHeading(level)])]);
+    if(signature!==villageSignature || !forestViewInitialized){
+      const forest=$('forest'), positions=villageLayout(queue);
+      villageSignature=signature;
+      houses=new Map();roads=[];bounds=null;
+      const svg=svgEl('svg',{width:1,height:1,class:'village-roads','aria-hidden':'true'});
+      const scenery=svgEl('g',{'aria-hidden':'true'});
+      svg.append(scenery);forest.replaceChildren(svg);
+      for (const level of visibleLevels) {
+        const p=positions.get(level.id);
+        if(!p)continue;
+        if(!bounds)bounds={left:p.x,right:p.x,top:p.y,bottom:p.y};
+        bounds.left=Math.min(bounds.left,p.x);bounds.right=Math.max(bounds.right,p.x);
+        bounds.top=Math.min(bounds.top,p.y);bounds.bottom=Math.max(bounds.bottom,p.y);
+        // Cartographic vegetation sits beside a house; only the manuscript contributes roads.
+        const grove=svgEl('g',{transform:'translate('+(p.x+59)+' '+(p.y-22)+')',opacity:'.85'});
+        grove.innerHTML='<ellipse cx="8" cy="16" rx="17" ry="5" fill="#a5bd92"/><path d="M3 15V-3m12 21V6" stroke="#8b775c" stroke-width="3"/><path d="M-7 2 2-18 12 2z" fill="#759a78"/><path d="M-6-6 2-21 10-6z" fill="#96b58a"/><path d="M8 11 15-6 24 11z" fill="#88a982"/>';
+        scenery.append(grove);
+        if(available.has(level.parent)){
+          const q=positions.get(level.parent);
+          const middle=(p.y+q.y)/2;
+          const d='M '+q.x+' '+q.y+' C '+q.x+' '+middle+' '+p.x+' '+middle+' '+p.x+' '+p.y;
+          const road=svgEl('g',{'class':'village-road','data-from':level.parent,'data-to':level.id});
+          for (const cls of ['road-border','road-bed'])road.append(svgEl('path',{d,class:cls,pathLength:1}));
+          svg.append(road);
+          roads.push({parent:level.parent,child:level.id,element:road});
+        }
+        const finished=done.has(level.id),button=element('button','level-node village-house '+(finished?'done':'current'));
+        button.type='button';button.style.left=p.x+'px';button.style.top=p.y+'px';
+        button.dataset.levelId=level.id;button.dataset.kind=level.type;
+        const heading=level.type==='convention'?t('convention'):level.statement_number?levelHeading(level).split(' · ')[0]:t(level.type);
+        const title=level.type==='convention'?'':localizedLevel(level).title, status=finished?t('cleared'):t('available');
+        button.setAttribute('aria-label',[t('level')+' '+levelNumber(level),heading,title,status].filter(Boolean).join(' · '));
+        button.append(houseIcon(level.type));
+        if(next?.id===level.id)button.append(element('span','next-marker',t('nextHouse')));
+        const label=element('span','node-title');label.setAttribute('data-status',status);
+        label.append(element('span',title?'node-reference':'node-description',heading));
+        if(title)label.append(element('span','node-description',title));
+        button.append(label);
+        button.addEventListener('click',()=>{
+          if(focusHouse!==level.id || camera.zoom<readableZoom){centerHouse(level.id);return;}
+          ++flight;lastFocusedNode=level.id;openLevel(level.id,{fromMap:true});
+        });
+        forest.append(button);houses.set(level.id,{...p,button,label});
       }
-      const locked = !available.has(level.id);
-      const status = locked?'locked':done.has(level.id)?'done':'current';
-      const button=element('button',`level-node ${status}`);
-      button.type='button'; button.style.left=p.x+'px'; button.style.top=p.y+'px'; button.dataset.levelId=level.id;
-      button.disabled=locked || busy || saveBusy;
-      const cardLabel=level.type==='convention'?t(level.type):level.statement_number?levelHeading(level).split(' · ')[0]:t(level.type);
-      const cardTitle=level.type==='convention'?null:localizedLevel(level).title||null;
-      button.setAttribute('aria-label',`${t('level')} ${levelNumber(level)} · ${cardLabel}${cardTitle?': '+cardTitle:''}. ${locked?t('locked'):done.has(level.id)?t('cleared'):t('available')}`);
-      const top=element('span','node-top'); top.append(element('span','node-status',locked?'⌑':done.has(level.id)?'✓':'↗'));
-      const title=element('span','node-title');
-      title.append(element('span',cardTitle?'node-reference':'node-description',cardLabel));
-      if(cardTitle)title.append(element('span','node-description',cardTitle));
-      button.append(top,title);
-      button.addEventListener('click',() => { lastFocusedNode=level.id; openLevel(level.id,{fromMap:true}); });
-      forest.append(button);
-    });
-    forest.prepend(svg);
-    if(!forestViewInitialized){
+      if(bounds && (!forestViewInitialized || !houses.has(focusHouse))){
+        if(next && houses.has(next.id))centerHouse(next.id);
+        else {focusHouse=null;++flight;Object.assign(camera,overviewCamera());}
+      }
       forestViewInitialized=true;
-      const point=positions.get(next?.id)||positions.get(roots[0]?.id);
-      if(point)requestAnimationFrame(()=>{
-        const view=$('map-scroll');view.scrollLeft=point.x-view.clientWidth/2;view.scrollTop=point.y-view.clientHeight/2;
-      });
     }
-    $('progress-count').textContent=words().progress(done.size,levels().length);
-    $('progress-fill').style.width=(levels().length?done.size/levels().length*100:0)+'%';
-    $('progress-caption').textContent=words().progressCaption(!next);
-    $('garden-hint').textContent=next?t('hint'):t('allDone');
-    $('next-level').textContent=(!next?t('revisit'):done.size?t('continue'):t('start'))+' ↗';
-    $('next-level').disabled=busy || !levels().length;
+    applyCamera();
+    $('progress-count').textContent=words().progress(done.size,queue.length);
+    $('progress-fill').style.width=(queue.length?done.size/queue.length*100:0)+'%';
+    $('garden-hint').textContent=t('villageHint');
+    $('next-level').textContent=t('continue');
+    $('next-level').disabled=!next;
+    $('next-level').hidden=!next;
+    $('map-complete').textContent=t('manuscriptComplete');
+    $('map-complete').hidden=Boolean(next)||!queue.length;
+  }
+  function flyToUnlockedHouse(clearedId) {
+    const next=levelStatus().next, destination=next && houses.get(next.id);
+    if(!bounds || (next && !destination))return;
+    const token=++flight;
+    const adjacent=destination?roads.filter(road=>road.child===next.id||road.parent===next.id):[];
+    // A future parent can open after several of its children. Show every genuine new road.
+    for(const road of adjacent)road.element.classList.add('road-opening');
+    const connecting=adjacent.find(road=>road.parent===clearedId||road.child===clearedId)||adjacent[0];
+    const start=connecting?houses.get(connecting.parent===next.id?connecting.child:connecting.parent):houses.get(clearedId);
+    if(!start)return;
+    const end=destination?{x:destination.x,y:destination.y,zoom:focusZoom}:overviewCamera();
+    const endFocus=destination?next.id:null;
+    if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches){
+      focusHouse=endFocus;Object.assign(camera,end);applyCamera();return;
+    }
+    if(!next)houses.get(clearedId)?.button.classList.add('final-house');
+    // A newly opened parent may join widely separated branches. Frame every
+    // new road before following one of them to the destination.
+    let startZoom=focusZoom;
+    if(next){
+      const points=[destination,...adjacent.map(road=>houses.get(road.parent===next.id?road.child:road.parent))];
+      const spanX=Math.max(...points.map(p=>Math.abs(p.x-start.x)));
+      const spanY=Math.max(...points.map(p=>Math.abs(p.y-start.y)));
+      startZoom=Math.min(.73,mapView.clientWidth/(2*spanX+130),mapView.clientHeight/(2*spanY+150));
+    }
+    Object.assign(camera,{x:start.x,y:start.y,zoom:startZoom});focusHouse=clearedId;applyCamera();
+    let began;
+    function frame(now){
+      if(token!==flight)return;
+      if(began===undefined)began=now;
+      const elapsed=Number.isFinite(now)?now-began:1800;
+      const t=Math.max(0,Math.min(1,(elapsed-350)/820));
+      const eased=t*t*(3-2*t);
+      // The map's cubic road has vertical tangents and its controls at mid-height.
+      camera.x=start.x+(end.x-start.x)*eased;
+      const along=connecting?(1.5*t-1.5*t*t+t*t*t):eased;
+      camera.y=start.y+(end.y-start.y)*along;
+      const scaleTime=next?Math.max(0,Math.min(1,(elapsed-950)/420)):eased;
+      camera.zoom=startZoom+(end.zoom-startZoom)*scaleTime;
+      if(t===1)focusHouse=endFocus;
+      applyCamera();
+      if(elapsed<1370)requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  function updateFormulaEdges(frame,scroller){
+    const overflow=mobileLayout() && scroller.clientWidth>0 && scroller.scrollWidth>scroller.clientWidth+1;
+    frame.dataset.fadeLeft=String(overflow && scroller.scrollLeft>1);
+    frame.dataset.fadeRight=String(overflow && (scroller.scrollLeft||0)+scroller.clientWidth<scroller.scrollWidth-1);
   }
   let equationCheckPending=false;
   function scheduleEquationCheck(){
@@ -573,6 +721,7 @@
       const mobile=mobileLayout();
       for(const frame of document.querySelectorAll('.equation-frame')){
         const scroller=frame.firstElementChild;
+        updateFormulaEdges(frame,scroller);
         const overflow=mobile && scroller.clientWidth>0 && scroller.scrollWidth>scroller.clientWidth+1;
         if(overflow){
           const label=t('formulaScroll');
@@ -594,10 +743,11 @@
     scheduleEquationCheck();
     const panel = contentPanel ? 'content' : chatMode();
     $('level-dialog').dataset.panel = panel;
+    $('level-dialog').dataset.asking=String(guideAsking);
     for (const name of ['content','guide','chat']) {
       const button = $('mobile-'+name);
       button.setAttribute('aria-pressed', String(panel === name));
-      button.disabled = name !== 'content' && name !== chatMode() && (busy || saveBusy || languageBusy);
+      button.disabled = saveBusy || languageBusy;
     }
     const history = window.history.state?.referenceNav;
     $('mobile-back').disabled = busy || saveBusy || !history?.depth;
@@ -642,12 +792,84 @@
     document.querySelector('.composer-hint').textContent = t(mode === 'chat' ? 'chatHint' : 'composerHint');
     requestAnimationFrame(sizeComposerInput);
   }
+  function showIllustration(src,alt){
+    const viewer=$('illustration-viewer'),image=$('illustration-full');
+    viewer.dataset.zoomed='false';
+    image.src=src;image.alt=alt;
+    renderRich($('illustration-caption'),alt,{macroLevelId:currentLevel});
+    $('illustration-close').setAttribute('aria-label',language()==='中文'?'关闭插图':'Close illustration');
+    $('illustration-zoom').textContent=t('zoom');
+    viewer.showModal();
+  }
+  function illustrationButton(src,alt){
+    const button=element('button','illustration-button');button.type='button';
+    const image=element('img','guide-illustration');image.alt=alt;image.src=src;
+    button.append(image);button.addEventListener('click',()=>showIllustration(src,alt));
+    return button;
+  }
+  $('illustration-close').addEventListener('click',()=>$('illustration-viewer').close());
+  $('illustration-zoom').addEventListener('click',()=>{
+    const viewer=$('illustration-viewer'),zoom=viewer.dataset.zoomed!=='true';
+    viewer.dataset.zoomed=String(zoom);$('illustration-zoom').textContent=t(zoom?'fit':'zoom');
+  });
+  function taskVisible(){
+    return pendingTask?.levelId===currentLevel && pendingTask.mode===chatMode();
+  }
+  function topicText(){
+    const level=levels().find(item=>item.id===currentLevel);
+    const topic=pendingTopic?.topic || (level && levelHeading(level)) || '';
+    return t(({draw:'drawTopic',review:'reviewTopic'})[pendingTopic?.stage]||'thinkTopic')+' '+topic;
+  }
+  function updateTopic(){
+    const text=taskVisible()&&pendingLabel!=='saving'?topicText():'',banner=$('tutor-progress');
+    let inlineVisible=false;
+    const area=$('messages').getBoundingClientRect();
+    for(const node of document.querySelectorAll('.guide-actions .pending-message')){
+      node.textContent=text;
+      const bounds=node.getBoundingClientRect();
+      inlineVisible ||= bounds.height>0 && bounds.top>=area.top && bounds.bottom<=area.bottom;
+    }
+    banner.hidden=!text || inlineVisible;banner.textContent=text;
+  }
+  $('messages').addEventListener('scroll',()=>{if(pendingTask)updateTopic();},{passive:true});
+  window.addEventListener('proof2game-topic',event=>{
+    const topic=event.detail;
+    if(!pendingTask || !topic || topic.level_id!==pendingTask?.levelId || topic.mode!==pendingTask.mode)return;
+    pendingTopic=topic;updateTopic();
+  });
+  function guideConfirmation(message,index,saved,done,level){
+    const block=element('footer','guide-confirmation');
+    const avatar=element('img','guide-avatar');avatar.src='./tutor.webp';avatar.alt='';avatar.width=44;avatar.height=44;
+    const goal=element('div','local-step-goal math-content'),whole=message.phase==='goal_confirmation';
+    const question=message.step_goal || t(whole?'confirmLevel':'confirmStep');
+    renderRich(goal,question.replace(/^(\s*)(?:The\s+)?local goal\b/i,'$1The point of this step'),{macroLevelId:level.id});
+    const actions=element('div','guide-actions');
+    const last=saved.messages.findLastIndex(item=>item.role==='assistant')===index;
+    const advancing=last && taskVisible() && ['understand','continue'].includes(pendingTask.action);
+    const waiting=last && saved.phase==='awaiting_continuation';
+    const reply=saved.messages[index+1];
+    const typedConfirmation=reply?.role==='user' && reply.understanding?.kind==='confirm' &&
+      reply.understanding.level_id===level.id && ['passage','level'].includes(reply.understanding.scope);
+    const confirmed=advancing || waiting || typedConfirmation || saved.messages.some(item=>item.role==='user'&&item.confirms===index) || (whole && done);
+    const label=confirmed?t('understood'):whole?words().understandComponent[level.type]:t('understand');
+    const button=element('button','understand-button',label);
+    button.type='button';button.disabled=confirmed||!last||busy||saveBusy||done;
+    button.addEventListener('click',()=>act(whole?'complete':'understand'));actions.append(button);
+    if(advancing)actions.append(element('span','pending-message',topicText()));
+    else if(waiting && !busy){
+      const retry=element('button','plain-button retry-passage',t('retryPassage'));retry.type='button';
+      retry.addEventListener('click',()=>act('continue'));actions.append(retry);
+    }
+    const ask=element('button','plain-button guide-ask',t('ask'));ask.type='button';
+    ask.addEventListener('click',()=>{guideAsking=true;renderMobileControls();$('chat-input').focus();});
+    actions.append(ask);block.append(avatar,goal,actions);return block;
+  }
   function renderLevel() {
     if (!currentLevel || !state) return;
     const level=levels().find(item=>item.id===currentLevel); if (!level) return;
     renderMobileControls();
     const saved=conversationState(),regular=chatMode()==='chat'; const done=completed().has(currentLevel);
-    for(const [mode,id] of [['guide','mode-guide'],['chat','mode-chat']]){const tab=$(id);tab.setAttribute('aria-pressed',String(chatMode()===mode));tab.disabled=busy||saveBusy;}
+    for(const [mode,id] of [['guide','mode-guide'],['chat','mode-chat']]){const tab=$(id);tab.setAttribute('aria-pressed',String(chatMode()===mode));tab.disabled=saveBusy;}
     renderComposer(chatMode());
     renderLevelHeading(level);
     renderRich($('level-original'),localizedLevel(level).text,{levelId:level.id});
@@ -673,10 +895,12 @@
     const understandAll=$('understand-all');
     understandAll.textContent=done?t('understood'):words().understandComponent[level.type];
     understandAll.disabled=busy||saveBusy||done||!levelStatus().available.has(currentLevel);
-    const messages=$('messages'); const wasBottom=messages.scrollHeight-messages.scrollTop-messages.clientHeight<120;
+    const messages=$('messages'),reading=messages.scrollTop;
+    messages.style.paddingBottom='';
     messages.replaceChildren();
     for (const [messageIndex,message] of (saved.messages || []).entries()) {
       const article=element('article',`chat-message ${message.role==='user'?'user':'assistant'}`);
+      article.dataset.messageIndex=String(messageIndex);
       article.append(element('div','message-label',message.role==='user'?t('you'):regular?t('assistant'):t('guide')));
       let displayedContent=String(message.content || message.message || '');
       if(message.kind!=='message'){
@@ -686,22 +910,20 @@
         if (displayedContent==='[Confirmed understanding of the entire level goal]') displayedContent=chinese?'我理解了整关。':'I understand the complete goal of this level.';
         if (displayedContent==='[Understood the preceding explanatory passage]') displayedContent=chinese?'我理解了这一段。':'I understand this passage.';
       }
-      if(displayedContent){
-        const content=element('div','message-body math-content');renderRich(content,displayedContent,{macroLevelId:level.id});
+      if(displayedContent || message.images?.length){
+        const content=element('div','message-body math-content');
+        renderRich(content,displayedContent.trim(),{macroLevelId:level.id,images:message.images});
         article.append(content);
       }
       if(message.role==='assistant'&&message.image){
-        const illustration=element('img','guide-illustration');
-        illustration.alt=message.image.alt;
-        illustration.width=640;illustration.height=400;
-        illustration.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(message.image.svg);
-        article.append(illustration);
+        article.append(illustrationButton('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(message.image.svg),message.image.alt));
       }
-      if(!regular&&message.role==='assistant'&&message.step_goal) {
-        const goal=element('div','local-step-goal math-content');
-        const stepPoint=message.step_goal.replace(/^(\s*)(?:The\s+)?local goal\b/i,'$1The point of this step');
-        renderRich(goal,stepPoint,{macroLevelId:level.id});article.append(goal);
+      if(message.image_retry && window.proof2gameBrowser){
+        const retry=element('button','plain-button',t('retryImage'));retry.type='button';retry.disabled=busy||saveBusy;
+        retry.addEventListener('click',()=>act('retry_image',{message_index:messageIndex}));
+        article.append(element('small','',t('imageFailed')),retry);
       }
+      if(!regular && message.role==='assistant')article.append(guideConfirmation(message,messageIndex,saved,done,level));
       const undo=undoMessages()?.[currentLevel];
       if(message.role==='user'&&undo?.message_index===messageIndex&&!busy&&!saveBusy){article.classList.add('with-undo');article.append(undoButton(undo.target_id));}
       messages.append(article);
@@ -723,21 +945,29 @@
       const empty=regular?'chatEmpty':needsBrowserKey()?'guideWithoutKey':'empty';
       messages.append(element('p','empty-message',t(empty)));
     }
-    if (busy && pendingLabel) {const pending=element('div','pending-message');pending.append(element('span','pulse'),document.createTextNode(t(pendingLabel)));messages.append(pending);}
-    if (wasBottom || busy) requestAnimationFrame(()=>{messages.scrollTop=messages.scrollHeight;});
-    const controls=$('step-controls'); controls.replaceChildren();
-    if (!regular && !busy && !saveBusy && saved.messages?.length) {
-      if (done) controls.append(element('span','step-note',t('doneNote')));
-      else if (saved.phase==='step' || saved.phase==='awaiting_continuation') {
-        const pendingPassage=saved.phase==='awaiting_continuation';
-        const button=element('button','understand-button',pendingPassage?t('continueGuide'):t('understand')+' ✓');
-        button.type='button';button.addEventListener('click',()=>act(pendingPassage?'continue':'understand'));controls.append(button);
-      }
+    if(alignedPassage?.levelId===currentLevel && !regular && !contentPanel)reservePassageSpace(alignedPassage.index);
+    messages.scrollTop=reading;
+    updateTopic();
+    const controls=$('step-controls');controls.replaceChildren();
+    if(failedRequest && !busy && failedRequest.levelId===level.id && failedRequest.mode===chatMode() &&
+       ['start','message'].includes(failedRequest.action)){
+      const {action,extras}=failedRequest;
+      const retry=element('button','plain-button',t('retry'));
+      retry.type='button';retry.addEventListener('click',()=>act(action,extras));controls.append(retry);
     }
     for(const id of ['level-back','level-forward'])$(id).disabled=busy||saveBusy;
-    const editingChat=regular && (openingMode?.levelId===currentLevel || activePending?.nextDraft || editingDuringUndo===currentLevel);
+    const editingChat=regular && (touchComposer() || openingMode?.levelId===currentLevel || activePending?.nextDraft || editingDuringUndo===currentLevel);
     $('chat-input').disabled=saveBusy || (busy && !editingChat);
     updateSendButton();
+  }
+  // Keep enough space below a short new passage for its first line to reach
+  // the top of the viewport. Other conversations retain their normal spacing.
+  function reservePassageSpace(index){
+    const messages=$('messages');
+    const article=Array.from(messages.children).find(item=>item.dataset.messageIndex===String(index));
+    if(!article)return null;
+    if(Number.isFinite(article.offsetHeight))messages.style.paddingBottom=Math.max(8,messages.clientHeight-article.offsetHeight-8)+'px';
+    return article;
   }
   async function request(path,body) {
     if(window.proof2gameBrowser)return window.proof2gameBrowser.request(path,body);
@@ -753,12 +983,18 @@
   function accept(next) {
     if(state&&next.progress.revision<state.progress.revision)return;
     state=next;applyInterface();
+    renderConnectionStatus();
+    renderForest();renderLevel();renderSaves();renderUndo();schedulePrefetch();
+  }
+  function renderConnectionStatus(){
+    if(!state)return;
     const connected=state.connection?.available !== false && state.connection?.authenticated === true;
     $('connection-check').dataset.ready=String(connected);
     const connectionLabel=state.connection?.available===false?t('aiUnavailable'):state.connection?.authenticated===false?t('aiCheckLogin'):connected?t('aiConnected'):t('aiReady');
-    $('connection-state').textContent=connectionLabel;
+    const providers=state.connection?.providers;
+    const labelStatus=window.proof2gameConnectionStatus;
+    $('connection-state').textContent=providers&&labelStatus?labelStatus(providers,language()):connectionLabel;
     $('connection-check').title=language()==='中文' ? t('checkConnection')+' · '+connectionLabel : state.connection?.message||t('checkConnection');
-    renderForest();renderLevel();renderSaves();renderUndo();schedulePrefetch();
   }
   let prefetchTimer;
   function needsBrowserKey(){
@@ -799,13 +1035,14 @@
     for(const id of ['undo-map','undo-level','mobile-undo'])$(id).disabled=undoBusy||saveBusy||!undoTarget();
   }
   function restoreConversationDraft(){
-    const draft=conversationDrafts.get(currentLevel+':'+chatMode())??conversationState().draft??'';
+    const draft=conversationDrafts.get(currentLevel+':'+chatMode())??'';
     if(chatInput.value!==draft)chatInput.value=draft;
     sizeComposerInput();updateSendButton();
   }
   function finishOpeningMode(){
     if(!openingMode)return;
-    conversationDrafts.set(openingMode.levelId+':'+openingMode.mode,chatInput.value);
+    if(currentLevel===openingMode.levelId && chatMode()===openingMode.mode)
+      conversationDrafts.set(openingMode.levelId+':'+openingMode.mode,chatInput.value);
     openingMode=null;
   }
   function retainChatMessage(id,label,text){
@@ -833,7 +1070,7 @@
     const touchChat=target.action==='message' && target.mode==='chat' && (pendingPlayerTurn?.nextDraft || touchComposer());
     const wasOpen=$('level-dialog').open,wasContent=contentPanel;
     if(touchChat)editingDuringUndo=target.level_id;
-    undoBusy=true;++actionEpoch;clearTimeout(prefetchTimer);pendingPlayerTurn=null;
+    undoBusy=true;++actionEpoch;clearTimeout(prefetchTimer);pendingPlayerTurn=null;pendingTask=null;pendingTopic=null;
     if(openingMode){finishOpeningMode();restoreConversationDraft();}
     busy=true;pendingLabel='saving';state.pending_message=null;renderLevel();renderUndo();
     const requestId=crypto.randomUUID();
@@ -864,7 +1101,7 @@
       }else if(currentLevel&&$('level-dialog').open){
         if(!levelStatus().available.has(currentLevel)||target.action==='start'&&currentLevel===target.level_id)closeLevel();
         else{
-          $('chat-input').value=conversationDrafts.get(currentLevel+':'+chatMode())??conversationState().draft??'';
+          restoreConversationDraft();
           renderLevel();
         }
       }
@@ -879,22 +1116,24 @@
     if (busy || saveBusy || languageBusy || !state) return false;
     if (action!=='connection' && !currentLevel) return false;
     const levelId=currentLevel, mode=chatMode(), wasComplete=completed().has(levelId);
+    if(action==='message' && alignedPassage?.levelId===levelId)alignedPassage=null;
     const epoch=++actionEpoch;
+    pendingTask={action,levelId,mode};pendingTopic=null;
     busy=true; pendingLabel=['complete','understand_all','mode'].includes(action)?'saving':action==='message'&&chatMode()==='chat'?'thinking':'waiting';
     notice('level-error','');notice('global-error','');
     const signature=JSON.stringify({level_id:currentLevel,action,mode:chatMode(),...extras,revision:state.progress.revision});
     const requestId=failedRequest?.signature===signature?failedRequest.request_id:crypto.randomUUID();
     if(action==='mode'){
       conversationDrafts.set(levelId+':'+mode,chatInput.value);
-      if(touchComposer()){
-        openingMode={levelId,mode:extras.mode};
-        restoreConversationDraft();
-      }
+      openingMode={levelId,mode:extras.mode};
+      restoreConversationDraft();
     }
-    const nextDraft=action==='message' && mode==='chat' && touchComposer()?{sent:chatInput.value,edited:false}:null;
+    const matchingDraft=chatInput.value.trim()===extras.message;
+    const nextDraft=action==='message' && mode==='chat' && touchComposer()
+      ? {sent:matchingDraft?chatInput.value:extras.message,edited:!matchingDraft} : null;
     if(action==='message'||action==='understand'){
       pendingPlayerTurn={action,level_id:levelId,mode,message:extras.message,target_id:requestId,nextDraft};
-      if(nextDraft){
+      if(nextDraft && !nextDraft.edited){
         chatInput.value='';
         conversationDrafts.set(levelId+':'+mode,'');
       }
@@ -905,7 +1144,7 @@
       const result=await request('/api/action',{level_id:currentLevel,action,mode:chatMode(),expected_revision:state.progress.revision,request_id:requestId,...extras});
       if(epoch!==actionEpoch)return false;
       finishOpeningMode();
-      pendingPlayerTurn=null;busy=false;pendingLabel='';failedRequest=null;
+      pendingPlayerTurn=null;pendingTask=null;pendingTopic=null;busy=false;pendingLabel='';failedRequest=null;
       if(action==='message' && mode==='chat' && unsentChatMessages.has(levelId)){
         const retained=unsentChatMessages.get(levelId).filter(item=>item.text.trim()!==extras.message);
         unsentChatMessages.set(levelId,retained);
@@ -916,11 +1155,20 @@
       }
       accept(result);
       if(action==='mode' && currentLevel===levelId)restoreConversationDraft();
+      if(['understand','continue'].includes(action) && currentLevel===levelId && $('level-dialog').open && !contentPanel && chatMode()==='guide'){
+        const nextIndex=levelState(levelId).messages.findLastIndex(item=>item.role==='assistant');
+        alignedPassage={levelId,index:nextIndex};
+        const article=reservePassageSpace(nextIndex);
+        if(article){
+          const messages=$('messages');
+          messages.scrollTop+=article.getBoundingClientRect().top-messages.getBoundingClientRect().top;
+        }
+      }
       if(!await flushNavigation()){
-        if(!wasComplete&&completed().has(levelId))closeLevel();
+        if(!wasComplete&&completed().has(levelId)){closeLevel();flyToUnlockedHouse(levelId);}
         else schedulePrefetch();
       }
-      return true;
+      await flushViewSelection();return true;
     } catch (error) {
       if(epoch!==actionEpoch)return false;
       const passageTurn=action==='understand'||action==='continue';
@@ -931,7 +1179,7 @@
         if(latest)accept(latest);
       }
       finishOpeningMode();
-      pendingPlayerTurn=null;busy=false;pendingLabel='';failedRequest={signature,request_id:requestId};
+      pendingPlayerTurn=null;pendingTask=null;pendingTopic=null;busy=false;pendingLabel='';failedRequest={signature,request_id:requestId,levelId,mode,action,extras};
       if(nextDraft?.edited)retainChatMessage(levelId,'notSent',nextDraft.sent);
       if(nextDraft && !nextDraft.edited)conversationDrafts.set(levelId+':'+mode,nextDraft.sent);
       if(currentLevel===levelId && (action==='mode' || (nextDraft && !nextDraft.edited)))restoreConversationDraft();
@@ -942,14 +1190,14 @@
         message=t('passageSaved')+' '+t(cause||'nextPassageFailed');
       }
       notice($('level-dialog').open?'level-error':'global-error',message);
-      await flushNavigation();return false;
+      await flushNavigation();await flushViewSelection();return false;
     }
   }
   function downloadSave(link,route){
     if(!window.proof2gameBrowser)return;
     link.addEventListener('click',async event=>{event.preventDefault();try{
       const value=await window.proof2gameBrowser.request(route);
-      const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
+      const url=URL.createObjectURL(new Blob([JSON.stringify(value)],{type:'application/json'}));
       const anchor=document.createElement('a');anchor.href=url;anchor.download='proof2game-save.json';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     }catch(error){notice('save-error',error.message);}});
   }
@@ -960,7 +1208,7 @@
       const row=element('li','save-record');
       const info=element('div','save-info');
       const date=new Date(record.created_at);
-      const label=record.label==='Manual save'?t('manualSave'):record.error?t('unreadableSave'):record.label||t('savedGame');
+      const label=record.label==='Manual save'?t('manualSave'):record.label?.startsWith('Manual save · ')?t('manualSave')+' · '+date.toLocaleTimeString(document.documentElement.lang):record.error?t('unreadableSave'):record.label||t('savedGame');
       info.append(element('strong','',label),element('span','',Number.isNaN(date.getTime())?String(record.created_at||''):date.toLocaleString(document.documentElement.lang)));
       if(Number.isInteger(record.completed_count))info.append(element('span','',words().levelsComplete(record.completed_count,levels().length)));
       const controls=element('div','save-record-actions');
@@ -976,7 +1224,7 @@
   }
   async function openSaves(){
     if(!state||saveBusy)return;
-    notice('save-error','');notice('save-status','');renderSaves();
+    notice('save-error','');notice('save-status','');renderDeletionNotices();renderSaves();
     if(!$('save-dialog').open)$('save-dialog').showModal();
     try{
       let result;
@@ -985,23 +1233,62 @@
       state.saves=result.saves||[];renderSaves();
     }catch(error){notice('save-error',error.message);}
   }
+  // Each deletion has its own undo period, including successive deletes in the dialog.
+  const deletionNotices=new Map();
+  function showSaveUndo(target,message,buttonText,onClick){
+    const box=$(target);box.hidden=false;
+    const row=element('div','save-notice-action');
+    const button=element('button','plain-button',t(buttonText));button.type='button';
+    button.addEventListener('click',onClick);row.append(element('span','',t(message)),button);box.append(row);
+    return row;
+  }
+  function showDeleted(recovery){
+    if(!recovery)return;
+    const row=showSaveUndo('save-status','saveDeleted','undoDelete',async()=>{
+      if(await saveAction('save_undelete',{recovery_id:recovery.id})){
+        deletionNotices.delete(recovery.id);row.remove();
+      }
+    });
+    deletionNotices.set(recovery.id,row);
+    setTimeout(()=>{
+      deletionNotices.delete(recovery.id);row.remove();
+      if(!$('save-status').textContent)$('save-status').hidden=true;
+    },Math.max(0,recovery.expires_at-Date.now()));
+  }
+  function renderDeletionNotices(){
+    const box=$('save-status');
+    for(const row of deletionNotices.values())box.append(row);
+    if(deletionNotices.size)box.hidden=false;
+  }
   async function saveAction(action,extras={}){
     if(!state||busy||saveBusy||languageBusy)return false;
-    const restoring=['save_load','save_import'].includes(action);
+    const restoring=['save_load','save_import','save_recover'].includes(action);
     const epoch=++actionEpoch;
     saveBusy=true;clearTimeout(prefetchTimer);pendingPlayerTurn=null;failedRequest=null;renderForest();renderLevel();renderSaves();
-    notice('save-error','');notice('save-status','');
+    notice('save-error','');notice('save-status','');renderDeletionNotices();
     try{
       const result=await request('/api/action',{action,expected_revision:state.progress.revision,request_id:crypto.randomUUID(),...extras});
       if(epoch!==actionEpoch)return false;
       if(restoring){
-        closeLevel({keepPending:true});currentLevel=null;conversationDrafts.clear();unsentChatMessages.clear();forestViewInitialized=false;
+        closeLevel({keepPending:true});currentLevel=null;
+        conversationDrafts.clear();unsentChatMessages.clear();levelViews.clear();
+        alignedPassage=null;pendingViewMode=null;deferredOpening=null;forestViewInitialized=false;
         window.history.replaceState(null,'',window.location.pathname);
       }
       saveBusy=false;accept(result);
-      if(restoring){$('save-dialog').close();notice('global-error','');}
+      if(restoring){
+        if($('save-dialog').open)$('save-dialog').close();notice('global-error','');notice('save-toast','');
+        if(action==='save_recover')notice('save-toast',t('saveRecovered'));
+        else{
+          const loading=action==='save_load';
+          showSaveUndo('save-toast',loading?'saveLoaded':'saveImported',loading?'recoverLoad':'recoverImport',
+            ()=>saveAction('save_recover',{recovery_id:result.save_recovery.id}));
+        }
+      }
       else if(action==='save_create'){const label=words().savedCount((result.saves||[]).length);notice('save-status',label);notice('save-toast',label);$('level-save-status').textContent=label;}
-      else notice('save-status',t('saveDeleted'));
+      else if(action==='save_delete')showDeleted(result.save_recovery);
+      else notice('save-status',t('saveUndeleted'));
+      renderDeletionNotices();
       await flushNavigation();return true;
     }catch(error){
       saveBusy=false;
@@ -1012,7 +1299,6 @@
   async function importSave(){
     const file=$('save-upload').files?.[0];if(!file)return;
     try{
-      if(file.size>16*1024*1024)throw new Error(t('saveTooLarge'));
       const save=JSON.parse(await file.text());
       await saveAction('save_import',{save});
     }catch(error){notice('save-error',error instanceof SyntaxError?t('invalidJsonSave'):error.message);}
@@ -1023,16 +1309,21 @@
     const heading=$('level-title').hidden?$('mobile-level-meta'):$('level-title');
     const target=anchor?.closest('.numbered-equation')||anchor?.closest('.prose-run')||heading;
     target.classList.add('reference-target');
+    setTimeout(()=>target.classList.remove('reference-target'),3000);
     const scroll=document.querySelector('.component-scroll');
     if(anchor)scroll.scrollTop+=target.getBoundingClientRect().top-scroll.getBoundingClientRect().top-12;
   }
   async function openLevel(id,options={}) {
-    if (busy||saveBusy) return;
+    if (saveBusy) return;
     const {available}=levelStatus();
     if(!levels().some(level=>level.id===id))return;
     if (!available.has(id)) {notice('global-error',t('unavailable'));return;}
-    if(currentLevel)conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
-    currentLevel=id;
+    if(needsBrowserKey()){
+      window.openProof2GameConnection({whenReady:()=>openLevel(id,options)});
+      return;
+    }
+    rememberView();
+    currentLevel=id;guideAsking=false;pendingViewMode=null;
     const url=window.location.pathname+'?level='+encodeURIComponent(id)+(options.reference?'&ref='+encodeURIComponent(options.reference):'');
     if(options.historyMode!=='none' && (options.reference || window.location.pathname+window.location.search!==url)){
       const entry = options.reference ? {referenceNav:{depth:referenceDepth+1}} : null;
@@ -1042,20 +1333,25 @@
     referenceDepth = window.history.state?.referenceNav?.depth || 0;
     const source = options.source;
     const panel = source?.panel || options.panel || (options.reference ? 'content' :
-      options.fromMap && mobileLayout() ? 'guide' : chatMode());
+      options.fromMap && mobileLayout() ? (levelViews.get(id)?.panel||'guide') : chatMode());
     contentPanel = panel === 'content';
-    $('chat-input').value=conversationDrafts.get(id+':'+chatMode())??conversationState(id).draft??'';
+    restoreConversationDraft();
     notice('level-error','');renderLevel();
     if (!$('level-dialog').open) {
       $('level-dialog').showModal();
       if (mobileLayout()) $('mobile-'+panel).focus({preventScroll:true});
     }
-    $('messages').scrollTop=$('messages').scrollHeight;
+    $('messages').scrollTop=mobileLayout()?0:$('messages').scrollHeight;
     document.querySelector('.component-scroll').scrollTop=0;
     if(panel!=='content' && panel!==chatMode()){
-      if(!await act('mode',{mode:panel,navigation:true}) || currentLevel!==id || !$('level-dialog').open)return;
+      if(busy){pendingViewMode={levelId:id,mode:panel,navigation:true};restoreConversationDraft();renderLevel();}
+      else if(!await act('mode',{mode:panel,navigation:true}) || currentLevel!==id || !$('level-dialog').open)return;
     }
-    if (options.startGuide!==false && !source && (!contentPanel || !mobileLayout()) && shouldStartGuide()) await act('start');
+    restorePanelScroll();
+    if (options.startGuide!==false && !source && (!contentPanel || !mobileLayout()) && shouldStartGuide()){
+      if(busy)deferredOpening=id;
+      else await act('start');
+    }
     else schedulePrefetch();
     if (source || options.reference) requestAnimationFrame(()=>{
       if(currentLevel!==id || !$('level-dialog').open)return;
@@ -1109,51 +1405,161 @@
   $('mobile-forward').addEventListener('click',()=>{if(!$('mobile-forward').disabled)window.history.forward();});
   $('level-back').addEventListener('click',()=>{if(!busy&&!saveBusy)window.history.back();});
   $('level-forward').addEventListener('click',()=>{if(!busy&&!saveBusy)window.history.forward();});
-  const mapView=$('map-scroll');let mapPan=null,suppressMapClick=false;
+  const mapView=$('map-scroll'), mapPointers=new Map();
+  let mapDragged=false, ignoreHouseClick=false, pinchDistance=0, pinchCenter=null;
+  function mapPoint(event) {
+    const rect=mapView.getBoundingClientRect();
+    return {x:event.clientX-rect.left-mapView.clientWidth/2,y:event.clientY-rect.top-mapView.clientHeight/2};
+  }
+  function zoomAt(factor,from,to=from){
+    if(!bounds)return;
+    const zoom=Math.max(overviewCamera().zoom*.76,Math.min(2.35,camera.zoom*factor));
+    camera.x+=from.x/camera.zoom-to.x/zoom;camera.y+=from.y/camera.zoom-to.y/zoom;
+    camera.zoom=zoom;applyCamera();
+  }
+  function panBy(horizontal,vertical) {
+    // Keep some village ground within reach even when the completed map has no Continue button.
+    const marginX=mapView.clientWidth*.28/camera.zoom,marginY=mapView.clientHeight*.28/camera.zoom;
+    camera.x=Math.max(bounds.left-marginX,Math.min(bounds.right+marginX,camera.x+horizontal/camera.zoom));
+    camera.y=Math.max(bounds.top-marginY,Math.min(bounds.bottom+marginY,camera.y+vertical/camera.zoom));
+    applyCamera();
+  }
+  function twoFingerGesture(){
+    const [a,b]=[...mapPointers.values()].map(pointer=>pointer.at);
+    return {distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),center:{x:(a.x+b.x)/2,y:(a.y+b.y)/2}};
+  }
   mapView.addEventListener('pointerdown',event=>{
-    if(event.pointerType!=='mouse'||event.button!==0)return;
-    mapPan={id:event.pointerId,x:event.clientX,y:event.clientY,left:mapView.scrollLeft,top:mapView.scrollTop,moved:false};
+    if(event.button!==0 || !bounds)return;
+    ++flight;
+    const at=mapPoint(event);
+    if(!mapPointers.size){mapDragged=false;ignoreHouseClick=false;}
+    mapPointers.set(event.pointerId,{at,start:at});
+    if(mapPointers.size===2){
+      const gesture=twoFingerGesture();pinchDistance=gesture.distance;pinchCenter=gesture.center;
+      mapDragged=ignoreHouseClick=true;
+      for(const id of mapPointers.keys())mapView.setPointerCapture(id);
+    }
   });
   window.addEventListener('pointermove',event=>{
-    if(!mapPan||event.pointerId!==mapPan.id)return;
-    if(!(event.buttons&1)){endMapPan(event);return;}
-    const dx=event.clientX-mapPan.x,dy=event.clientY-mapPan.y;
-    if(!mapPan.moved){
-      if(Math.hypot(dx,dy)<5)return;
-      mapPan.moved=true;suppressMapClick=true;mapView.setPointerCapture(event.pointerId);mapView.classList.add('is-panning');
+    const pointer=mapPointers.get(event.pointerId);
+    if(!pointer)return;
+    const old=pointer.at;pointer.at=mapPoint(event);
+    if(mapPointers.size>=2){
+      const gesture=twoFingerGesture();
+      zoomAt(gesture.distance/pinchDistance,pinchCenter,gesture.center);
+      pinchDistance=gesture.distance;pinchCenter=gesture.center;
+    }else{
+      if(!mapDragged){
+        if(Math.hypot(pointer.at.x-pointer.start.x,pointer.at.y-pointer.start.y)<5)return;
+        mapDragged=ignoreHouseClick=true;
+        mapView.setPointerCapture(event.pointerId);mapView.classList.add('is-panning');
+      }
+      panBy(old.x-pointer.at.x,old.y-pointer.at.y);
     }
-    event.preventDefault();mapView.scrollLeft=mapPan.left-dx;mapView.scrollTop=mapPan.top-dy;
+    event.preventDefault();
   });
-  function endMapPan(event){
-    if(!mapPan||event.pointerId!==mapPan.id)return;
-    const id=mapPan.id;mapPan=null;mapView.classList.remove('is-panning');
-    if(mapView.hasPointerCapture(id))mapView.releasePointerCapture(id);
-    setTimeout(()=>{suppressMapClick=false;},0);
+  function endMapPointer(event){
+    if(!mapPointers.delete(event.pointerId))return;
+    if(mapView.hasPointerCapture(event.pointerId))mapView.releasePointerCapture(event.pointerId);
+    if(!mapPointers.size){
+      mapView.classList.remove('is-panning');
+      if(mapDragged)nearestHouse();
+    }else if(mapPointers.size>=2){
+      const gesture=twoFingerGesture();pinchDistance=gesture.distance;pinchCenter=gesture.center;
+    }
   }
-  window.addEventListener('pointerup',endMapPan);
-  window.addEventListener('pointercancel',endMapPan);
-  mapView.addEventListener('lostpointercapture',endMapPan);
+  window.addEventListener('pointerup',endMapPointer);
+  window.addEventListener('pointercancel',endMapPointer);
+  mapView.addEventListener('lostpointercapture',event=>{
+    // Touch implicitly captures to the tapped child. Transferring capture to the
+    // viewport bubbles a loss from that child; the gesture itself is still active.
+    if(event.target===mapView && !mapView.hasPointerCapture(event.pointerId))endMapPointer(event);
+  });
   mapView.addEventListener('click',event=>{
-    if(suppressMapClick&&event.detail){event.preventDefault();event.stopImmediatePropagation();suppressMapClick=false;}
+    if(ignoreHouseClick && event.detail){event.preventDefault();event.stopImmediatePropagation();}
   },true);
+  let wheelEnd=0, wheelKind='', lastWheelAt=0, nativeGesture=0;
+  const macPointer=/Mac/.test(window.navigator?.platform||'');
+  mapView.addEventListener('wheel',event=>{
+    if(!bounds)return;
+    event.preventDefault();++flight;
+    if(nativeGesture)return;
+    const now=Date.now(),dy=event.deltaY;
+    // WheelEvent does not identify the device. On macOS, gesture streams have
+    // fine pixel deltas; physical wheels usually report lines or 120-unit notches.
+    if(now-lastWheelAt>180 || !wheelKind){
+      const notches=event.wheelDeltaY && Math.abs(event.wheelDeltaY)%120===0;
+      const coarsePixel=Number.isInteger(dy) && Math.abs(dy)>=40 && Math.abs(dy)%10===0;
+      wheelKind=event.deltaMode!==0 || !macPointer || (!event.deltaX && (notches||coarsePixel))?'wheel':'pad';
+    }
+    lastWheelAt=now;
+    const at=mapPoint(event);
+    if(event.ctrlKey || wheelKind==='wheel'){
+      const unit=event.deltaMode===1?16:event.deltaMode===2?mapView.clientHeight:1;
+      zoomAt(Math.exp(-Math.min(300,Math.max(-300,dy*unit))*(event.ctrlKey ? .014 : .0035)),at);
+    }else{
+      panBy(event.deltaX,dy);
+    }
+    clearTimeout(wheelEnd);wheelEnd=setTimeout(nearestHouse,140);
+  },{passive:false});
+  // Safari exposes trackpad magnification via GestureEvent on some macOS versions.
+  mapView.addEventListener('gesturestart',event=>{
+    event.preventDefault();if(mapPointers.size<2){++flight;nativeGesture=event.scale||1;}
+  },{passive:false});
+  mapView.addEventListener('gesturechange',event=>{
+    event.preventDefault();if(!nativeGesture||mapPointers.size>=2)return;
+    zoomAt(event.scale/nativeGesture,mapPoint(event));nativeGesture=event.scale;
+  },{passive:false});
+  mapView.addEventListener('gestureend',event=>{
+    event.preventDefault();if(nativeGesture){nativeGesture=0;nearestHouse();}
+  },{passive:false});
+  mapView.addEventListener('keydown',event=>{
+    const movement={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[event.key];
+    if(!bounds || (!movement && !['+','=','-'].includes(event.key)))return;
+    event.preventDefault();++flight;
+    if(movement)panBy(movement[0]*72,movement[1]*72);
+    else zoomAt(event.key==='-' ? .82 : 1.22,{x:0,y:0});
+    nearestHouse();
+  });
+  async function flushViewSelection(){
+    if(busy||saveBusy)return;
+    const choice=pendingViewMode,opening=deferredOpening;
+    pendingViewMode=null;deferredOpening=null;
+    if(!$('level-dialog').open)return;
+    if(choice?.levelId===currentLevel && choice.mode!==chatMode()){
+      // The editor already shows the newly selected conversation while the
+      // previous request finishes. Persist the choice without moving its view.
+      openingMode=choice;
+      await act('mode',{mode:choice.mode,navigation:choice.navigation||false});
+    }
+    if(opening===currentLevel && !contentPanel && shouldStartGuide())await act('start');
+  }
   async function switchMode(mode){
-    if(busy||saveBusy||!state||mode===chatMode())return;
+    if(saveBusy||languageBusy||!state)return;
     const levelId=currentLevel,touch=touchComposer();
-    if(!await act('mode',{mode})||currentLevel!==levelId||!$('level-dialog').open)return;
-    if(shouldStartGuide() && !(mobileLayout() && contentPanel))await act('start');
-    else if(!touch && !touchComposer())$('chat-input').focus();
+    rememberView();contentPanel=false;
+    if(mode!==chatMode()){
+      guideAsking=false;
+      if(busy){
+        pendingViewMode={levelId,mode};restoreConversationDraft();renderLevel();restorePanelScroll();
+      }else{
+        const saving=act('mode',{mode});
+        restorePanelScroll();
+        if(!await saving || currentLevel!==levelId || !$('level-dialog').open)return;
+      }
+    }else {renderMobileControls();restorePanelScroll();}
+    if(contentPanel || chatMode()!==mode)return;
+    if(shouldStartGuide()){
+      if(busy)deferredOpening=levelId;
+      else await act('start');
+    }else if(!touch && !touchComposer() && !busy)$('chat-input').focus();
   }
   $('mobile-content').addEventListener('click',()=>{
-    contentPanel=true;
-    renderMobileControls();
+    rememberView();contentPanel=true;guideAsking=false;
+    renderMobileControls();restorePanelScroll();
   });
-  for (const mode of ['guide','chat']) {
-    $('mobile-'+mode).addEventListener('click',async ()=>{
-      contentPanel=false;
-      renderMobileControls();
-      if(mode!==chatMode())await switchMode(mode);
-      else if(!busy && shouldStartGuide())await act('start');
-    });
+  for (const mode of ['guide','chat']){
+    $('mobile-'+mode).addEventListener('click',()=>switchMode(mode));
   }
   for(const id of ['undo-map','undo-level','mobile-undo'])$(id).addEventListener('click',()=>withdrawMessage());
   for(const id of ['save-game','save-game-level','save-game-dialog'])$(id).addEventListener('click',()=>saveAction('save_create'));
@@ -1167,12 +1573,23 @@
   $('understand-all').addEventListener('click',()=>act('understand_all'));
   $('connection-check').addEventListener('click',()=>window.proof2gameBrowser?window.openProof2GameConnection():act('connection'));
   downloadSave($('export-current'),'/api/save/export');
-  window.addEventListener('storage',event=>{if(window.proof2gameBrowser&&(event.key===window.proof2gameBrowser.storageKey||event.key==='proof2game:deepseek-key'))request('/api/game').then(accept).catch(error=>notice('global-error',error.message));});
-  $('next-level').addEventListener('click',()=>{const {next}=levelStatus();const first=next || levels()[0];if(first){lastFocusedNode=first.id;openLevel(first.id,{fromMap:true});}});
+  window.addEventListener('ai-connection-change',event=>{
+    if(!state)return;
+    state.connection={...state.connection,...event.detail};
+    renderConnectionStatus();
+    schedulePrefetch();
+  });
+  window.addEventListener('storage',event=>{
+    const engine=window.proof2gameBrowser;
+    if(!engine)return;
+    engine.syncCredentials?.(event.key);
+    if(!event.key||event.key===engine.storageKey)request('/api/game').then(accept).catch(error=>notice('global-error',error.message));
+  });
+  $('next-level').addEventListener('click',()=>{const {next}=levelStatus();if(next)centerHouse(next.id);});
   function closeLevel(options={}) {
     if(!options.keepPending)pendingNavigation=null;
     clearTimeout(prefetchTimer);
-    if(currentLevel)conversationDrafts.set(currentLevel+':'+chatMode(),$('chat-input').value);
+    rememberView();guideAsking=false;
     $('level-dialog').close();
     if(options.historyMode!=='none'&&window.location.search){
       discardReferenceForward();
@@ -1185,7 +1602,7 @@
     if($('level-dialog').open)return;
     clearTimeout(prefetchTimer);
     const button=[...document.querySelectorAll('.level-node')].find(el=>el.dataset.levelId===lastFocusedNode);
-    button?.focus();schedulePrefetch();
+    button?.focus({preventScroll:true});schedulePrefetch();
   });
   const chatInput=$('chat-input');
   const sendButton=$('send-message');
@@ -1222,7 +1639,7 @@
     updateSendButton();
   }
   chatInput.addEventListener('compositionstart',()=>{
-    if(pendingPlayerTurn?.nextDraft)pendingPlayerTurn.nextDraft.edited=true;
+    if(pendingPlayerTurn?.nextDraft && currentLevel===pendingPlayerTurn.level_id && chatMode()==='chat')pendingPlayerTurn.nextDraft.edited=true;
     composing=true;
     imeEscapeUntil=0;
     selectionKeyDown=false;
@@ -1231,7 +1648,7 @@
   });
   chatInput.addEventListener('compositionend',endComposition);
   chatInput.addEventListener('input',event=>{
-    if(pendingPlayerTurn?.nextDraft)pendingPlayerTurn.nextDraft.edited=true;
+    if(pendingPlayerTurn?.nextDraft && currentLevel===pendingPlayerTurn.level_id && chatMode()==='chat')pendingPlayerTurn.nextDraft.edited=true;
     if(event.isComposing)composing=true;
     else if(composing && event.inputType==='insertFromComposition')endComposition();
     sizeComposerInput();
@@ -1275,7 +1692,10 @@
     const input=chatInput;const message=input.value.trim();if(!message || busy || saveBusy)return;
     if(needsBrowserKey()){window.openProof2GameConnection();return;}
     const levelId=currentLevel,mode=chatMode(),touchChat=touchComposer() && mode==='chat';
-    if(await act('message',{message}) && !touchChat && !(mode==='chat' && touchComposer()) && currentLevel===levelId && chatMode()===mode &&
+    if(mobileLayout() && mode==='guide'){
+      input.blur();guideAsking=false;renderMobileControls();
+    }
+    if(await act('message',{message}) && !(mobileLayout() && mode==='guide') && !touchChat && !(mode==='chat' && touchComposer()) && currentLevel===levelId && chatMode()===mode &&
        $('level-dialog').open && (!mobileLayout() || !contentPanel))input.focus();
   });
   document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(prefetchTimer);else schedulePrefetch();});

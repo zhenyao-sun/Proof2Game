@@ -19,6 +19,11 @@ from state import default_models
 
 
 TUTOR_MODEL, TUTOR_REASONING = default_models()["tutor"]
+BROWSER_FILES = (
+    'app.js', 'style.css', 'browser-entry.mjs', 'browser-engine.mjs',
+    'guide-diagram.mjs', 'level-tree.mjs', 'ai-connection.mjs', 'illustration-tools.mjs',
+    'save-store.mjs',
+)
 
 
 class Rejected(ValueError):
@@ -607,13 +612,14 @@ def site_digest(inventory):
 
 def browser_assets():
     runtime = Path(__file__).resolve().parents[1] / 'assets/game-runtime'
-    names = ['app.js', 'style.css', 'guide-diagram.mjs', 'level-tree.mjs', 'browser-entry.mjs', 'browser-engine.mjs']
-    assets = {name: (runtime / name).read_bytes() for name in names}
+    assets = {name: (runtime / name).read_bytes() for name in BROWSER_FILES}
+    repo = Path(__file__).resolve().parents[3]
+    assets['tutor.webp'] = (repo / 'docs/agents/tutor.webp').read_bytes()
     assets['index.html'] = (runtime / 'browser.html').read_bytes()
     release = (Path(__file__).resolve().parents[3] / 'VERSION').read_text(encoding='ascii').strip()
-    for name in ['index.html', 'browser-entry.mjs', 'browser-engine.mjs']:
+    for name in ['index.html', *BROWSER_FILES]:
         text = assets[name].decode('utf-8')
-        for dependency in names:
+        for dependency in (*BROWSER_FILES, 'tutor.webp'):
             text = text.replace('./' + dependency, './' + dependency + '?v=' + release)
         assets[name] = text.encode('utf-8')
     assets['.nojekyll'] = b''
@@ -672,8 +678,8 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
            model=TUTOR_MODEL, reasoning=TUTOR_REASONING, *, paper=None):
     if sys.platform != 'darwin':
         raise Rejected('Proof2Game generation is supported on macOS.')
-    if model not in ('deepseek-flash', 'deepseek-v4-pro'):
-        raise Rejected('Browser games require a supported DeepSeek tutor model.')
+    if model != 'deepseek-flash':
+        raise Rejected('Use deepseek-flash for a tutor that supports both tool calls and image review.')
     output = Path(output).resolve()
     if output.suffix.lower() == '.zip':
         raise Rejected('Output must be a new directory for the hosted game.')
@@ -685,8 +691,6 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     attribution = paper_metadata(record, paper)
     game, files, _ = make_game(main, approval, source_bindings, references_dir,
                                             translation=translation, model=model, reasoning=reasoning)
-    if model == 'deepseek-v4-pro' and game.get('images'):
-        raise Rejected('Use deepseek-flash for games with manuscript images; deepseek-v4-pro does not support them.')
     if attribution is not None:
         game['paper'] = attribution
     chinese_files = {'translation/zh/' + name: source.encode()
@@ -707,7 +711,7 @@ def export(main, output, approval=None, source_bindings=None, references_dir=Non
     release_license = script.parents[3] / 'LICENSE'
     if not release_license.is_file():
         raise Rejected('The Proof2Game release license is missing from the installation.')
-    required = ('browser-engine.mjs', 'browser-entry.mjs', 'guide-diagram.mjs', 'level-tree.mjs', 'browser.html', 'app.js', 'style.css', 'vendor/katex.min.js',
+    required = (*BROWSER_FILES, 'browser.html', 'vendor/katex.min.js',
                 'vendor/katex.min.css', 'vendor/auto-render.min.js', 'vendor/LICENSE-KaTeX.txt',
                 'vendor/fonts/OFL.txt')
     if not all((runtime / name).is_file() for name in required):

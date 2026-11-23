@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import {spawn, spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {createLevelTree} from './level-tree.mjs';
-import {diagramSchema, renderGuideDiagram, validGuideImage} from './guide-diagram.mjs';
+import {diagramSchema, renderGuideDiagram, validGuideImage, validSavedIllustrations} from './guide-diagram.mjs';
 
 const RUNTIME = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.PROOF2GAME_PAGES_DATA ? fs.realpathSync(process.env.PROOF2GAME_PAGES_DATA) : RUNTIME;
@@ -138,7 +138,7 @@ function validateProgress(value){
       if(!state||typeof state!=='object'||Array.isArray(state)||!Array.isArray(state.messages)||![null,'step','goal_confirmation','awaiting_continuation'].includes(state.phase)||state.draft!==undefined&&(typeof state.draft!=='string'||state.draft.length>30000))fail('Save has an invalid level.');
       if(state.messages.some(m=>!m||typeof m!=='object'||Array.isArray(m)||!['user','assistant'].includes(m.role)||typeof m.content!=='string'||m.phase!==undefined&&!['step','goal_confirmation'].includes(m.phase)||m.step_goal!==undefined&&typeof m.step_goal!=='string'||m.branch_complete!==undefined&&typeof m.branch_complete!=='boolean'))fail('Save has an invalid conversation.');
       for(const m of state.messages){
-        if(m.image!==undefined&&(m.role!=='assistant'||!validGuideImage(m.image)))fail('Save has an invalid illustration.');
+        if(!validSavedIllustrations(m)||m.image!==undefined&&(m.role!=='assistant'||!validGuideImage(m.image)))fail('Save has an invalid illustration.');
         if(m.before_phase!==undefined&&![null,'step','goal_confirmation'].includes(m.before_phase)||m.before_completed!==undefined&&(!Array.isArray(m.before_completed)||m.before_completed.some((id,i)=>id!==game.levels[i]?.id))||m.before_understanding_count!==undefined&&(!Number.isSafeInteger(m.before_understanding_count)||m.before_understanding_count<0||m.before_understanding_count>(state.understanding||[]).length)||m.turn_id!==undefined&&(typeof m.turn_id!=='string'||m.turn_id.length>200))fail('Save has invalid withdrawal metadata.');
       }
       // Historical nested metadata is retained as history, never as a pending agenda.
@@ -238,7 +238,7 @@ function persist(next){
     try{const fd=fs.openSync(ROOT,'r');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}}catch{}
   }catch(error){try{fs.unlinkSync(temporary);}catch{}throw error;}
 }
-const MAX_SAVE_BYTES=16*1024*1024;
+const MAX_REQUEST_BYTES=512*1024*1024;
 const savesDirectory=path.join(ROOT,'manual-saves');
 function localDirectory(target,create=false){
   if(!fs.existsSync(target)){if(create)fs.mkdirSync(target,{mode:0o700});else return false;}
@@ -254,7 +254,6 @@ function savedEnvelope(value,label='Manual save'){
   return {schema:1,kind:SAVE_FORMAT,game_id:game.id,snapshot_digest:game.snapshot_digest,created_at:new Date().toISOString(),label,progress:copy(value)};
 }
 function importProgress(value){
-  if(Buffer.byteLength(JSON.stringify(value))>MAX_SAVE_BYTES)fail('Save file is larger than 16 MiB.',413,'saveTooLarge');
   if(value?.kind===SAVE_FORMAT){
     if(value.schema!==1||value.game_id!==game.id||value.snapshot_digest!==game.snapshot_digest)fail('Save does not match this game snapshot.',400,'saveMismatch');
     value=value.progress;
@@ -269,7 +268,7 @@ function recordPath(id){
 function readRecord(id){
   const file=recordPath(id);
   if(!fs.existsSync(file))fail('This save was not found.',404,'saveMissing');
-  if(!fs.lstatSync(file).isFile()||fs.realpathSync(file)!==file||fs.statSync(file).size>MAX_SAVE_BYTES)fail('Invalid saved record.');
+  if(!fs.lstatSync(file).isFile()||fs.realpathSync(file)!==file)fail('Invalid saved record.');
   const record=json(file);
   if(record?.kind!==SAVE_FORMAT||typeof record.created_at!=='string'||!Number.isFinite(Date.parse(record.created_at))||typeof record.label!=='string'||record.label.length>150)fail('Invalid saved record.');
   importProgress(record);return record;
@@ -278,9 +277,9 @@ function listSaves(){
   if(!localDirectory(savesDirectory))return [];
   return fs.readdirSync(savesDirectory).filter(name=>/^[a-f0-9-]{36}\.json$/.test(name)).map(name=>{
     const id=name.slice(0,-5);
-    try{const record=readRecord(id);return {id,created_at:record.created_at,label:record.label||'Manual save',completed_count:record.progress.completed.length};}
+    try{const record=readRecord(id);return {id,created_at:record.created_at,label:record.label||'Manual save',completed_count:record.progress.completed.length,sequence:record.progress.revision};}
     catch(error){return {id,created_at:'',label:'Unreadable save (preserved)',completed_count:0,error:error.message};}
-  }).sort((a,b)=>b.created_at.localeCompare(a.created_at)||a.id.localeCompare(b.id));
+  }).sort((a,b)=>b.created_at.localeCompare(a.created_at)||(b.sequence||0)-(a.sequence||0)||a.id.localeCompare(b.id));
 }
 function cancelTurns(){
   discardPrepared();
@@ -293,32 +292,65 @@ function cancelTurns(){
   busy=false;
 }
 function saveAction(request,signature){
-  if(request.action==='save_create'){
+  const action=request.action;
+  const complete=(next,recovery)=>{
+    commitAction(next,request,signature,recovery);
+    return {...payload(),...(recovery?{save_recovery:recovery}:{})};
+  };
+  if(action==='save_create'){
     if(busy)fail('Wait for the current response before saving.',409);
     const label=request.label===undefined?'Manual save':request.label;
     if(typeof label!=='string'||!label.trim()||label.length>150)fail('Enter a save name of at most 150 characters.');
     localDirectory(savesDirectory,true);
-    const record=savedEnvelope(progress,label.trim());importProgress(record);
-    atomicJson(recordPath(crypto.randomUUID()),record);
-    return finishAction(copy(progress),request,signature);
+    const record=savedEnvelope(progress,label.trim());
+    if(request.label===undefined)record.label+=' · '+record.created_at;
+    importProgress(record);
+    const file=recordPath(crypto.randomUUID());
+    atomicJson(file,record);
+    try{return complete(copy(progress));}catch(error){fs.unlinkSync(file);throw error;}
   }
-  if(request.action==='save_delete'){
+  if(action==='save_delete'||action==='save_undelete'){
     if(busy)fail('Wait for the current response before changing saves.',409);
-    const file=recordPath(request.save_id);
-    if(!fs.existsSync(file))fail('This save was not found.',404,'saveMissing');
-    if(!fs.lstatSync(file).isFile()||fs.realpathSync(file)!==file)fail('Invalid saved record.');
     const trash=path.join(ROOT,'deleted-saves');localDirectory(trash,true);
-    fs.renameSync(file,path.join(trash,request.save_id+'-'+crypto.randomUUID()+'.json'));
-    return finishAction(copy(progress),request,signature);
+    let recovery,original,deleted;
+    if(action==='save_delete'){
+      const expires=Date.now()+12000;
+      recovery={id:expires+'-'+crypto.randomUUID(),action,expires_at:expires};
+      original=recordPath(request.save_id);
+      deleted=path.join(trash,request.save_id+'-'+recovery.id+'.json');
+    }else{
+      const token=request.recovery_id;
+      if(typeof token!=='string'||!/^\d{13}-[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(token)||
+          Number(token.slice(0,13))<=Date.now())fail('The time to undo this deletion has expired.',409,'undoExpired');
+      const name=fs.readdirSync(trash).find(name=>name.endsWith('-'+token+'.json'));
+      if(!name)fail('This save was not found.',404,'saveMissing');
+      original=recordPath(name.slice(0,36));deleted=path.join(trash,name);
+    }
+    const [from,to]=action==='save_delete'?[original,deleted]:[deleted,original];
+    if(!fs.existsSync(from))fail('This save was not found.',404,'saveMissing');
+    if(!fs.lstatSync(from).isFile()||fs.realpathSync(from)!==from||fs.existsSync(to))fail('Invalid saved record.');
+    fs.renameSync(from,to);
+    try{return complete(copy(progress),action==='save_delete'?recovery:null);}
+    catch(error){fs.renameSync(to,from);throw error;}
   }
-  // Validate completely before cancelling work, creating backups or replacing progress.
-  const candidate=importProgress(request.action==='save_load'?readRecord(request.save_id):request.save);
+  // Validate before interrupting any in-flight turn or replacing the current game.
+  const directory=path.join(ROOT,'recovery-saves');
+  let source;
+  if(action==='save_recover'){
+    if(typeof request.recovery_id!=='string'||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(request.recovery_id))fail('Invalid recovery identifier.');
+    localDirectory(directory);
+    const file=path.join(directory,request.recovery_id+'.json');
+    if(!fs.existsSync(file)||!fs.lstatSync(file).isFile()||fs.realpathSync(file)!==file)fail('This restore point is unavailable.',404,'saveMissing');
+    source=json(file);
+  }else source=action==='save_load'?readRecord(request.save_id):request.save;
+  const candidate=importProgress(source);
   if(bilingual)candidate.language=languageOf(progress);
-  const recovery=path.join(ROOT,'recovery-saves');localDirectory(recovery,true);
-  atomicJson(path.join(recovery,crypto.randomUUID()+'.json'),savedEnvelope(progress,'Before restore'));
+  localDirectory(directory,true);
+  const recovery={id:crypto.randomUUID(),action};
+  atomicJson(path.join(directory,recovery.id+'.json'),savedEnvelope(progress,'Before restore'));
   cancelTurns();
   candidate.recent_actions=[];candidate.revision=progress.revision;
-  return finishAction(candidate,request,signature);
+  return complete(candidate,action==='save_recover'?null:recovery);
 }
 let cliHealth={available:false,authenticated:false,message:'Checking local Codex…'};
 function isExecutable(candidate){
@@ -360,7 +392,7 @@ const tutorInstructions=`Only context.level identifies the active level. Use its
 
 An unconfirmed explanation is disposable: feedback calls for rethinking the approach, not a paused parent to replay. Do not assume the player read unmentioned content. Preserve only understanding the player actually confirms, at its expressed scope. Understanding is separate from agreement; respect criticism, preserve unresolved disagreement and continue. Later questions do not revoke prior understanding; only an explicit correction by the player changes it. Completed progress is never revoked. Necessary content still belongs to the level even when an old explanation is discarded.
 
-State the definitions needed for the explanation. Whenever helpful, write the actual equation or mathematical relation that connects the quantities, rather than describing where an unnamed piece appears. You may define a temporary symbol by an explicit equation, use it for the local argument, and return to the manuscript notation when done. Choose the teaching order and level of detail yourself.
+Aim to fit each small passage, its illustration or formulas, and the closing question on one portrait phone screen. Narrow the topic when needed. In step_goal ask one brief, specific question in the selected language about the passage (or the whole level at goal_confirmation). State the definitions needed for the explanation. Whenever helpful, write the actual equation or mathematical relation that connects the quantities, rather than describing where an unnamed piece appears. You may define a temporary symbol by an explicit equation, use it for the local argument, and return to the manuscript notation when done. Choose the teaching order and level of detail yourself.
 
 If a diagram helps explain this step, use it. ${diagramInstructions} Ask whether the player understands this step in step_goal as usual, including for a diagram without prose.
 
@@ -505,9 +537,9 @@ function undoTarget(){
   if(running&&!running.cancelled&&running.frame)return running.frame;
   return progress.undo_history.at(-1)||null;
 }
-function commitAction(next,request,signature){
+function commitAction(next,request,signature,recovery){
   next.revision=progress.revision+1;
-  if(request.request_id)next.recent_actions=[...next.recent_actions,{id:request.request_id,signature,revision:next.revision}].slice(-50);
+  if(request.request_id)next.recent_actions=[...next.recent_actions,{id:request.request_id,signature,revision:next.revision,...(recovery?{save_recovery:recovery}:{})}].slice(-50);
   persist(next);progress=next;
   // A confirmed click can consume the prediction for this same passage.
   if(['understand','mode','save_create','save_delete'].includes(request.action)&&preparedStep)preparedStep.revision=next.revision;
@@ -551,7 +583,7 @@ async function act(request){
   if(request.request_id!==undefined){
     if(typeof request.request_id!=='string'||request.request_id.length>100)fail('Invalid request identifier.');
     const previous=progress.recent_actions.find(item=>item.id===request.request_id);
-    if(previous){if(previous.signature!==signature)fail('Request identifier was reused for another action.',409);return payload();}
+    if(previous){if(previous.signature!==signature)fail('Request identifier was reused for another action.',409);return {...payload(),...(previous.save_recovery?{save_recovery:previous.save_recovery}:{})};}
   }
   if(!Number.isSafeInteger(request.expected_revision)||request.expected_revision!==progress.revision)fail('Progress changed in another request. Refresh and try again.',409,'progressChanged');
   if(request.action==='language'){
@@ -569,7 +601,7 @@ async function act(request){
     }
     return result;
   }
-  if(['save_create','save_load','save_delete','save_import'].includes(request.action))return saveAction(request,signature);
+  if(['save_create','save_load','save_delete','save_import','save_undelete','save_recover'].includes(request.action))return saveAction(request,signature);
   if(['undo_action','undo_message'].includes(request.action))return undoAction(request,signature);
   const mode=request.mode??chatMode(progress,request.level_id);
   if(!['guide','chat'].includes(mode))fail('Invalid conversation mode.');
@@ -692,8 +724,9 @@ const server=http.createServer(async(req,res)=>{
       }
       if(req.method==='POST'&&url.pathname==='/api/action'){
         if(req.headers.origin!==origin || !String(req.headers['content-type']||'').startsWith('application/json'))fail('Use the game page to send actions.',403);
-        let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>20*1024*1024)fail('Request is too large.',413);}
-        let request;try{request=JSON.parse(body);}catch{fail('Invalid JSON.');}
+        let size=0;const chunks=[];
+        for await(const chunk of req){size+=chunk.length;if(size>MAX_REQUEST_BYTES)fail('Request is too large.',413);chunks.push(chunk);}
+        let request;try{request=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{fail('Invalid JSON.');}
         send(200,await act(request));return;
       }
       fail('Unknown API route.',404);
@@ -720,8 +753,10 @@ const server=http.createServer(async(req,res)=>{
       if(req.method==='HEAD'){res.end();return;}
       fs.createReadStream(target,{start,end}).pipe(res);return;
     }
-    if(!snapshotImage&&!['index.html','app.js','style.css'].includes(relative)&&!/^vendor\/[A-Za-z0-9_./-]+\.(?:js|css|woff2?|ttf|svg|png)$/.test(relative))fail('File not found.',404);
-    const target=safePath(relative,snapshotImage?ROOT:RUNTIME);
+    if(!snapshotImage&&!['index.html','app.js','style.css','tutor.webp'].includes(relative)&&!/^vendor\/[A-Za-z0-9_./-]+\.(?:js|css|woff2?|ttf|svg|png)$/.test(relative))fail('File not found.',404);
+    const target=relative==='tutor.webp'
+      ? safePath('docs/agents/tutor.webp',path.resolve(RUNTIME,'../../../..'))
+      : safePath(relative,snapshotImage?ROOT:RUNTIME);
     res.writeHead(200,{'Content-Type':mime[path.extname(target)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",...(relative==='index.html'?{'Set-Cookie':`${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/`}:{})});
     if(req.method==='HEAD'){res.end();return;}fs.createReadStream(target).pipe(res);
   }catch(error){send(error.status||(error.code==='ENOENT'?404:500),{error:error.message,code:error.publicCode});}

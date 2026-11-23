@@ -1,5 +1,6 @@
 """Exercise the hosted website export boundary with real saveable artifacts."""
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -187,12 +188,22 @@ class GameExportTests(unittest.TestCase):
         manifest = json.loads((site / 'proof2game.json').read_bytes())
         self.assertEqual(manifest['paper'], public_game['paper'])
         self.assertEqual(manifest['launch_mode'], 'browser')
-        self.assertTrue((site / 'browser-engine.mjs').is_file())
+        for filename in game.BROWSER_FILES:
+            self.assertTrue((site / filename).is_file(), filename)
+        for filename in ('ai-connection.mjs', 'illustration-tools.mjs', 'save-store.mjs'):
+            self.assertTrue(any('./' + filename + '?v=' + manifest['connector'] in module.read_text()
+                                for module in site.glob('*.mjs')), filename)
+        portrait = Path(game.__file__).resolve().parents[3] / 'docs/agents/tutor.webp'
+        self.assertEqual((site / 'tutor.webp').read_bytes(), portrait.read_bytes())
         self.assertFalse((site / 'server.mjs').exists())
         self.assertFalse((site / 'launch.js').exists())
         for name, entry in manifest['files'].items():
             data = (site / name).read_bytes()
             self.assertEqual(entry, {'size': len(data), 'sha256': game.sha(data)})
+
+        if os.environ.get('PROOF2GAME_CHECK_BROWSERS') == '1':
+            subprocess.run(['node', Path(__file__).with_name('check_export_in_browsers.js'), site],
+                           check=True, timeout=180)
 
 
 if __name__ == '__main__':

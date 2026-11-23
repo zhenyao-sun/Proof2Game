@@ -75,34 +75,13 @@ export function createLevelTree(levels, fail) {
   for (const level of mapLevels) byId.set(level.id, level);
   validateParents();
 
-  // Preview only the existing entrances, paired proofs, and ancestors needed to connect them.
-  const visibleFrom = new Map();
-  for (const level of mapLevels) {
-    let from = position.get(level.id);
-    if (level.type === 'proof') from = Math.min(from, position.get(level.paired));
-    if (level.type === 'convention') {
-      const owner = statementOwner(level);
-      if (owner) from = Math.min(from, position.get(owner.id));
-    }
-    if (level.type === 'statement') {
-      const entrance = byId.get(level.parent);
-      if (entrance?.type === 'convention' && entrance.owner === level.id) {
-        from = Math.min(from, position.get(entrance.id));
-      }
-    }
-    let id = level.id;
-    while (id && from < (visibleFrom.get(id) ?? Infinity)) {
-      visibleFrom.set(id, from);
-      id = byId.get(id).parent;
-    }
-  }
   function levelStatus(progress, id) {
     if (!position.has(id)) fail('Unknown level.', 404);
     const index = position.get(id);
     const completed = progress.completed.length; // Both engines validate the saved prefix.
     if (index < completed) return 'complete';
     if (index === completed) return 'open';
-    return visibleFrom.get(id) <= completed ? 'locked' : 'hidden';
+    return 'hidden';
   }
   return {levels: mapLevels, byId, levelStatus};
 }

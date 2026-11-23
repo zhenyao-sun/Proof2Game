@@ -4,7 +4,8 @@ const assets=path.resolve(__dirname,'../assets/game-runtime');
 const source=fs.readFileSync(path.join(assets,'app.js'),'utf8');
 const katex=require(path.join(assets,'vendor/katex.min.js'));
 class Node{
- constructor(tag,text=''){this.tag=tag;this.children=[];this._text=text;this.attributes={};}
+ constructor(tag,text=''){this.tag=tag;this.children=[];this._text=text;this.attributes={};this.listeners={};this.dataset={};}
+ addEventListener(type,fn){this.listeners[type]=fn;}
  append(...children){this.children.push(...children);}
  replaceChildren(){this.children=[];this._text='';}
  set textContent(value){this._text=String(value);this.children=[];}
@@ -108,7 +109,7 @@ const layoutContext = {
  document:{querySelectorAll:()=>[frame]}, requestAnimationFrame:fn=>fn(), mobileLayout:()=>phone, t:key=>key,
 };
 vm.createContext(layoutContext);
-vm.runInContext(source.slice(source.indexOf('  let equationCheckPending'),source.indexOf('  function renderMobileControls')), layoutContext);
+vm.runInContext(source.slice(source.indexOf('  function updateFormulaEdges'),source.indexOf('  function renderMobileControls')), layoutContext);
 function checkScrollHint(width, expected){
  scrollBox.clientWidth=width;
  layoutContext.scheduleEquationCheck();
@@ -121,6 +122,36 @@ checkScrollHint(220,true);
 checkScrollHint(380,false);
 checkScrollHint(0,false);
 checkScrollHint(220,true);
+context.updateFormulaEdges=layoutContext.updateFormulaEdges;
+for(const text of ['See $x+y$.',String.raw`See \[x+y\].`]){
+ const formulaFrame=all(render(text),node=>node.className?.split(' ').includes('equation-frame'))[0];
+ const box=formulaFrame.children[0];
+ Object.assign(box,{clientWidth:220,scrollWidth:380,scrollLeft:0});
+ for(const [pos,left,right] of [[0,'false','true'],[40,'true','true'],[160,'true','false']]){
+  box.scrollLeft=pos;box.listeners.scroll();
+  assert.deepEqual([formulaFrame.dataset.fadeLeft,formulaFrame.dataset.fadeRight],[left,right]);
+  checks++;
+ }
+ box.clientWidth=380;box.scrollLeft=0;box.listeners.scroll();
+ assert.deepEqual([formulaFrame.dataset.fadeLeft,formulaFrame.dataset.fadeRight],['false','false']);
+ checks++;
+}
 phone=false;
 checkScrollHint(220,false);
+// Stored paragraph indices refer to the original reply, including when TeX
+// lists expand into multiple display blocks or a formula spans blank lines.
+context.illustrationButton=(url,alt)=>Object.assign(new Node('button',alt),{url});
+const imageAt=(after_paragraph,alt)=>({after_paragraph,alt,data_url:'data:image/png;base64,AA=='});
+const mixed=render('\n  '+String.raw`\begin{enumerate}\item Up\item Down\end{enumerate}`+'\n\nThe shared point $z$.\n\nConclusion.',{
+ images:[imageAt(0,'Directions'),imageAt(1,'Intersection $z$')],
+});
+const order=mixed.children.filter(node=>node.tag==='figure'||node.tag==='span'&&node.textContent.trim()).map(node=>node.tag==='figure'?node.children[0].textContent:node.textContent.trim());
+assert.deepEqual(order,['1. Up','2. Down','Directions','The shared point .','Intersection $z$','Conclusion.']);checks++;
+assert.equal(all(mixed,node=>node.tag==='figcaption').length,2);checks++;
+const equationPictures=render('\\[x\n\n+y\\]\n\nEnd.',{images:[imageAt(0,'x plus y')]});
+assert.equal(all(equationPictures,node=>node.tag==='figure').length,1);
+assert(all(equationPictures,node=>Boolean(node.math))[0].math.includes('x'));
+assert(!/[\uE104\uE105]/.test(equationPictures.textContent));checks++;
+const imageOnly=render('',{images:[imageAt(0,'An orbit')]});
+assert.equal(all(imageOnly,node=>node.tag==='figure').length,1);checks++;
 console.log(JSON.stringify({ok:true,rendering_cases:checks,actual_katex_fragments:formulaCount}));
