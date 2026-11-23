@@ -251,11 +251,19 @@ async function exerciseMobileChatReply(){
  const sent=()=>calls.filter(call=>call.action==='message'&&call.mode==='chat');
  const begin=async message=>{
    input.focus();await type(message);
-   const pointer={pointerType:'touch',button:0,preventDefault(){this.defaultPrevented=true;}};
+   const primaryDown=()=>({button:0,defaultPrevented:false,preventDefault(){this.defaultPrevented=true;}});
+   const pointer={...primaryDown(),pointerType:'touch'};
    await send.fire('pointerdown',pointer);
-   if(!pointer.defaultPrevented)send.focus();
+   assert.equal(pointer.defaultPrevented,false,'native touch activation can proceed to the Send click');
+   const mouse=primaryDown();
+   await send.fire('mousedown',mouse);
+   if(!mouse.defaultPrevented)send.focus();
+   const count=sent().length;
    slowReply=new Promise(resolve=>releaseReply=resolve);
+   assert.equal(send.disabled,false);
+   await send.click();
    const pending=submit();await settle();
+   assert.equal(sent().length,count+1,'a single Send activation posts one player message');
    assert.equal(sent().at(-1).message,message);
    assert.equal(input.disabled,false,'the next chat draft stays editable while waiting for a reply');
    assert.equal(document.activeElement,input,'tapping Send keeps the active mobile editor focused');

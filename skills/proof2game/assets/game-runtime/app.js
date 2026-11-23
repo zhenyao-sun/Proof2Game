@@ -979,7 +979,7 @@
     button.title=label;button.setAttribute('aria-label',label);button.disabled=undoBusy;
     const icon=svgEl('svg',{viewBox:'0 0 24 24',width:17,height:17,'aria-hidden':'true'});
     icon.append(svgEl('path',{d:'M9 5 4 10l5 5M4 10h10a6 6 0 0 1 0 12',fill:'none',stroke:'currentColor','stroke-width':1.8,'stroke-linecap':'round','stroke-linejoin':'round'}));
-    button.append(icon);button.addEventListener('pointerdown',keepChatEditorFocused);
+    button.append(icon);button.addEventListener('mousedown',keepChatEditorFocused);
     button.addEventListener('click',()=>withdrawMessage(targetId));return button;
   }
   function undoTarget(){
@@ -1562,10 +1562,11 @@
   const chatInput=$('chat-input');
   const sendButton=$('send-message');
   function keepChatEditorFocused(event){
-    // The touch keyboard stays attached to its editor. The button's click still runs.
+    // Cancel the mouse focus transfer without cancelling the touch pointer sequence.
+    // WebKit uses that sequence to activate Send and Undo.
     if(touchComposer() && chatMode()==='chat' && document.activeElement===chatInput && event.button===0)event.preventDefault();
   }
-  for(const button of [sendButton,$('mobile-undo'),$('undo-level')])button.addEventListener('pointerdown',keepChatEditorFocused);
+  for(const button of [sendButton,$('mobile-undo'),$('undo-level')])button.addEventListener('mousedown',keepChatEditorFocused);
   let composing=false;
   let selectionKeyDown=false;
   let commitEnterUntil=0;
