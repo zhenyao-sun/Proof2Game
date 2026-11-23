@@ -29,8 +29,10 @@ export async function generateBailianUrl({fetcher, key, signal, prompt}) {
 }
 
 export async function generateBailianImage(options) {
+  // Safari's native fetch rejects an options object as its receiver.
+  const {fetcher, signal} = options;
   const url = await generateBailianUrl(options);
-  const response = await options.fetcher(url,{credentials:'omit',redirect:'error',referrerPolicy:'no-referrer',signal:options.signal});
+  const response = await fetcher(url,{credentials:'omit',redirect:'error',referrerPolicy:'no-referrer',signal});
   if (!response.ok) throw new Error('The generated image could not be downloaded.');
   const bytes = new Uint8Array(await response.arrayBuffer());
   // z-image-turbo supplies PNG. Never admit executable documents or a remote URL into a save.

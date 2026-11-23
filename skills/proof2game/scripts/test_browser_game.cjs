@@ -397,6 +397,22 @@ function drawReply(number){
 }
 function imageReply(){return Response.json({output:{choices:[{message:{content:[{image:resultUrl}]}}]}});}
 
+test('Bailian downloads the generated PNG with a Safari-compatible fetch receiver',async()=>{
+  const {generateBailianImage}=await import(new URL('illustration-tools.mjs',moduleURL));
+  const requests=[];
+  async function nativeFetch(url,init){
+    'use strict';
+    if(this!==undefined && this!==globalThis)throw new TypeError('Can only call Window.fetch on instances of Window');
+    requests.push(url);
+    if(init.method==='POST')return imageReply();
+    assert.equal(init.headers,undefined);
+    return new Response(Buffer.from(testImage,'base64'));
+  }
+  const image=await generateBailianImage({fetcher:nativeFetch,key:'fixture',signal:new AbortController().signal,prompt:'Draw a circle.'});
+  assert.deepEqual(requests,['https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',resultUrl]);
+  assert.equal(image,'data:image/png;base64,'+testImage);
+});
+
 test('prefetch only plans, actual review receives image bytes, and selected placements survive export',async()=>{
   let deep=0,draws=0,downloads=0;const drawsWhenPaused=[];
   const f=await setup({onMissingKey:()=>drawsWhenPaused.push(draws),fetcher:async(url,options)=>{
