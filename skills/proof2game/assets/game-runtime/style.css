@@ -356,3 +356,15 @@
   .map-toolbar .primary-button{font-size:13px;min-height:42px;padding:7px 15px}
   #map-scroll{height:clamp(320px,64svh,740px)}
 }
+
+/* A portrait viewport may lose several rows to a wrapped byline or connection
+   controls. Give the map the actual remaining height, including on iOS Safari. */
+@media(max-width:760px) and (orientation:portrait){
+  body{display:flex;flex-direction:column;height:100svh}
+  body>.topbar{width:100%;margin:0;flex:none}
+  body>main{display:flex;flex:1 0 auto;flex-direction:column;width:100%;margin:0;
+    padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  main>.garden{display:flex;flex:1 0 auto;flex-direction:column}
+  .garden>.map-toolbar{flex:none}
+  #map-scroll{height:auto;min-height:230px;flex:1 0 230px}
+}
