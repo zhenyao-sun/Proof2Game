@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Internal Proof2Game writer delivery checks. Model judgments stay with the writer."""
+"""Build unpublished papers and verify Proof2Game delivery bundles."""
 
 import argparse
 from datetime import date
@@ -16,6 +16,7 @@ import tempfile
 
 HUMANIZER = "blader/humanizer@v4.0.0"
 HUMANIZER_SHA256 = "804a119e924ac30295b298213e0b71b3e38b2667b8ef4fb7b69e9246369b9045"
+PAPER_SCHEMA = 5
 
 
 class Rejected(ValueError):
@@ -115,7 +116,7 @@ def applicable_inputs(kind, main=None, target=None, withdrawal=None):
     require(approval.get("project_type") == project_type, f"The {kind} delivery requires a {project_type} project.")
     inputs = {"kind": kind, "snapshot_digest": approval["snapshot_digest"], "targets": targets}
     if kind == "paper":
-        require(target is None, "Write the paper from the approved snapshot.")
+        require(target is None, "A paper delivery uses the approved script binding without a public target record.")
         return inputs
 
     require(target is not None, "Referee reports require the exact target version record.")
@@ -166,16 +167,6 @@ def source_files(directory):
     return files
 
 
-def check_paper_identity(files):
-    import manuscript
-
-    forbidden = re.compile(r"\\author\b(?!\s*\{\s*\})|\bpdfauthor\s*=(?!\s*\{\s*\})")
-    for name, data in files.items():
-        if Path(name).suffix in {".tex", ".sty", ".cls", ".ltx"}:
-            require(not forbidden.search(manuscript.uncomment(data.decode("utf-8"))),
-                    f"Omit author declarations from the authorless paper in {name}.")
-
-
 def run_latex(source, main, build, engine):
     invocation = {
         "pdflatex": ("-pdf", "-pdflatex"),
@@ -183,24 +174,23 @@ def run_latex(source, main, build, engine):
         "xelatex": ("-xelatex", "-pdfxelatex"),
     }
     option, executable = invocation[engine]
+    engine_flags = "--safer --nosocket " if engine == "lualatex" else ""
     command = [
-        "latexmk", "-norc", option, f"{executable}={engine} -no-shell-escape %O %S",
-        "-recorder", "-halt-on-error", "-interaction=nonstopmode", "-bibtex-",
+        "latexmk", "-norc", option, f"{executable}={engine} -no-shell-escape {engine_flags}%O %S",
+        "-recorder", "-halt-on-error", "-interaction=nonstopmode",
         f"-outdir={build}", f"./{main}",
     ]
     environment = os.environ.copy()
-    environment.update(openin_any="p", openout_any="p", TEXINPUTS="")
+    environment.update(openin_any="p", openout_any="p", TEXINPUTS="", BIBINPUTS="", BSTINPUTS="")
     build.mkdir()
+    if engine == "lualatex":
+        # LuaTeX opens installed Unicode tables by absolute path during startup.
+        environment.update(openin_any="r", TEXMFCACHE=str(build))
     log_path = build / "build.log"
     with log_path.open("xb") as log:
         result = subprocess.run(command, cwd=source, env=environment, stdout=log, stderr=subprocess.STDOUT)
     require(result.returncode == 0, f"Compilation failed. See {log_path}.")
 
-    transcript = (build / Path(main).with_suffix(".log")).read_text(encoding="utf-8", errors="replace")
-    unresolved = re.search(r"(?:LaTeX|Package \S+) Warning:.*(?:undefined|multiply defined)"
-                           r"|Label\(s\) may have changed|Rerun to get cross-references right",
-                           transcript, re.IGNORECASE)
-    require(not unresolved, f"Resolve unstable or missing cross-references in {build}.")
     return build / Path(main).with_suffix(".pdf")
 
 
@@ -211,12 +201,15 @@ def check_local_resources(source, build, main):
     require(path and Path(path).is_absolute(), "Cannot locate the system TeX distribution.")
     system = Path(path).resolve(strict=True)
     require(system != Path("/") and system.is_dir(), "Cannot identify a bounded system TeX installation.")
-    recorder = build / Path(main).with_suffix(".fls")
-    for line in recorder.read_text(encoding="utf-8", errors="replace").splitlines():
-        if line.startswith("INPUT "):
-            path = (source / line[6:]).resolve()
-            require(any(path.is_relative_to(root) for root in (source, build, system)),
-                    f"Copy the dependencies of the Writer source locally. External input: {path}")
+    recorder = (build / Path(main).with_suffix(".fls")).read_text(encoding="utf-8", errors="replace")
+    inputs = {line[6:] for line in recorder.splitlines() if line.startswith("INPUT ")}
+    # The TeX recorder omits dependencies opened by BibTeX and Biber.
+    database = (build / Path(main).with_suffix(".fdb_latexmk")).read_text(encoding="utf-8", errors="replace")
+    inputs.update(re.findall(r'^  "([^"\n]+)" -?\d+(?:\.\d+)? -?\d+ ', database, re.MULTILINE))
+    for name in sorted(inputs):
+        path = (source / name).resolve()
+        require(any(path.is_relative_to(root) for root in (source, build, system)),
+                f"Copy the dependencies of the Writer source locally. External input: {path}")
 
 
 def pdf_bytes(path):
@@ -228,7 +221,6 @@ def pdf_bytes(path):
 def compile_delivery(kind, tex, bundle, engine, read_inputs):
     require(kind == "paper", "For a referee report use prepare with --markdown.")
     inputs = read_inputs()
-    guide = writing_guide()
     tex = Path(tex).resolve(strict=True)
     bundle = Path(bundle).resolve()
     require(tex.suffix == ".tex" and tex.is_file(), "Point --tex to the complete draft entrypoint.")
@@ -239,7 +231,6 @@ def compile_delivery(kind, tex, bundle, engine, read_inputs):
             "Choose a new delivery bundle beside, or outside, the draft source directory.")
 
     files = source_files(tex.parent)
-    check_paper_identity(files)
     staging = Path(tempfile.mkdtemp(prefix=f".{kind}-build-", dir=bundle.parent))
     source = staging / "source"
     for name, data in files.items():
@@ -256,8 +247,7 @@ def compile_delivery(kind, tex, bundle, engine, read_inputs):
     (staging / name).write_bytes(pdf)
     manifest = {file: digest(data) for file, data in files.items()}
     candidate = {
-        "schema": 4, "kind": kind, "snapshot_digest": inputs["snapshot_digest"],
-        "humanizer": guide["id"],
+        "schema": PAPER_SCHEMA, "kind": kind, "snapshot_digest": inputs["snapshot_digest"],
         "input_digest": record_digest(inputs), "source_digest": record_digest(manifest),
         "source_files": manifest, "entrypoint": tex.name, "pdf": name,
         "pdf_sha256": digest(pdf), "engine": engine,
@@ -298,12 +288,12 @@ def prepare_report(markdown, bundle, read_inputs):
 def current_candidate(kind, bundle, inputs):
     candidate = read_record(bundle / "candidate.json")
     schema = candidate.get("schema")
-    require((schema in (1, 2, 4) if kind == "paper" else schema in (1, 2, 3))
+    require((schema in (1, 2, 4, PAPER_SCHEMA) if kind == "paper" else schema in (1, 2, 3))
             and candidate.get("kind") == kind
             and candidate.get("snapshot_digest") == inputs["snapshot_digest"]
             and candidate.get("input_digest") == record_digest(inputs),
             "Candidate belongs to a different delivery or input version.")
-    if schema >= 2:
+    if schema in (2, 3, 4):
         require(candidate.get("humanizer") == HUMANIZER, "Candidate writing guide differs from the selected version.")
     if schema == 3:
         import referee_markdown
@@ -393,12 +383,17 @@ def check_evidence(checks, inputs, candidate):
 def finish_delivery(kind, bundle, checks, read_inputs):
     inputs = read_inputs()
     candidate = current_candidate(kind, bundle, inputs)
-    current_schema = 3 if kind == "referee" else 4
+    current_schema = 3 if kind == "referee" else PAPER_SCHEMA
     require(candidate["schema"] == current_schema or (bundle / "receipt.json").is_file(),
             "Prepare the unfinished legacy draft in a fresh bundle under the current Writer instructions.")
-    evidence = read_record(checks)
-    check_evidence(evidence, inputs, candidate)
-    receipt = candidate | {"checks": evidence}
+    receipt = candidate
+    if candidate["schema"] == PAPER_SCHEMA:
+        require(checks is None, "Unpublished paper delivery uses the compiled bundle without Writer self-checks.")
+    else:
+        require(checks is not None, "This delivery requires --checks.")
+        evidence = read_record(checks)
+        check_evidence(evidence, inputs, candidate)
+        receipt = candidate | {"checks": evidence}
     path = bundle / "receipt.json"
     # Link a complete receipt into place atomically. A retry after a completed
     # write can return the same receipt without overwriting a durable check.
@@ -420,7 +415,10 @@ def verify_delivery(kind, bundle, read_inputs):
     receipt = read_record(bundle / "receipt.json")
     require(all(receipt.get(key) == value for key, value in candidate.items()),
             "Final receipt does not match the current checked candidate.")
-    check_evidence(receipt.get("checks"), inputs, candidate)
+    if candidate["schema"] == PAPER_SCHEMA:
+        require(receipt == candidate, "Paper receipt must match the compiled bundle.")
+    else:
+        check_evidence(receipt.get("checks"), inputs, candidate)
     return receipt
 
 
@@ -437,7 +435,7 @@ def main(argv=None):
     source.add_argument("--markdown", type=Path, help="Standalone Markdown referee report")
     parser.add_argument("--bundle", type=Path, help="Writer's versioned build directory")
     parser.add_argument("--engine", choices=("pdflatex", "lualatex", "xelatex"), default="pdflatex")
-    parser.add_argument("--checks", type=Path, help="Actual Writer self-check evidence JSON")
+    parser.add_argument("--checks", type=Path, help="Referee self-check or historical delivery evidence JSON")
     args = parser.parse_args(argv)
 
     def read_inputs():
@@ -446,10 +444,10 @@ def main(argv=None):
     try:
         if args.action == "inspect":
             result = read_inputs()
-            result["writing_guide"] = writing_guide()
-            template = "writer-paper.tex" if args.kind == "paper" else "writer-referee.md"
-            result["template"] = str(Path(__file__).resolve().parents[1] / "assets" / template)
-            if args.kind == "paper":
+            if args.kind == "referee":
+                result["writing_guide"] = writing_guide()
+                result["template"] = str(Path(__file__).resolve().parents[1] / "assets/writer-referee.md")
+            else:
                 import manuscript
 
                 clean, full, (prefix, body, _, _), resources = manuscript.read_assembly(args.main)
@@ -466,7 +464,6 @@ def main(argv=None):
                 require(args.tex is not None, "compile requires --tex.")
                 result = compile_delivery(args.kind, args.tex, args.bundle, args.engine, read_inputs)
             elif args.action == "finish":
-                require(args.checks is not None, "finish requires --checks.")
                 result = finish_delivery(args.kind, args.bundle, args.checks, read_inputs)
             else:
                 result = verify_delivery(args.kind, args.bundle, read_inputs)

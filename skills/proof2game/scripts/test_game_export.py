@@ -58,6 +58,35 @@ class GameExportTests(unittest.TestCase):
         with self.assertRaisesRegex(game.Rejected, 'route'):
             game.eligibility(self.main)
 
+    def test_retained_paper_input_cannot_authorize_game_export(self):
+        record, _ = self.approve()
+        record.update(project_type='unpublished', cutoff=None, purpose='paper-input')
+        self.approval.write_text(json.dumps(record))
+        with self.assertRaisesRegex(game.Rejected, 'not a game delivery approval'):
+            game.eligibility(self.main)
+
+    def test_export_retains_result_boundaries_in_both_languages(self):
+        component = self.script / 'components/lower-bound.tex'
+        component.write_text(component.read_text() + '\nThe bound is attained at zero.\n')
+        record, full = self.approve()
+        translation = self.translation(record, full)
+        name = 'components/lower-bound.tex'
+        translation['files'][name] = (translation['files'][name]
+            .replace('We first bound the quadratic term in the expression.', '先估计二次项。')
+            .replace('The bound is attained at zero.', '在零点取等号。'))
+        exported, _, _ = game.make_game(self.main, translation=translation, verify_numbering=False)
+        level = next(level for level in exported['levels'] if level['id'] == 'lower-bound')
+        self.assertEqual(level['result_sections'], [
+            'We first bound the quadratic term in the expression.',
+            r'If \(x\geq 0\), then \(x^2\geq 0\).',
+            'The bound is attained at zero.',
+        ])
+        self.assertEqual(exported['chinese']['levels']['lower-bound']['result_sections'][::2],
+                         ['先估计二次项。', '在零点取等号。'])
+        translation['files'][name] = translation['files'][name].replace(r'\end{MSresult}', '')
+        with self.assertRaisesRegex(game.Rejected, 'retain the formal result'):
+            game.make_game(self.main, translation=translation, verify_numbering=False)
+
     def test_proofs_branch_to_declared_children_in_manuscript_play_order(self):
         components = self.script / 'components'
         for name in ('outer-setting', 'inner-setting', 'upper-bound', 'upper-bound-proof'):
@@ -68,7 +97,7 @@ class GameExportTests(unittest.TestCase):
         self.main.write_text(prefix + r'''\section{Detailed Proofs}
 \MSnode{main}{1}
 \MScomponent{outer-setting}{convention}{components/outer-setting.tex}{}{}{}
-\MScomponent{lower-bound}{statement}{components/lower-bound.tex}{lower-bound-proof}{Lemma}{A nonnegative square}
+\MSstatement{lower-bound}{components/lower-bound.tex}{lower-bound-proof}{Lemma}{A nonnegative square}
 \MScomponent{upper-bound}{statement}{components/upper-bound.tex}{upper-bound-proof}{Lemma}{}
 \MScomponent{main-proof}{proof}{components/main-proof.tex}{main}{}{}
 \MSnode{lower-bound}{}

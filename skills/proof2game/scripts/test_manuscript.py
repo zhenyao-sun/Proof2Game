@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import manuscript
 
@@ -42,7 +43,7 @@ class ManuscriptTest(unittest.TestCase):
         )
 
     def add_retired_branch(self):
-        self.insert(r'\MScomponent{lower-bound}{statement}', r'''
+        self.insert(r'\MSstatement{lower-bound}', r'''
 \MScomponent{retired}{statement}{components/retired.tex}{retired-proof}{Lemma}{}
 ''')
         self.insert(r'\MSnode{lower-bound}{}', r'''
@@ -121,7 +122,7 @@ class ManuscriptTest(unittest.TestCase):
 
     def test_detects_gap_without_confusing_local_paired_formula_for_dependency(self):
         target = self.root / 'components/main.tex'
-        target.write_text(r'\begin{equation}x=1\label{eq:main}\end{equation}')
+        target.write_text(r'\begin{MSresult}\begin{equation}x=1\label{eq:main}\end{equation}\end{MSresult}')
         proof = self.root / 'components/main-proof.tex'
         proof.write_text(proof.read_text() + r' To prove \eqref{eq:main}, use \MSgap{an actual argument}.')
         clean, full = manuscript.parse(self.main)
@@ -154,6 +155,16 @@ class ManuscriptTest(unittest.TestCase):
         with self.assertRaisesRegex(manuscript.Invalid, 'new or empty'):
             manuscript.materialize_snapshot(self.main, destination)
 
+    def test_explicit_result_boundary_is_required_and_unique(self):
+        target = self.root / 'components/main.tex'
+        for body in ('Prose only.', r'\begin{MSresult}\end{MSresult}',
+                     r'\begin{MSresult}First.\end{MSresult}\begin{MSresult}Second.\end{MSresult}',
+                     r'\begin{quote}\begin{MSresult}First.\end{MSresult}\end{quote}'):
+            with self.subTest(body=body):
+                target.write_text(body)
+                with self.assertRaisesRegex(manuscript.Invalid, 'main: .*MSresult'):
+                    manuscript.parse(self.main)
+
     @unittest.skipUnless(shutil.which('pdflatex'), 'requires local TeX')
     def test_rendered_navigation_after_filtering(self):
         try:
@@ -163,11 +174,25 @@ class ManuscriptTest(unittest.TestCase):
                 self.skipTest('requires PDF text extraction')
         self.add_second_root()
         self.add_retired_branch()
-        numbers = manuscript.verify_numbering(self.main)
+        component = self.root / 'components/lower-bound.tex'
+        component.write_text(component.read_text() + '\nThe bound is attained at zero.\n')
+        rendered = []
+        extract_text = manuscript.pdf_text
+
+        def capture(path):
+            rendered.append(' '.join(extract_text(path).split()))
+            return rendered[-1]
+
+        with patch.object(manuscript, 'pdf_text', side_effect=capture):
+            numbers = manuscript.verify_numbering(self.main)
+        self.assertEqual(numbers['ms:lower-bound'], '2.1')
         self.assertEqual(numbers['ms:second'], '1.2')
         self.assertEqual(numbers['proof:main-proof'], '2.1')
         self.assertEqual(numbers['proof:lower-bound-proof'], '2.1.1')
         self.assertNotIn('proof:retired-proof', numbers)
+        self.assertRegex(rendered[0], r'We first bound the quadratic term in the expression\. '
+                         r'Lemma 2\.1 .*?The proof of Lemma 2\.1 is given in Subsubsection 2\.1\.1\. '
+                         r'The bound is attained at zero\.')
 
 
 if __name__ == '__main__':

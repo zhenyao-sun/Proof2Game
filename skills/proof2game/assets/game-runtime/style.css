@@ -20,6 +20,8 @@
 @media(max-width:760px){.level-layout{grid-template-columns:minmax(0,1fr)}.original-text{max-height:none}.goal-panel{max-height:29vh}.message-body{font-size:13px}}
 
 .prose-run{margin:0}.paragraph-break{height:.8em}
+.formal-statement{border-inline-start:2px solid currentColor;padding-inline-start:.8em}
+.statement-prose + .formal-statement,.proof-location + .statement-prose,.formal-statement + .statement-prose{margin-top:.8em}
 
 .local-step-goal{margin-top:14px;padding:10px 13px;border-left:3px solid #a6ba86;background:#f0f4e8;border-radius:0 7px 7px 0;font-size:12px;line-height:1.8}
 

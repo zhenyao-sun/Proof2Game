@@ -146,14 +146,22 @@ changes using the same workflow. Never reinitialize around an existing legacy le
 
 ## Delivery
 
-After `advance` at a guided approval, read `state.delivery`: the same immutable filtered
-`main.tex` and adjacent `approval.json` supply both downstream workers. No currently
-discarded material is copied by the snapshot projector. Public approvals schedule both
-`game` and `referee`, with `referee_comparison: true` binding Writer's comparison of
-the snapshot to the preserved original. Confirmed original-text findings are included
-when present. Unpublished approvals schedule `game` and `paper`. Report-only withdrawal has
-`snapshot_digest:null` and a distinct withdrawal certificate; it authorizes only Writer's
-public referee report. No game/paper is generated for the unpublished last-target branch.
+After `advance` at a guided approval, read `state.delivery`. Its immutable filtered
+`main.tex` and `approval.json` supply the game and the applicable public referee
+report. Public approvals schedule both `game` and `referee`. Their
+`referee_comparison: true` binds the referee comparison to the preserved original,
+and confirmed original-text findings are included when present. Report-only
+withdrawal has `snapshot_digest: null` and a distinct certificate that authorizes
+the public referee report. The unpublished last-target branch ends without a game
+or paper.
+
+Unpublished approvals schedule `game` and `paper`. For the paper, use
+`state.delivery.paper_approval_path` and its adjacent `main.tex` as the retained
+approved script input. Earlier approvals without this field use `approval_path`
+and its adjacent `main.tex`. Follow the [paper handoff](writer.md#complete-paper)
+to provide the other materials to the independent Writer. The paper receipt
+binds exact delivered files and the script input it received. The coordinator checks
+compilation and file completeness.
 
 Submit `deliverable` for each product (`game`, `paper`, or `referee`) with the exact
 `snapshot_digest` (including null for withdrawal), its `kind`, `status`, and `evidence`.
@@ -164,11 +172,19 @@ products are delivered. Independent output problems block only the affected prod
 
 For a user-requested replacement referee report on the same approval, finish and verify the new Writer bundle, then hand over its editable Markdown file. Record a `deliverable` for `kind: referee` with `status: replacement-delivered`, the usual snapshot, artifact, sha256 and verification evidence, the previous report's `previous_sha256`, and a `message_receipt` for the new handoff. This replaces the referee entry in one transaction and records its predecessor in history. Use a fresh bundle. The same operation works after the guided task has finished.
 
-For incidental substantial math concerns that affect multiple outputs, the
+For an incidental substantial math concern in the game or public referee report, the
 `incident` operation takes `kind` (`script` or `counterexample`), the exact current
 `snapshot_digest`, affected `components` when known, and specific `evidence`.
-It revokes the bound approval, records prior receipts for replacement notices, and
-reenters validation. A counterexample concern is first rechecked by the queued
-Fixer; the result is `confirmed`, `refuted`, or `blocked`, with any revised
-`report_findings`. A failed withdrawal ground can return to user refactor. Do not
-use a shared incident for a translation or other single-product correction.
+It revokes the affected approval, records prior receipts for replacement notices,
+and reenters validation. A counterexample concern is first rechecked by the queued
+Fixer. Its result is `confirmed`, `refuted`, or `blocked`, with any revised
+`report_findings`. A failed withdrawal ground can return to user refactor. Use the
+game production flow for translation corrections.
+
+During an unpublished game's shared-script incident, the current paper moves to
+`state.independent_paper`. Use its `approval_path`, adjacent `main.tex`,
+`snapshot_digest`, and `products.paper` to continue checking or delivering that
+paper under its original input. A replacement `state.delivery` covers the game.
+Complete the guided Goal after both applicable outputs have been delivered. Use
+a current verified script for a new paper or revision. The retained input remains
+available to check an already bound paper or its marked copy.

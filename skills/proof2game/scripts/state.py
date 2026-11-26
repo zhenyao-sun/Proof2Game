@@ -18,6 +18,7 @@ from intake import resolve_task_path
 import manuscript
 
 REVIEW_LIMIT = 10
+STATEMENT_EXPRESSION_POLICY = 1
 
 GATES = {
     "statement": ("expression", "self_contained", "mathematics", "sources", "reuse"),
@@ -121,6 +122,7 @@ def init(task, target, live, request):
     models = default_models()
     for role, value in request.get("models", {}).items():
         require(role in models and isinstance(value, list) and len(value) == 2, f"bad role configuration: {role}")
+        require(role != "paper_writer" or value == models[role], "the unpublished paper Writer model and effort are fixed")
         models[role] = [evidence(value[0]), evidence(value[1])]
     if entry != "refactor":
         check_identity(coordinator, models["coordinator"])
@@ -134,6 +136,7 @@ def init(task, target, live, request):
         "explored_digest": None, "route": None, "attempt": None, "checkpoints": [],
         "delivery": None, "superseded": [], "pause": None, "decision": None,
         "withdrawal": None,
+        "statement_expression_policy": STATEMENT_EXPRESSION_POLICY,
     }
     if entry == "refactor":
         pause(state, "manual-refactor", evidence(request.get("reason")))
@@ -227,6 +230,24 @@ def advance_review(state):
         role_action(state, "batcher", round=current["id"], issues=current["issues"], pending_source_tokens=list(actions))
 
 
+def refresh_statement_expression(state):
+    """An old statement pass did not require checking the formal environment."""
+    if state.get("statement_expression_policy", 0) >= STATEMENT_EXPRESSION_POLICY:
+        return False
+    state["statement_expression_policy"] = STATEMENT_EXPRESSION_POLICY
+    old_passes = {row["id"] for row in state["snapshot"]["components"] if row["type"] == "statement"}
+    recheck = old_passes & set(state["safe"])
+    if not recheck:
+        return False
+    state["safe"] = ordered(state, set(state["safe"]) - recheck)
+    for cid in recheck:
+        state["source_results"].pop(cid, None)
+    state["route"] = None
+    record(state, "statement-expression-policy", policy=STATEMENT_EXPRESSION_POLICY,
+           recheck=ordered(state, recheck))
+    return True
+
+
 def reopen_review(state):
     if state["phase"] not in ("batch", "fix"):
         return
@@ -241,6 +262,7 @@ def reopen_review(state):
 def dispatch(state, task):
     if state["phase"] != "dispatch" or state["actions"]:
         return
+    refresh_statement_expression(state)
     snapshot = state["snapshot"]
     todo = unsafe(state) & set(snapshot["cone"])
     if not state["round_serial"]:
@@ -447,6 +469,13 @@ def review_result(task, state, action, request):
     review = current["reviews"][cid]
     verdict = request.get("verdict")
     require(verdict in ("pass", "nonpass"), "expected pass or nonpass")
+    if action["gate"] == "expression" and verdict == "pass":
+        component = components(state["snapshot"])[cid]
+        if component["type"] == "statement":
+            text = confined(task, component["path"]).read_text(encoding="utf-8")
+            layout = manuscript.statement_layout(text, component.get("explicit_statement", False))
+            require(not layout["embedded_headings"],
+                    "Statement expression cannot pass with a bold Statement. or Comment. heading inside the formal result.")
     if (resolution := action.get("source_resolution")) and resolution["required"] and resolution["status"] == "unavailable":
         require(verdict == "nonpass", "reviewer must report missing indispensable evidence as nonpass")
     result = {"gate": action["gate"], "verdict": verdict, "evidence": evidence(request.get("evidence")),
@@ -667,7 +696,10 @@ def route_result(task, state, action, request):
             "route verdict incompatible with project type")
     state["route"] = result
     if verdict in ("pass", "no-simplification"):
-        state["phase"] = "approved" if state["entry"] == "guided" else "complete"
+        if refresh_statement_expression(state):
+            state["phase"] = "dispatch"
+        else:
+            state["phase"] = "approved" if state["entry"] == "guided" else "complete"
         return
     plan = evidence(request.get("plan"))
     checkpoint = ensure_checkpoint(task, state)
@@ -716,6 +748,7 @@ def ensure_checkpoint(task, state):
     files = live_files(task, state["target"])
     baseline = {key: copy.deepcopy(state[key]) for key in
                 ("snapshot", "universe", "safe", "source_results", "explored_digest", "route", "findings")}
+    baseline["statement_expression_policy"] = state.get("statement_expression_policy", 0)
     same = next((entry for entry in reversed(state["checkpoints"]) if entry["files"] == files and entry["branch"] == branch
                  and entry["baseline"] == baseline), None)
     if same:
@@ -868,6 +901,7 @@ def rollback(task, state, request):
     record(state, "route-resolution", attempt=attempt, decision="rollback",
            reason=attempt["rollback_reason"], evidence=evidence(request.get("evidence")), discarded_round=state["round"])
     state.update(copy.deepcopy(checkpoint["baseline"]))
+    state["statement_expression_policy"] = checkpoint["baseline"].get("statement_expression_policy", 0)
     state["attempt"] = None
     state["round"] = None
     state["loop_active"] = False
@@ -938,6 +972,31 @@ def refactor_decision(task, state, request):
         return_to_validation(state)
 
 
+def paper_input_certificate(approval):
+    return {key: approval[key] for key in (
+        "schema", "snapshot_digest", "components", "project_type", "cutoff",
+        "math_review", "proof_obligations", "route_review",
+    )} | {"purpose": "paper-input"}
+
+
+def retain_paper_input(task, delivery):
+    """Keep the verified writing input usable after a game approval is revoked."""
+    snapshot = delivery["snapshot_digest"]
+    approval = paper_input_certificate(delivery["approval"])
+    path = confined(task, f"deliveries/paper-inputs/{snapshot}/approval.json")
+    if not path.parent.exists():
+        main = confined(task, delivery["approval_path"]).with_name("main.tex")
+        path.parent.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".paper-input-", dir=path.parent.parent) as scratch:
+            staged = Path(scratch) / "snapshot"
+            manuscript.materialize_snapshot(main, staged)
+            atomic_write(staged / "approval.json", json_bytes(approval))
+            os.rename(staged, path.parent)
+    require(read_json(path) == approval and manuscript.parse(path.with_name("main.tex"))[0]["snapshot_digest"] == snapshot,
+            "retained paper input differs from the verified writing snapshot")
+    return {"approval_path": str(path.relative_to(task)), "snapshot_digest": snapshot, "approval": approval}
+
+
 def verify_approval(task, state):
     require(state["route"] and state["route"]["snapshot_digest"] == live_digest(state)
             and state["route"]["verdict"] in ("pass", "no-simplification"), "same-version route pass required")
@@ -975,16 +1034,25 @@ def verify_approval(task, state):
     if public:
         approval["referee_comparison"] = True
     atomic_write(install / "approval.json", json_bytes(approval))
-    kinds = ["game", "referee" if public else "paper"]
-    state["delivery"] = {"snapshot_digest": digest, "approval_path": str((install / "approval.json").relative_to(task)),
-                         "approval": approval, "products": {kind: {"status": "pending"} for kind in kinds}}
+    kinds = ["game"]
+    if public:
+        kinds.append("referee")
+    elif not state.get("independent_paper"):
+        kinds.append("paper")
+    delivery = {"snapshot_digest": digest, "approval_path": str((install / "approval.json").relative_to(task)),
+                "approval": approval, "products": {kind: {"status": "pending"} for kind in kinds}}
+    if "paper" in kinds:
+        delivery["paper_approval_path"] = retain_paper_input(task, delivery)["approval_path"]
+        state["models"]["paper_writer"] = default_models()["paper_writer"]
+    state["delivery"] = delivery
     state["phase"] = "delivery"
     record(state, "approved", route=state["route"], digest=digest, kinds=kinds)
 
 
 def withdrawal_delivery(task, state):
     if state["entry"] != "guided" or state["target"]["project_type"] == "unpublished":
-        state["phase"] = "complete"
+        state["phase"] = "delivery" if state.get("independent_paper") else "complete"
+        finish_delivery_if_ready(state)
         return
     approval = {
         "schema": 1, "kind": "referee", "project_type": "public", "reason": "last-target-withdrawn",
@@ -1051,19 +1119,46 @@ def checked_artifact_digest(kind, artifact, approval_path, approval):
     return file_digest(artifact)
 
 
+def verify_writer_artifact(kind, artifact, approval_path, delivery, task):
+    import writer
+
+    main = approval_path.with_name("main.tex") if delivery["snapshot_digest"] else None
+    withdrawal = approval_path if main is None else None
+    target = task / "target.json" if kind == "referee" else None
+    receipt = writer.verify_delivery(kind, artifact.parent,
+                                     lambda: writer.applicable_inputs(kind, main, target, withdrawal))
+    if kind == "referee":
+        require(receipt["schema"] == 3, "prepare the Markdown referee report with the current Writer")
+    require(receipt.get("artifact", receipt.get("pdf")) == artifact.name,
+            "checked artifact differs from the Writer's verified file")
+
+
+def finish_delivery_if_ready(state):
+    deliveries = [entry for key in ("delivery", "independent_paper") if (entry := state.get(key))]
+    if state["phase"] == "delivery" and deliveries and all(
+            product["status"] == "delivered" for entry in deliveries for product in entry["products"].values()):
+        state["phase"] = "complete"
+
+
 def deliverable(task, state, request):
     status = request.get("status")
     kind = request.get("kind")
     replacement = status == "replacement-delivered" and kind == "referee"
-    require(state["phase"] == "delivery" or (replacement and state["phase"] == "complete"),
+    independent = state.get("independent_paper") if kind == "paper" else None
+    paper_can_continue = independent and (state.get("pause") or {}).get("kind") != "user"
+    require(state["phase"] == "delivery" or paper_can_continue or (replacement and state["phase"] == "complete"),
             "no active delivery approval")
-    delivery = state["delivery"]
+    delivery = independent or state["delivery"]
+    require(delivery is not None, "this product is outside the active delivery")
     require("snapshot_digest" in request and request["snapshot_digest"] == delivery["snapshot_digest"],
             "artifact must be bound to the active delivery snapshot")
-    approval_path = confined(task, delivery["approval_path"])
-    require(read_json(approval_path) == delivery["approval"], "delivery approval changed on disk")
-    if delivery["approval"].get("report_findings"):
-        require(delivery["approval"]["report_sha256"] == report_digest(task, state["findings"]),
+    approval_path = confined(task, delivery.get("paper_approval_path", delivery["approval_path"])
+                             if kind == "paper" else delivery["approval_path"])
+    approval = (paper_input_certificate(delivery["approval"])
+                if kind == "paper" and "paper_approval_path" in delivery else delivery["approval"])
+    require(read_json(approval_path) == approval, "delivery approval changed on disk")
+    if approval.get("report_findings"):
+        require(approval["report_sha256"] == report_digest(task, state["findings"]),
                 "hard finding documentation changed during delivery")
     require(kind in delivery["products"], "this product is outside the active delivery")
     product = delivery["products"][kind]
@@ -1080,20 +1175,11 @@ def deliverable(task, state, request):
             require(product["status"] in ("pending", "blocked"), "product check was already recorded")
         artifact = confined(task, request["artifact"])
         expected = evidence(request.get("sha256"))
-        actual = (verify_game_artifact(artifact, approval_path, delivery["approval"]) if kind == "game"
+        actual = (verify_game_artifact(artifact, approval_path, approval) if kind == "game"
                   else file_digest(artifact))
         require(actual == expected, "artifact bytes differ from its check receipt")
         if kind != "game":
-            import writer
-            main = approval_path.with_name("main.tex") if delivery["snapshot_digest"] else None
-            withdrawal = approval_path if main is None else None
-            target = task / "target.json" if kind == "referee" else None
-            receipt = writer.verify_delivery(kind, artifact.parent,
-                                             lambda: writer.applicable_inputs(kind, main, target, withdrawal))
-            if kind == "referee":
-                require(receipt["schema"] == 3, "prepare the Markdown referee report with the current Writer")
-            require(receipt.get("artifact", receipt.get("pdf")) == artifact.name,
-                    "checked artifact differs from the Writer's verified file")
+            verify_writer_artifact(kind, artifact, approval_path, delivery, task)
             if replacement:
                 message = evidence(request.get("message_receipt"))
                 record(state, "referee-replaced", previous=copy.deepcopy(product),
@@ -1104,11 +1190,12 @@ def deliverable(task, state, request):
     elif status == "delivered":
         require(product["status"] == "checked", "check the artifact before delivering it")
         artifact = confined(task, product["artifact"])
-        actual = checked_artifact_digest(kind, artifact, approval_path, delivery["approval"])
+        actual = checked_artifact_digest(kind, artifact, approval_path, approval)
         require(actual == product["sha256"], "checked artifact changed before delivery")
+        if kind == "paper":
+            verify_writer_artifact(kind, artifact, approval_path, delivery, task)
         product.update(status=status, message_receipt=evidence(request.get("evidence")))
-        if all(item["status"] == "delivered" for item in delivery["products"].values()):
-            state["phase"] = "complete"
+        finish_delivery_if_ready(state)
     else:
         raise Rejected("unknown deliverable status")
     record(state, "deliverable", product=kind, check=copy.deepcopy(product), snapshot_digest=delivery["snapshot_digest"])
@@ -1130,10 +1217,20 @@ def incident(task, state, request):
     cites = set(request.get("components", []))
     require(cites <= set(state["snapshot"]["cone"]), "incident components must lie in the delivery dependency union")
     record(state, "incident", details=request)
-    approval_path = confined(task, state["delivery"]["approval_path"])
-    previous = state["delivery"]["approval"]
+    delivery = state["delivery"]
+    approval_path = confined(task, delivery["approval_path"])
+    previous = delivery["approval"]
     revoked = {**previous, "math_review": "invalidated", "route_review": "invalidated", "revoked": reason}
-    atomic_write(approval_path, json_bytes(revoked))
+    on_disk = read_json(approval_path)
+    require(on_disk in (previous, revoked), "delivery approval changed on disk")
+    if previous["project_type"] == "unpublished" and "paper" in delivery["products"]:
+        retained = retain_paper_input(task, delivery)
+        retained["products"] = {"paper": delivery["products"].pop("paper")}
+        state["independent_paper"] = retained
+        delivery.pop("paper_approval_path", None)
+        record(state, "paper-delivery-retained", snapshot_digest=retained["snapshot_digest"])
+    if on_disk == previous:
+        atomic_write(approval_path, json_bytes(revoked))
     supersede(state, reason)
     state["route"] = None
     state["safe"] = ordered(state, set(state["safe"]) - (cites or set(state["snapshot"]["cone"])))
@@ -1174,6 +1271,7 @@ def select_release(state, request):
             "settle the staged write or prepared delivery before switching its loaded release")
     previous = state["tool_release"]
     state["tool_release"] = selected
+    state["models"]["paper_writer"] = default_models()["paper_writer"]
     for action in list(state["actions"].values()):
         if action["token"] not in state["actions"]:
             continue
@@ -1195,14 +1293,19 @@ def start_entry(task, state, request):
     if state["phase"] == "paused":
         evidence(request["abandon_evidence"])
         record(state, "abandoned", round=state["round"], pause=state["pause"], evidence=request["abandon_evidence"])
+    if retained := state.pop("independent_paper", None):
+        record(state, "earlier-paper-delivery", delivery=retained)
     state["entry"] = entry
     state["phase"] = "dispatch"
     state["goal"] = request.get("goal")
     state["goal_complete"] = None
     state["coordinator"] = request.get("coordinator")
     state["tool_release"] = evidence(request.get("tool_release"))
+    state["models"]["paper_writer"] = default_models()["paper_writer"]
     for role, config in request.get("models", {}).items():
         require(role in state["models"] and isinstance(config, list) and len(config) == 2, f"invalid role: {role}")
+        require(role != "paper_writer" or config == state["models"][role],
+                "the unpublished paper Writer model and effort are fixed")
         state["models"][role] = [evidence(config[0]), evidence(config[1])]
     if entry != "refactor":
         goal = state["goal"]
@@ -1230,7 +1333,10 @@ def operation(task, state, request):
     writes = {}
     if op == "advance":
         if state["phase"] == "approved":
-            verify_approval(task, state)
+            if refresh_statement_expression(state):
+                state["phase"] = "dispatch"
+            else:
+                verify_approval(task, state)
         elif state["phase"] == "withdrawn":
             withdrawal_delivery(task, state)
         elif state["phase"] == "review":

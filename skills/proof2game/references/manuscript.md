@@ -22,14 +22,25 @@ Use `\MSgap{...}` for a specific missing proof obligation. A gap stays open for 
   pair. Place new lemmas under the first direct proof that uses them, and reference
   previously closed results by stable labels. A local convention passes to descendants
   and has no effect on sibling nodes or a target’s mathematical meaning.
-- Declare each component with `\MScomponent{ID}{type}{path}{pair}{kind}{title}`.
-  Use `convention`, `statement` and `proof` as the component types. Supply a
+- Use `\MScomponent{ID}{type}{path}{pair}{kind}{title}` for conventions and proofs.
+  Declare a statement with `\MSstatement{ID}{path}{paired-proof-ID}{kind}{title}`.
+  The component types remain `convention`, `statement` and `proof`. Supply a
   reciprocal paired ID for statements and proofs, and a theorem kind for a statement.
   The title is optional. Paths are relative to `main.tex`. Declare every component in a
   separate visible TeX file and keep assembly literal. Use `\ref{ms:ID}` for
   mathematical uses of statements. `\ref{proof:ID}` links to a paired proof; use a
   proof ID there. The assembly prints each statement's proof locator from the paired
   labels and gives each proof node a depth-specific section number.
+- Put exactly one `\begin{MSresult}...\end{MSresult}` in a statement file.
+  Put the formal result inside it and any needed lead-in or following exposition
+  outside it in the same file. The assembly opens the theorem environment at
+  `MSresult`, assigns its result label there, and prints the proof locator
+  immediately after the environment. The entire file is one review component
+  and one game level. Do not add a prose heading such as bold `Statement.`
+  to delimit the result. Existing `\MScomponent{ID}{statement}...` declarations
+  remain readable as files whose entire body is typeset inside the theorem.
+  To move surrounding prose in an existing statement, use the current template's
+  statement macros and convert the declaration and component together.
 - Keep branch prose in its components so the source and associated resources can be
   excluded if that branch retires. Active nodes can refer to declared results once
   the required proof has closed in tree order. Use explicit references for mathematical
@@ -40,6 +51,16 @@ pairs, transitive referenced interfaces and applicable conventions. The calculat
 checks declaration order, first direct use, scope and cycles in the visible structure.
 It cannot find a mathematical dependency left implicit in the text or determine
 whether a proof establishes its paired statement. Reviewers check those questions.
+
+## Repairing legacy theorem layout
+
+When a Reviewer finds prose inside a legacy theorem, the Fixer can use
+`python3 scripts/manuscript.py migrate-statement STAGED/main.tex --component ID --formal-lines FIRST LAST`.
+Select the inclusive source lines after reading the component. Keep the setup
+that is part of the mathematical claim, even if it precedes a bold heading.
+The command removes standalone bold `Statement.` and `Comment.` headings and
+installs the current statement macros for a recognized legacy template.
+Apply the result through the normal staged candidate, compilation and fresh review.
 
 ## External interfaces and compile checks
 
@@ -81,5 +102,7 @@ mathematical and route verdicts come from the verification workflow.
   `main.tex` and its TeX/graphics resources. It preserves the working sources,
   removes inactive inputs and subtrees, and prunes inline bibliography entries
   without retained citations. Apply the review/route eligibility checks before
-  producing a delivery snapshot and then give the same snapshot to both exporters.
+  producing a delivery snapshot. Give it to the game exporter and the public
+  referee Writer when applicable. For an unpublished paper, provide it as part of
+  the [Writer's verified script materials](writer.md#complete-paper).
   The game website links to the DOI or stable official record of each cited edition.

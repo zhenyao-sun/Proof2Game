@@ -9,6 +9,7 @@
   "refactor": {"model": "gpt-6.2-astra", "reasoning_effort": "high"},
   "game_developer": {"model": "gpt-6.2-sol", "reasoning_effort": "medium"},
   "writer": {"model": "gpt-6.2-sol", "reasoning_effort": "ultra"},
+  "paper_writer": {"model": "gpt-6.2-astra", "reasoning_effort": "ultra"},
   "translator": {"model": "gpt-6.2-sol", "reasoning_effort": "medium"},
   "tutor": {"model": "deepseek-flash", "reasoning_effort": "medium"}
 }

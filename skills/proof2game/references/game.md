@@ -2,11 +2,12 @@
 
 This is an internal step of guided startup. Use the immutable filtered delivery
 directory that passed math and route review. Its approval.json must match the
-game script and record closed proof obligations. Game production and the Writer
-may run concurrently from that same directory and deliver independently. If
-either happens to identify a substantive flaw in the English snapshot, stop
-both deliveries, record the finding in verification, and rebuild from the newly
-reviewed snapshot. Correct a translation-only defect in the game translation.
+game script and record closed proof obligations. Game production can run
+alongside the applicable writing work and deliver independently. If game or
+public referee work identifies a substantive flaw in the English snapshot,
+pause the affected game and applicable public referee report, record the finding
+in verification, and rebuild the affected products from the newly reviewed
+snapshot. Correct a translation-only defect in the game translation.
 
 ## Translate and package
 

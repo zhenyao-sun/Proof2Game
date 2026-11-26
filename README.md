@@ -25,12 +25,12 @@ You can attach a LaTeX file, Markdown notes, or a PDF, or paste an arXiv link. A
 
 | Bring | Take away |
 | --- | --- |
-| **Your unpublished work** | A shareable game and a complete English paper in PDF and LaTeX, built from the same reviewed script. |
+| **Your unpublished work** | A shareable game and an independently written paper in PDF and LaTeX. |
 | **A public paper** | A game that follows the edition you chose, plus a generic English referee report in Markdown based on the original paper and the final reviewed game script. |
 
 Proof2Game keeps your original and builds a separate English game script. Independent Codex reviewers check the argument and the cited results. For public papers, a separate reviewer checks the route against the exact edition you supplied. For unpublished work, the team explores whether the proof can be made simpler.
 
-The Summary opens with one sentence stating the paper’s main contribution. The Assessment opens with the overall judgment, including the number of major issues and their collective impact when any are present. Major Issues and Minor Issues follow. Each item locates the original passage, quotes it in italics and states exactly what is wrong there and gives just enough evidence to check the diagnosis. All verbatim excerpts appear in italics, including inline quotations and quoted formulas. The authors decide how to address it. You can request a fresh report from the same approved manuscript. Writer uses the bundled [Humanizer v4.0.0](skills/proof2game/references/humanizer/SKILL.md) when drafting, revising and checking its prose.
+The Summary opens with one sentence stating the paper’s main contribution. The Assessment opens with the overall judgment, including the number of major issues and their collective impact when any are present. Major Issues and Minor Issues follow. Each item locates the original passage, quotes it in italics and states exactly what is wrong there and gives just enough evidence to check the diagnosis. All verbatim excerpts appear in italics, including inline quotations and quoted formulas. The authors decide how to address it. You can request a fresh report from the same approved manuscript. The public referee Writer uses the bundled [Humanizer v4.0.0](skills/proof2game/references/humanizer/SKILL.md) when drafting, revising and checking the report.
 
 ## What it's like to play
 
@@ -77,7 +77,7 @@ One Codex session coordinates the work. Each specialist takes a different part o
       <p align="center"><img src="docs/agents/writer.webp" width="144" alt="A heron with a fountain pen and manuscript pages"></p>
       <strong>Writer</strong><br>
       <em>“Let's get the argument onto the page.”</em><br>
-      Writes an English paper for unpublished work or a referee report comparing a public paper with the final reviewed game script.
+      For an unpublished paper, a fresh GPT‑6.2 Astra Ultra session reads the verified game-script materials and all feedback, then chooses the results, proofs and presentation. For public work, Writer prepares a referee report.
     </td>
     <td width="50%" valign="top">
       <p align="center"><img src="docs/agents/tutor.webp" width="144" alt="A tortoise teaching with a chalkboard"></p>
@@ -106,19 +106,19 @@ Authors can [export and publish a game directory to GitHub Pages](skills/proof2g
 
 ## Revise an unpublished paper
 
-After Writer delivers a paper, ask Proof2Game to revise it and share your feedback. For example, “Start from your last paper, use my collaborator’s comments, and mark the changes against their attached draft.” Writer delivers the clean paper and its LaTeX sources, plus a highlighted PDF. The default comparison is the previous official Writer paper. [Writer instructions](skills/proof2game/references/writer.md#revise-a-delivered-paper)
+Tell Proof2Game which draft to revise and share your feedback. For example, “Revise the attached draft using my collaborator’s comments.” Writer receives the designated draft, the verified game-script materials and all feedback. The coordinator checks compilation and source completeness, then delivers the clean paper and its LaTeX source plus a PDF compiled from a marked TeX copy. The marked copy shows additions and rewrites relative to the designated draft. [Writer instructions](skills/proof2game/references/writer.md#revise-a-delivered-paper)
 
 ## Manual setup
 
-Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Pandoc for checking Markdown referee reports, Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. To play a newly exported game, players need a browser and a personal DeepSeek API key. The PDF navigation check uses `pdftotext` or `pypdf`. Writer revision comparisons also need `PyMuPDF>=1.24.11,<2` in the Writer environment.
+Use macOS with ChatGPT Desktop or Codex, local terminal access, Codex Goals, and independent agent sessions. Proof2Game uses Git and Python 3.11 or later. Use Pandoc for checking Markdown referee reports, Poppler for PDF intake, TeX Live or MacTeX for compilation, and Node.js 22 or later for authoring checks. To play a newly exported game, players need a browser and a personal DeepSeek API key. The PDF navigation check uses `pdftotext` or `pypdf`. Revision comparisons use `PyMuPDF>=1.24.11,<2` to check the compiled output. Automatic markup also uses `latexdiff` in the coordinator’s TeX environment.
 
 If you already have a verified release checkout, use it and let Proof2Game check for updates. For a fresh setup, run:
 
 ```sh
 proof2game_releases="$HOME/Library/Application Support/Proof2Game/releases"
 mkdir -p "$proof2game_releases"
-git clone --depth 1 --branch v0.3.1 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.3.1"
-python3 "$proof2game_releases/v0.3.1/skills/proof2game/scripts/release.py" verify
+git clone --depth 1 --branch v0.4.0 https://github.com/zhenyao-sun/Proof2Game.git "$proof2game_releases/v0.4.0"
+python3 "$proof2game_releases/v0.4.0/skills/proof2game/scripts/release.py" verify
 ```
 
 Load the skill at the `entrypoint` returned by the verifier. You can run the full guided workflow, ingest a reference PDF, verify an existing game script, or request a refactor. [Skill documentation](skills/proof2game/SKILL.md)
@@ -127,4 +127,4 @@ Load the skill at the `entrypoint` returned by the verifier. You can run the ful
 
 Proof2Game is released under the [MIT License](LICENSE). The bundled KaTeX code uses the [MIT License](skills/proof2game/assets/game-runtime/vendor/LICENSE-KaTeX.txt), and its fonts use the [SIL Open Font License](skills/proof2game/assets/game-runtime/vendor/fonts/OFL.txt).
 
-Writer includes the full instructions from [Humanizer v4.0.0](https://github.com/blader/humanizer/tree/b48c832f0f809c1b5658edbb838c2521b72f2413), distributed with its [MIT license](skills/proof2game/references/humanizer/LICENSE).
+The public referee Writer includes the full instructions from [Humanizer v4.0.0](https://github.com/blader/humanizer/tree/b48c832f0f809c1b5658edbb838c2521b72f2413), distributed with its [MIT license](skills/proof2game/references/humanizer/LICENSE).

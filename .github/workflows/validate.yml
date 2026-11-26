@@ -23,7 +23,7 @@ jobs:
           brew install poppler pandoc
           brew install --cask basictex
           sudo /Library/TeX/texbin/tlmgr update --self
-          sudo /Library/TeX/texbin/tlmgr install amsrefs geometry latexmk mathtools
+          sudo /Library/TeX/texbin/tlmgr install amsrefs geometry latexdiff latexmk mathtools
           printf '%s\n' /Library/TeX/texbin >> "$GITHUB_PATH"
       - run: python3 -m pip install "PyMuPDF>=1.24.11,<2"
       - name: Install browsers for the exported game

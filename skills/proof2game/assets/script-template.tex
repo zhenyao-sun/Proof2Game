@@ -1,5 +1,6 @@
 % Copy this as main.tex and script-example/ as components/.
 % MScomponent arguments: ID, type, path, paired ID, theorem kind, optional title.
+% MSstatement arguments: ID, path, paired proof ID, theorem kind, optional title.
 % MSnode arguments: statement ID, explicit Main Results prefix (empty for descendants).
 \documentclass[12pt,a4paper]{amsart}
 \usepackage{amsmath,amssymb,graphicx}
@@ -63,17 +64,29 @@
     \global\csname MSnum@\number\numexpr\MSdepth+1\relax\endcsname=0
   \fi
   \global\advance\MSdepth by-1}
+\newcommand\MSprooflocator[3]{%
+  \par\noindent The proof of #3~\ref{ms:#1} is given in
+  \ifcsname MSlevel@#2\endcsname\csname MSlevel@#2\endcsname\else Section\fi
+  ~\ref{proof:#2}.\par}
+\newcommand\MSstatement[5]{%
+  \expandafter\gdef\csname MSkind@#1\endcsname{#4}%
+  \expandafter\gdef\csname MStitle@#1\endcsname{#5}%
+  \begingroup
+  \newenvironment{MSresult}{%
+    \if\relax\detokenize{#5}\relax\begin{#4}\else\begin{#4}[#5]\fi
+    \label{ms:#1}%
+  }{\end{#4}\MSprooflocator{#1}{#3}{#4}}%
+  \input{#2}\par
+  \endgroup}
 \newcommand\MScomponent[6]{%
-  \def\MStype{#2}\def\MSstatement{statement}\def\MSproof{proof}%
-  \ifx\MStype\MSstatement
+  \def\MStype{#2}\def\MSstatementtype{statement}\def\MSproof{proof}%
+  \ifx\MStype\MSstatementtype
     \expandafter\gdef\csname MSkind@#1\endcsname{#5}%
     \expandafter\gdef\csname MStitle@#1\endcsname{#6}%
     \def\MStitle{#6}%
     \ifx\MStitle\@empty\begin{#5}\else\begin{#5}[#6]\fi
     \label{ms:#1}\input{#3}\end{#5}%
-    \noindent The proof of #5~\ref{ms:#1} is given in
-    \ifcsname MSlevel@#4\endcsname\csname MSlevel@#4\endcsname\else Section\fi
-    ~\ref{proof:#4}.\par
+    \MSprooflocator{#1}{#4}{#5}%
   \else\ifx\MStype\MSproof
     \phantomsection\edef\@currentlabel{\MSloc}\label{proof:#1}%
     \protected@write\@auxout{}{\string\MSrecordlevel{#1}{\MSlevel}}%
@@ -89,11 +102,11 @@
 \begin{document}
 \section{Main Results}
 \MScomponent{setting}{convention}{components/setting.tex}{}{}{}
-\MScomponent{main}{statement}{components/main.tex}{main-proof}{Theorem}{Positivity}
+\MSstatement{main}{components/main.tex}{main-proof}{Theorem}{Positivity}
 
 \section{Detailed Proofs}
 \MSnode{main}{1}
-\MScomponent{lower-bound}{statement}{components/lower-bound.tex}{lower-bound-proof}{Lemma}{A nonnegative square}
+\MSstatement{lower-bound}{components/lower-bound.tex}{lower-bound-proof}{Lemma}{A nonnegative square}
 \MScomponent{main-proof}{proof}{components/main-proof.tex}{main}{}{}
 \MSnode{lower-bound}{}
 \MScomponent{lower-bound-proof}{proof}{components/lower-bound-proof.tex}{lower-bound}{}{}

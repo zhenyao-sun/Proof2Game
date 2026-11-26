@@ -102,6 +102,8 @@ def eligibility(main, approval=None):
     approval = Path(approval or main.with_name('approval.json')).resolve(strict=True)
     data = approval.read_bytes()
     record = json.loads(data)
+    if isinstance(record, dict) and record.get('purpose') == 'paper-input':
+        raise Rejected('A retained paper input is not a game delivery approval.')
     clean, full = manuscript.parse(main)
     component_ids = record.get('components') if isinstance(record, dict) else None
     expected_ids = {component['id'] for component in full['components']}
@@ -397,6 +399,10 @@ TRANSLATION_LINK = re.compile(
 )
 
 
+def result_sections(text):
+    return [part.strip() for part in manuscript.statement_parts(manuscript.uncomment(text))]
+
+
 def validate_translation(original, translated, main_name):
     """Check snapshot coverage and anchors; the translator judges semantic fidelity."""
     if not isinstance(translated, dict) or translated.get('schema') != 1 or (
@@ -432,11 +438,26 @@ def validate_translation(original, translated, main_name):
     english = structure(original['files'][main_name])
     chinese = structure(files[main_name])
     def structural_keys(commands):
-        return [(command, args[:-1] if command == 'MScomponent' else args if command.startswith('MS') else [])
+        return [(command, args[:-1] if command in ('MScomponent', 'MSstatement') else args if command.startswith('MS') else [])
                 for command, args in commands]
     if structural_keys(english) != structural_keys(chinese):
         raise Rejected('Chinese translation must retain the game script structure and component bindings.')
-    level_titles = {args[0]: args[5] for command, args in chinese if command == 'MScomponent'}
+    level_titles = {args[0]: args[-1] for command, args in chinese if command in ('MScomponent', 'MSstatement')}
+    for command, args in english:
+        if command != 'MSstatement':
+            continue
+        name = args[1]
+        try:
+            source = result_sections(original['files'][name])
+            target = result_sections(files[name])
+        except manuscript.Invalid as exc:
+            raise Rejected(f'Chinese translation must retain the formal result in {name}: {exc}') from exc
+        for before, after in zip(source, target):
+            if bool(before) != bool(after) or any(
+                pattern.findall(before) != pattern.findall(after)
+                for pattern in (TRANSLATION_MATH, TRANSLATION_LINK)
+            ):
+                raise Rejected('Chinese translation changed formal result boundaries in ' + name)
     return dict(level_titles=level_titles, files=files)
 
 
@@ -486,6 +507,8 @@ def make_game(main, approval=None, source_bindings=None, references_dir=None,
             statement=target['text'],
             images=referenced_images(c['text'] + '\n' + target['text'] + '\n' + context_text, files),
             context=[dict(id=x, text=byid[x]['text']) for x in c['ambient']]))
+        if c.get('explicit_statement'):
+            levels[-1]['result_sections'] = result_sections(c['text'])
     set_tree_parents(levels, full['components'])
     numbers = verified_numbers(main, files, full) if verify_numbering else None
     internal = reference_metadata(full, levels, numbers) if numbers is not None else {}
@@ -523,6 +546,8 @@ def make_game(main, approval=None, source_bindings=None, references_dir=None,
                 title=translated['level_titles'][target],
                 text=manuscript.uncomment(translated['files'][source_file]),
             )
+            if 'result_sections' in level:
+                localized_levels[level['id']]['result_sections'] = result_sections(translated['files'][source_file])
         chinese = dict(files=sorted(translated_files),
                        levels=localized_levels)
     ref_hashes = {p: sha(data) for p, data in reference_files.items()}

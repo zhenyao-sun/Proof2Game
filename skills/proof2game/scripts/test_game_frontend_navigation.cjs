@@ -488,6 +488,7 @@ async function exerciseChatInput(mode) {
 
  progress.language='English';
  game.chinese={title:'双语游戏',levels:{convention:{title:'',text:'参见\\autoref{thm:one}。'},one:{title:'一个陈述',text:'中文陈述。'},proof:{title:'一个陈述',text:'中文证明。'}}};
+ game.chinese.levels.one.result_sections=['引导文字。','中文陈述。','后续文字。'];
  await nodes.get('connection-check').fire('click');await settle();calls.length=0;
  assert.equal(nodes.get('language-map').hidden,false);
  nodes.get('language-map').value='中文';await nodes.get('language-map').fire('change');await settle();
@@ -497,7 +498,9 @@ async function exerciseChatInput(mode) {
  assert.equal(cardTitle('one').textContent,'引理 1.1一个陈述');
  assert.equal(nodes.get('progress-count').textContent,'1 / 3');
  await focusNextAndEnter('one');
- assert.equal(nodes.get('level-original').textContent,'中文陈述。');
+ assert.deepEqual(nodes.get('level-original').children.map(node=>[node.className,node.textContent]),[
+   ['statement-prose','引导文字。'],['formal-statement','中文陈述。'],['statement-prose','后续文字。'],
+ ]);
  assert.equal(nodes.get('language-level').value,'中文');
  assert(nodes.get('messages').textContent.includes('Welcome.'));
  const passageButtons=()=>nodes.get('messages').querySelectorAll('button.understand-button');

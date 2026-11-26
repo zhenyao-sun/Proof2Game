@@ -10,7 +10,6 @@ import unittest
 import manuscript
 import referee_markdown
 import writer
-import writer_revision
 
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
@@ -143,85 +142,8 @@ class WriterTests(unittest.TestCase):
             self.assertEqual(writer.main(["inspect", "--kind", "paper", "--main", str(self.main)]), 0)
         inspected = json.loads(output.getvalue())
         self.assertEqual(inspected["cited_keys"], ["alpha", "beta", "intro"])
-        guide = inspected["writing_guide"]
-        self.assertEqual(guide["id"], "blader/humanizer@v4.0.0")
-        self.assertEqual(writer.digest(Path(guide["path"]).read_bytes()), guide["sha256"])
-
-    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "TeX tools unavailable")
-    def test_revision_uses_checked_clean_paper_and_actual_comparison_content(self):
-        import pymupdf
-
-        def checked_bundle(name, body):
-            bundle = self.task / name
-            tex = self.draft_document("paper", body)
-            read_inputs = lambda: writer.applicable_inputs("paper", self.main)
-            candidate = writer.compile_delivery("paper", tex, bundle, "pdflatex", read_inputs)
-            self.write(self.checks_path, self.self_check(candidate, fidelity="Synthetic comparison fixture.",
-                       targets={key: {"statement": "p. 1", "proof": "p. 1"} for key in self.snap["targets"]}))
-            writer.finish_delivery("paper", bundle, self.checks_path, read_inputs)
-            return bundle
-
-        def words_and_marks(path):
-            with pymupdf.open(path) as doc:
-                words, marked = [], []
-                for page in doc:
-                    boxes = [annot.rect for annot in page.annots()]
-                    for x0, y0, x1, y1, word, *_ in page.get_text("words"):
-                        words.append(word)
-                        if any(((x0 + x1) / 2, (y0 + y1) / 2) in box for box in boxes):
-                            marked.append(word)
-                return words, marked
-
-        previous = checked_bundle("previous", r"Shared obsolete lemma.\newpage Second page.")
-        current = checked_bundle("current", r"Shared improved lemma.\newpage Second page.")
-        snapshot_files = writer.source_files(self.snapshot)
-        old_pdf = (previous / "paper.pdf").read_bytes()
-        clean_pdf = (current / "paper.pdf").read_bytes()
-        expected_words, clean_marks = words_and_marks(current / "paper.pdf")
-        self.assertEqual(clean_marks, [])
-        marked = writer_revision.compare(self.main, previous, current)
-        self.assertEqual(words_and_marks(marked), (expected_words, ["improved"]))
-        self.assertEqual(writer_revision.compare(self.main, previous, current), marked)
-
-        # A collaborator already made the same edit and applied color to it.
-        external = self.task / "collaborator.pdf"
-        with pymupdf.open(marked) as document:
-            document.save(external)
-        another = self.task / "another"
-        shutil.copytree(current, another, ignore=shutil.ignore_patterns("comparison"))
-        selected = writer_revision.compare(self.main, previous, another, external)
-        self.assertEqual(words_and_marks(selected), (expected_words, []))
-        self.assertEqual((previous / "paper.pdf").read_bytes(), old_pdf)
-        self.assertEqual((current / "paper.pdf").read_bytes(), clean_pdf)
-        self.assertEqual(writer.source_files(self.snapshot), snapshot_files)
-        with self.assertRaisesRegex(writer.Rejected, "different inputs"):
-            writer_revision.compare(self.main, previous, another)
-
-        # The next round starts from the most recent clean delivery.
-        following = checked_bundle("following", r"improved lemma.\newpage Second page.")
-        removed = writer_revision.compare(self.main, current, following)
-        self.assertNotIn("Shared", words_and_marks(removed)[0])
-        self.assertEqual(words_and_marks(removed)[1], [])
-
-        # The designated source file stays bound even when its colored TeX
-        # is compared through a checked plain-text rendition.
-        converted = self.task / "converted"
-        shutil.copytree(current, converted, ignore=shutil.ignore_patterns("comparison"))
-        original = self.task / "edited.tex"
-        original.write_text(r"Shared \textcolor{red}{improved} lemma.\newpage Second page.")
-        rendition = self.task / "visible.txt"
-        rendition.write_text(" ".join(expected_words))
-        marked_view = writer_revision.compare(self.main, previous, converted, original, rendition)
-        self.assertEqual(words_and_marks(marked_view), (expected_words, []))
-        original.write_text("Later external version.")
-        with self.assertRaisesRegex(writer.Rejected, "different inputs"):
-            writer_revision.compare(self.main, previous, converted, original, rendition)
-        selected.write_bytes(b"damaged")
-        with self.assertRaisesRegex(writer.Rejected, "Invalid compiled PDF"):
-            writer_revision.compare(self.main, previous, another, external)
-        self.public_input()
-        with self.assertRaisesRegex(writer.Rejected, "unpublished"):
-            writer_revision.compare(self.main, previous, current)
+        self.assertNotIn("writing_guide", inspected)
+        self.assertNotIn("template", inspected)
 
     def test_requires_current_filtered_approval(self):
         self.assertEqual(writer.applicable_inputs("paper", self.main)["targets"], ["plus-zero", "zero-plus"])
@@ -297,64 +219,43 @@ class WriterTests(unittest.TestCase):
         with self.assertRaisesRegex(writer.Rejected, "bytes differ"):
             writer.verify_delivery("referee", self.bundle, read_inputs)
 
-    def test_latex_accepts_standard_and_custom_titles_and_omits_author_declarations(self):
-        for source in (rb"\title{An authorless paper}\maketitle", rb"\begin{titlepage}Title\end{titlepage}",
-                       rb"\section*{A paper title}", rb"\hypersetup{pdftitle={A title}}",
-                       rb"\author{}\hypersetup{pdfauthor={}}", rb"% \author{This is only a comment}"):
-            writer.check_paper_identity({"main.tex": source})
-        for source in (rb"\author{Example}", rb"\hypersetup{pdfauthor={Example}}"):
-            with self.subTest(source=source), self.assertRaisesRegex(writer.Rejected, "Omit author"):
-                writer.check_paper_identity({"meta.tex": source})
-
-    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "MacTeX tools unavailable")
-    def test_paper_build_and_resume_verify_every_target_and_exact_bytes(self):
-        read_inputs = lambda: writer.applicable_inputs("paper", self.main)
-        tex = self.draft_document("paper", r"""
-\section{Introduction}
-\input{results}
-\section{Proofs}
-\begin{proof} Apply the definition in \eqref{e:zero}. This proves the first identity.\end{proof}
-\begin{proof} By commutativity,
-\begin{align*}0+x &=x+0 \\ &= x.\qedhere\end{align*}
-\end{proof}
-""")
-        (self.draft / "results.tex").write_text(
-            r"""\begin{theorem} For every real $x$ one has
-\begin{equation}\label{e:zero} x+0=x. \end{equation}
-\end{theorem}
-\begin{theorem} For every real $x$ one has $0+x=x$.\end{theorem}
-""", encoding="utf-8"
+    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "TeX tools unavailable")
+    def test_independent_paper_build_checks_files_without_writer_self_check(self):
+        tex = self.draft / "main.tex"
+        tex.write_text(r"""
+\documentclass{article}
+\title{An unrelated exposition}
+\author{A. Example}
+\begin{document}
+\maketitle
+\input{discussion}
+\bibliographystyle{plain}
+\bibliography{sources}
+\end{document}
+""", encoding="utf-8")
+        (self.draft / "discussion.tex").write_text(r"An independent discussion citing \cite{sample}.", encoding="utf-8")
+        (self.draft / "sources.bib").write_text(
+            "@article{sample, author={Sample, A.}, title={Sample reference}, journal={Example}, year={2020}}",
+            encoding="utf-8",
         )
+        read_inputs = lambda: writer.applicable_inputs("paper", self.main)
         candidate = writer.compile_delivery("paper", tex, self.bundle, "pdflatex", read_inputs)
-        self.assertIn("results.tex", candidate["source_files"])
-        self.assertTrue((self.bundle / "paper.pdf").read_bytes().startswith(b"%PDF-"))
-        # Confirm the default amsart title and both proof-ending styles on the actual page.
+        self.assertEqual(candidate["schema"], writer.PAPER_SCHEMA)
+        self.assertEqual(set(candidate["source_files"]), {"main.tex", "discussion.tex", "sources.bib"})
+        self.assertNotIn("humanizer", candidate)
         import pymupdf
         with pymupdf.open(self.bundle / "paper.pdf") as paper:
-            words = paper[0].get_text("words")
-            page_text = " ".join(word[4] for word in words).casefold()
-            self.assertLess(page_text.index("two additive identities"), page_text.index("introduction"))
-            markers = [word for word in words if word[4] == "□"]
-            self.assertEqual(len(markers), 2)
-            for marker, final_word in zip(markers, ("identity.", "x.")):
-                self.assertTrue(any(word[4] == final_word and abs(word[1] - marker[1]) < 4
-                                    for word in words))
-        checks = self.self_check(
-            candidate, fidelity="Both statements and the defining property appear on page 1.",
-            targets={"plus-zero": {"statement": "Theorem 1.1", "proof": "Section 2 paragraph 1"}},
-        )
-        self.write(self.checks_path, checks)
-        with self.assertRaisesRegex(writer.Rejected, "every current target"):
-            writer.finish_delivery("paper", self.bundle, self.checks_path, read_inputs)
-        checks["targets"]["zero-plus"] = {"statement": "Theorem 1.2", "proof": "Section 2 paragraph 1, final sentence"}
-        for field in ("paper_title", "title_render", "proof_endings"):
-            with self.subTest(missing=field), self.assertRaisesRegex(writer.Rejected, field):
-                writer.check_evidence({k: v for k, v in checks.items() if k != field}, read_inputs(), candidate)
-        self.write(self.checks_path, checks)
-        finished = writer.finish_delivery("paper", self.bundle, self.checks_path, read_inputs)
-        self.assertEqual(finished, writer.verify_delivery("paper", self.bundle, read_inputs))
-        self.assertEqual(finished, writer.finish_delivery("paper", self.bundle, self.checks_path, read_inputs))
-        (self.bundle / "source/results.tex").write_text("Changed after review.", encoding="utf-8")
+            visible = "".join(page.get_text() for page in paper)
+        self.assertIn("A. Example", visible)
+        self.assertIn("Sample reference", visible)
+        args = ["--kind", "paper", "--main", str(self.main), "--bundle", str(self.bundle)]
+        with redirect_stdout(StringIO()) as output:
+            self.assertEqual(writer.main(["finish", *args]), 0)
+        receipt = json.loads(output.getvalue())
+        self.assertEqual(candidate, receipt)
+        self.assertEqual(receipt, writer.verify_delivery("paper", self.bundle, read_inputs))
+        self.assertEqual(receipt, writer.finish_delivery("paper", self.bundle, None, read_inputs))
+        (self.bundle / "source/discussion.tex").write_text("Changed after compiling.", encoding="utf-8")
         with self.assertRaisesRegex(writer.Rejected, "sources have changed"):
             writer.verify_delivery("paper", self.bundle, read_inputs)
 
@@ -414,11 +315,11 @@ class WriterTests(unittest.TestCase):
         with self.assertRaisesRegex(writer.Rejected, "bytes differ"):
             writer.verify_delivery("referee", self.bundle, read_inputs)
 
-    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "MacTeX tools unavailable")
-    def test_unresolved_cross_references_stop_delivery(self):
-        tex = self.draft_document("paper", r"Reference to \ref{missing-label}.")
+    @unittest.skipUnless(shutil.which("latexmk") and shutil.which("kpsewhich"), "TeX tools unavailable")
+    def test_missing_required_source_file_stops_delivery(self):
+        tex = self.draft_document("paper", r"\input{missing-source}")
         read_inputs = lambda: writer.applicable_inputs("paper", self.main)
-        with self.assertRaisesRegex(writer.Rejected, "cross-references"):
+        with self.assertRaisesRegex(writer.Rejected, "Compilation failed"):
             writer.compile_delivery("paper", tex, self.bundle, "pdflatex", read_inputs)
         self.assertFalse(self.bundle.exists())
 
@@ -464,13 +365,13 @@ class WriterTests(unittest.TestCase):
                      "input_digest": writer.record_digest(inputs), "source_files": manifest,
                      "source_digest": writer.record_digest(manifest), "entrypoint": "main.tex",
                      "pdf": pdf.name, "pdf_sha256": writer.digest(pdf.read_bytes())}
-        if schema == 2:
+        if schema in (2, 4):
             candidate["humanizer"] = writer.HUMANIZER
         return bundle, candidate
 
     def test_sealed_titleless_papers_remain_verifiable(self):
         inputs = writer.applicable_inputs("paper", self.main)
-        for schema in (1, 2):
+        for schema in (1, 2, 4):
             with self.subTest(schema=schema):
                 bundle, candidate = self.legacy_pdf_candidate("paper", schema, inputs)
                 checks = self.self_check(candidate, fidelity="Synthetic historical proof checked.",

@@ -109,6 +109,10 @@ class Ledger(unittest.TestCase):
         self.assertEqual(state.read_json(certificate)["route_review"], "pass")
         self.assertEqual(state.manuscript.parse(certificate.with_name("main.tex"))[0]["snapshot_digest"],
                          product["snapshot_digest"])
+        paper_certificate = self.task / product["paper_approval_path"]
+        self.assertEqual(state.read_json(paper_certificate)["purpose"], "paper-input")
+        self.assertFalse((paper_certificate.parent / "original.md").exists())
+        self.assertEqual(approved["models"]["paper_writer"], ["gpt-6.2-astra", "ultra"])
         self.change("pause", kind="user", evidence="fixture user temporarily paused delivery")
         self.assertEqual(self.change("refactor-decision", decision="resume", confirmation="fixture user resumed")["phase"],
                          "delivery")
@@ -157,8 +161,41 @@ class Ledger(unittest.TestCase):
         self.assertEqual(result["phase"], "dispatch")
         self.assertIn("main-proof", self.data["unsafe"])
         self.assertEqual(result["superseded"][0]["products"]["game"]["status"], "delivered")
-        self.assertEqual(result["superseded"][0]["products"]["paper"]["status"], "blocked")
+        self.assertNotIn("paper", result["superseded"][0]["products"])
+        self.assertEqual(result["independent_paper"]["products"]["paper"]["status"], "blocked")
+        self.assertEqual(self.task / result["independent_paper"]["approval_path"], paper_certificate)
+        self.assertEqual(state.read_json(paper_certificate)["route_review"], "pass")
         self.assertEqual(state.read_json(certificate)["route_review"], "invalidated")
+
+        paper_pdf = self.task / "deliveries" / "paper.pdf"
+        paper_pdf.write_bytes(b"Paper fixture with mocked Writer receipt")
+
+        def checked_paper(kind, bundle, inputs):
+            self.assertEqual(kind, "paper")
+            self.assertEqual(bundle, paper_pdf.parent)
+            self.assertEqual(inputs()["snapshot_digest"], product["snapshot_digest"])
+            return {"pdf": "paper.pdf", "schema": 5}
+
+        with patch("writer.verify_delivery", side_effect=checked_paper):
+            with self.assertRaisesRegex(state.Rejected, "active delivery snapshot"):
+                self.change("deliverable", kind="paper", snapshot_digest="unrelated snapshot", status="checked",
+                            artifact="deliveries/paper.pdf", sha256=state.file_digest(paper_pdf),
+                            evidence="fixture paper check")
+            self.change("deliverable", kind="paper", snapshot_digest=product["snapshot_digest"], status="checked",
+                        artifact="deliveries/paper.pdf", sha256=state.file_digest(paper_pdf),
+                        evidence="fixture paper check")
+            self.change("deliverable", kind="paper", snapshot_digest=product["snapshot_digest"], status="delivered",
+                        evidence="fixture paper handoff")
+        self.assertEqual(self.data["state"]["phase"], "dispatch")
+        self.assertEqual(self.evaluate(), "route")
+        self.result(self.action(role="simplification"), "no-simplification")
+        replacement = self.change("advance")["delivery"]
+        self.assertEqual(set(replacement["products"]), {"game"})
+        self.assertEqual(self.data["state"]["independent_paper"]["products"]["paper"]["status"], "delivered")
+        self.change("deliverable", kind="game", snapshot_digest=replacement["snapshot_digest"], status="checked",
+                    artifact="deliveries/example-site", sha256=export["artifact_sha256"], evidence="fixture repaired game")
+        self.assertEqual(self.change("deliverable", kind="game", snapshot_digest=replacement["snapshot_digest"],
+                                     status="delivered", evidence="fixture repaired game handoff")["phase"], "complete")
 
     def test_completed_task_replaces_only_the_verified_referee_report(self):
         approval = {"snapshot_digest": "synthetic-snapshot"}
@@ -231,6 +268,64 @@ class Ledger(unittest.TestCase):
             self.assertIn(reviewer, status["actions"])
         current = self.result(reviewer, "nonpass", issue="unclear", location="first sentence")
         self.assertEqual(current["round"]["issues"][reviewer["token"]]["issue"], "unclear")
+
+    def test_legacy_statement_nonpass_enters_fixer_and_is_reviewed_again(self):
+        main = self.task / "main.tex"
+        main.write_text(main.read_text().replace(r"\MSstatement{main}", r"\MScomponent{main}{statement}"))
+        body = self.task / "components/main.tex"
+        body.write_text("We next explain the bound.\n\n"
+                        r"\noindent\textup{\textbf{Statement.}}" "\n"
+                        r"If \(x\geq0\), then \(x^2+x+1\geq1\)." "\n\n"
+                        r"\noindent\textup{\textbf{Comment.}}" "\n"
+                        "The next argument uses this bound.\n")
+        self.init()
+        self.change("advance")
+        self.pass_component("setting")
+        reviewer = self.bind(self.action(component="main", gate="expression"))
+        self.assertEqual((reviewer["model"], reviewer["effort"]), ("gpt-6-luna", "high"))
+        with self.assertRaisesRegex(state.Rejected, "cannot pass with a bold"):
+            self.result(reviewer, "pass")
+        self.result(reviewer, "nonpass", issue="Orientation and comments inside the formal result", location="lines 1–7")
+        batcher = self.action(role="batcher")
+        self.result(batcher, "complete", issue_ids=[reviewer["token"]])
+        fixer = self.action(role="fixer")
+        candidate = self.staged()
+        migration = state.manuscript.migrate_statement(candidate / "main.tex", "main", 4, 4)
+        self.assertEqual(migration["removed_heading_lines"], [3, 6])
+        self.result(fixer, "candidate", **self.proposal(candidate),
+                    issues={reviewer["token"]: {"status": "fixed", "evidence": "Moved only surrounding prose"}})
+        self.change("apply-candidate",
+                    changes={"main": {"meaning": "equivalent", "meaning_evidence": "Same assertion",
+                                      "transition": "equivalent", "transition_evidence": "Same prose and order"},
+                             "lower-bound": {"transition": "equivalent",
+                                             "transition_evidence": "Preceding result was only re-typeset"}},
+                    target_meaning_evidence="Unchanged mathematical scope")
+        self.assertIn("main", self.data["unsafe"])
+        self.change("advance")
+        fresh = self.action(component="main", gate="expression")
+        self.assertNotEqual(fresh["snapshot_digest"], reviewer["snapshot_digest"])
+        self.assertIsNone(fresh["identity"])
+        self.result(fresh, "pass")
+        self.assertEqual(self.action(component="main")["gate"], "self_contained")
+
+    def test_prior_safe_statements_are_reopened_at_validation_boundary(self):
+        self.init()
+        self.assertEqual(self.evaluate(), "route")
+        persisted = state.read_json(self.task / "state.json")
+        persisted.pop("statement_expression_policy")
+        (self.task / "state.json").write_bytes(state.json_bytes(persisted))
+        self.result(self.action(role="simplification"), "no-simplification")
+        self.assertEqual(self.data["state"]["phase"], "dispatch")
+        safe = self.data["state"]["safe"]
+        self.assertIn("setting", safe)
+        self.assertIn("main-proof", safe)
+        self.assertNotIn("main", safe)
+        self.change("advance")
+        self.assertEqual({(action["component"], action["gate"]) for action in self.actions()},
+                         {("main", "expression"), ("lower-bound", "expression")})
+        self.assertEqual(self.evaluate(), "route")
+        self.result(self.action(role="simplification"), "no-simplification")
+        self.assertEqual(self.data["state"]["phase"], "complete")
 
     def test_missing_pdf_stops_at_fixer_and_keeps_completed_peers_on_replacement(self):
         self.init(kind="public")

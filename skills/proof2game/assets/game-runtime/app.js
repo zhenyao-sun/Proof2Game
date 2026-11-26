@@ -443,7 +443,7 @@
       .replace(/\\(?:begin|end)\{(?:Theorem|Lemma|Proposition|Corollary|Claim|proof|remark|definition|convention)\}(?:\[[^\]]*\])?/gi,'');
     const tokens=[];
     tokens.anchorLabels=Boolean(options.levelId);
-    let equationIndex=0;
+    let equationIndex=options.equationOffset||0;
     tokens.mathMacros=state?.game?.math_macros||{};
     const prose=mathSegments(text,namespace).map(part=>{
       if(part.type==='text')return part.text;
@@ -459,6 +459,7 @@
       else inlineText(block,joined,tokens);
       el.append(block);
     }
+    return equationIndex;
   }
   function notice(target, message) { $(target).textContent = message || ''; $(target).hidden = !message; }
   function levels() { return state?.game?.levels || []; }
@@ -835,15 +836,35 @@
     for(const [mode,id] of [['guide','mode-guide'],['chat','mode-chat']]){const tab=$(id);tab.setAttribute('aria-pressed',String(chatMode()===mode));tab.disabled=saveBusy;}
     renderComposer(chatMode());
     renderLevelHeading(level);
-    renderRich($('level-original'),localizedLevel(level).text,{levelId:level.id});
+    const original=$('level-original'), localized=localizedLevel(level);
+    const sections=localized.result_sections;
+    let equationOffset=0;
+    if(sections){
+      original.replaceChildren();
+      const [before,result]=sections;
+      if(before){
+        const prose=element('div','statement-prose');
+        equationOffset=renderRich(prose,before,{levelId:level.id});
+        original.append(prose);
+      }
+      const formal=element('div','formal-statement');
+      formal.id=referenceAnchor('ms:'+level.id);
+      equationOffset=renderRich(formal,result,{levelId:level.id,equationOffset});
+      original.append(formal);
+    }else renderRich(original,localized.text,{levelId:level.id});
     if(level.type==='statement'){
       const proofKey=Object.keys(state.game.internal_references||{}).find(key=>
         state.game.internal_references[key].level_id===level.paired&&state.game.internal_references[key].kind==='proof');
       if(proofKey){
         const nav=element('p','proof-location');
         nav.append(document.createTextNode(words().pairedProof()),internalReferenceLink(proofKey,referenceTarget(proofKey).number));
-        $('level-original').append(nav);
+        original.append(nav);
       }
+    }
+    if(sections?.[2]){
+      const prose=element('div','statement-prose');
+      renderRich(prose,sections[2],{levelId:level.id,equationOffset});
+      original.append(prose);
     }
     $('level-images').replaceChildren();
     const verifiedImages=new Set(Array.isArray(state.game.images)?state.game.images:[]);

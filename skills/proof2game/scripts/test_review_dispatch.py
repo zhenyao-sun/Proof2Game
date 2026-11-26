@@ -108,6 +108,20 @@ class ReviewDispatchTest(unittest.TestCase):
         self.assertIn("Use the supplied preceding_component or preceding_proof_transition_excerpt", message)
         self.assertIn("Flag a missing transition only if the manuscript needs one", message)
         self.assertIn("Request only a precise excerpt", message)
+        self.assertEqual(packet["statement_layout"], {"mode": "explicit_result", "embedded_headings": []})
+
+    def test_legacy_packet_reports_actual_layout_without_requiring_legacy_conversion(self):
+        self.main.write_text(self.main.read_text().replace(r"\MSstatement{main}", r"\MScomponent{main}{statement}"))
+        path = self.task / "components/main.tex"
+        path.write_text(r"If \(x\ge0\), then \(x^2+x+1\ge1\)." "\n")
+        packet = review_dispatch.build_packet(self.main, self.action("main", "expression"), cutoff=CUTOFF)
+        self.assertEqual(packet["statement_layout"], {"mode": "whole_component", "embedded_headings": []})
+        self.append_component("main.tex", r"\noindent\textup{\textbf{Comment.}}" "\nAn application follows.")
+        packet = review_dispatch.build_packet(self.main, self.action("main", "expression"), cutoff=CUTOFF)
+        self.assertEqual(packet["statement_layout"]["embedded_headings"], [{"line": 4, "heading": "Comment."}])
+        message = review_dispatch.worker_prompt(packet, self.scratch / "gate.json", "sha256")
+        self.assertIn("even without headings", message)
+        self.assertIn("A clean legacy body", message)
 
     def test_nested_statement_navigation_separates_the_enclosing_proof(self):
         packet = review_dispatch.build_packet(self.main, self.action("lower-bound", "expression"), cutoff=CUTOFF)

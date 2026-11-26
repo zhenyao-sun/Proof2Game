@@ -64,7 +64,7 @@ def equation_labels(text):
                for f in frames):labels.add(label)
     return labels
 
-ARITY = {'MScomponent': 6, 'MSnode': 2, 'MSendnode': 0, 'section': 1, 'subsection': 1,
+ARITY = {'MScomponent': 6, 'MSstatement': 5, 'MSnode': 2, 'MSendnode': 0, 'section': 1, 'subsection': 1,
          'subsubsection': 1, 'MSdecomposition': 2}
 ASSEMBLY = re.compile(r'\\(' + '|'.join(ARITY) + r')\b')
 LABEL = re.compile(r'\\label\s*\{([^{}]+)\}')
@@ -82,6 +82,47 @@ RESOURCE = re.compile(
 )
 DEFAULT_REQUIRED = ('Main Results', 'Detailed Proofs')
 THEOREM_KIND = re.compile(r'[A-Za-z][A-Za-z0-9]*')
+ENVIRONMENT = re.compile(r'(?<!\\)\\(begin|end)\s*\{([^{}]+)\}')
+STATEMENT_HEADING = re.compile(
+    r'^\s*(?:\\noindent\s*)?(?:\\textup\s*\{\s*)?\\textbf\s*\{(Statement|Comment)\.\s*\}\s*\}?\s*$'
+)
+
+
+def statement_parts(text):
+    """Return preamble prose, formal result and following prose, using original offsets."""
+    stack = []
+    start = body = close = end = None
+    for match in ENVIRONMENT.finditer(uncomment(text)):
+        command, name = match.groups()
+        if name == 'MSresult':
+            if command == 'begin' and not stack and start is None:
+                start, body = match.span()
+            elif command == 'end' and stack == ['MSresult']:
+                close, end = match.span()
+            else:
+                raise Invalid('Expected exactly one top-level MSresult environment.')
+        if command == 'begin':
+            stack.append(name)
+        elif not stack or stack.pop() != name:
+            raise Invalid('Unbalanced environments in statement component.')
+    if stack or end is None or not uncomment(text[body:close]).strip():
+        raise Invalid('Expected one nonempty, closed MSresult environment.')
+    return text[:start], text[body:close], text[end:]
+
+
+def statement_layout(text, explicit):
+    """Describe which source lines are set inside the formal theorem."""
+    before, formal, _ = statement_parts(text) if explicit else ('', text, '')
+    offset = before.count('\n')
+    markers = [
+        {'line': offset + index, 'heading': match[1] + '.'}
+        for index, line in enumerate(uncomment(formal).splitlines(), 1)
+        if (match := STATEMENT_HEADING.fullmatch(line))
+    ]
+    return {
+        'mode': 'explicit_result' if explicit else 'whole_component',
+        'embedded_headings': markers,
+    }
 
 
 def group(text, index):
@@ -361,7 +402,11 @@ def read_assembly(main):
             if node['proof'] != byid[node['target']]['paired'] or node['expanded'] != node['children']:
                 raise Invalid(f'{node["target"]} needs its paired proof and all child nodes in declaration order.')
             continue
-        cid, kind_type, name, pair, kind, title = args
+        if command == 'MSstatement':
+            cid, name, pair, kind, title = args
+            kind_type = 'statement'
+        else:
+            cid, kind_type, name, pair, kind, title = args
         if not AT.fullmatch(cid) or cid in byid:
             raise Invalid(f'Invalid or repeated component ID: {cid}')
         if kind_type not in ('convention', 'statement', 'proof'):
@@ -379,6 +424,13 @@ def read_assembly(main):
         visible = uncomment(text)
         if DYNAMIC.search(visible) or RAW_INPUT.search(visible) or ASSEMBLY.search(visible):
             raise Invalid(f'{cid} contains unsupported nested assembly.')
+        if command == 'MSstatement':
+            try:
+                statement_parts(text)
+            except Invalid as exc:
+                raise Invalid(f'{cid}: {exc}') from exc
+        elif any(name == 'MSresult' for _, name in ENVIRONMENT.findall(visible)):
+            raise Invalid(f'{cid}: MSresult requires an MSstatement declaration.')
         ambient = list(settings)
         location = '1' if block == 0 else f'1.{block}'
         heading = main_heading
@@ -427,6 +479,8 @@ def read_assembly(main):
             'preceding_prose': preceding, 'equation_labels': sorted(equation_labels(text)),
             'adoption_prefix': {'section1': sum(a in settings for a in ambient)},
         }
+        if command == 'MSstatement':
+            component['explicit_statement'] = True
         if section == 2:
             component['node'] = stack[-1]['target']
         byid[cid] = component
@@ -522,7 +576,7 @@ def filtered_body(body, events, components, cone):
         keep = event.get('node') is None or event['node'] in active
         if command == 'subsection':
             keep = event['block'] in blocks
-        if command == 'MScomponent':
+        if command in ('MScomponent', 'MSstatement'):
             keep = event['component'] in active
         if keep:
             parts.append(body[position:end])
@@ -612,6 +666,43 @@ def filter_snapshot(source_main, output_main):
     return parse(materialize_snapshot(source_main, output_main.parent))[0]
 
 
+def migrate_statement(main, cid, first_line, last_line):
+    """Apply a Fixer's reviewed placement to one legacy statement in a staged draft."""
+    _, full, (prefix, body, suffix, events), _ = read_assembly(main)
+    component = next((row for row in full['components'] if row['id'] == cid), None)
+    if not component or component['type'] != 'statement' or component.get('explicit_statement'):
+        raise Invalid(f'{cid} is not a legacy statement component.')
+    lines = component['text'].splitlines(keepends=True)
+    if not 1 <= first_line <= last_line <= len(lines):
+        raise Invalid('Select an inclusive, nonempty range of formal source lines.')
+    markers = {row['line'] for row in statement_layout(component['text'], False)['embedded_headings']}
+    placed = [
+        ''.join(line for index, line in enumerate(lines, 1) if start <= index <= end and index not in markers).strip()
+        for start, end in ((1, first_line - 1), (first_line, last_line), (last_line + 1, len(lines)))
+    ]
+    layouts = [placed[0], '\\begin{MSresult}\n' + placed[1] + '\n\\end{MSresult}', placed[2]]
+    revised = '\n\n'.join(part for part in layouts if part) + '\n'
+    statement_parts(revised)
+    event = next(row for row in events if row.get('component') == cid)
+    declaration = '\\MSstatement' + ''.join('{' + value + '}' for value in
+        (cid, component['path'], component['paired'], component['kind'], component['title']))
+    body = body[:event['start']] + declaration + body[event['end']:]
+    if r'\newcommand\MSstatement[' not in prefix:
+        legacy = r'\newcommand\MScomponent[6]'
+        type_definition = r'\def\MSstatement{statement}'
+        type_test = r'\ifx\MStype\MSstatement'
+        if any(prefix.count(token) != 1 for token in (legacy, type_definition, type_test)):
+            raise Invalid('Unrecognized legacy renderer. Install the current statement macros in the staged preamble first.')
+        template = (Path(__file__).resolve().parents[1] / 'assets' / 'script-template.tex').read_text(encoding='utf-8')
+        support = template[template.index(r'\newcommand\MSprooflocator'):template.index(legacy)]
+        prefix = prefix.replace(type_definition, r'\def\MSstatementtype{statement}')
+        prefix = prefix.replace(type_test, r'\ifx\MStype\MSstatementtype')
+        prefix = prefix.replace(legacy, support + legacy)
+    (main.parent / component['path']).write_text(revised, encoding='utf-8')
+    main.write_text(prefix + body + suffix, encoding='utf-8')
+    return {'component': cid, 'file': component['path'], 'removed_heading_lines': sorted(markers)}
+
+
 GATES = {
     'convention': ('opening', 'expression', 'self_contained', 'mathematics', 'sources', 'reuse'),
     'statement': ('expression', 'self_contained', 'mathematics', 'sources', 'reuse'),
@@ -666,6 +757,7 @@ def review_payload(main, cid, gate):
                 'kind': component['kind'], 'title': component['title'],
                 'proof_location': byid[component['paired']]['location'],
             }
+            out['statement_layout'] = statement_layout(body, component.get('explicit_statement', False))
             out['adjacent_prose'] = uncomment(component['preceding_prose'])
             if component['order']:
                 previous = full['components'][component['order'] - 1]
@@ -777,11 +869,12 @@ def verify_numbering(main):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('inspect', 'payload', 'snapshot', 'verify-pdf'))
+    parser.add_argument('command', choices=('inspect', 'payload', 'snapshot', 'verify-pdf', 'migrate-statement'))
     parser.add_argument('main', type=Path)
     parser.add_argument('--component')
     parser.add_argument('--gate')
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--formal-lines', nargs=2, type=int, metavar=('FIRST', 'LAST'))
     args = parser.parse_args()
     try:
         if args.command == 'snapshot':
@@ -792,6 +885,10 @@ def main():
             result = review_payload(args.main, args.component, args.gate)
         elif args.command == 'verify-pdf':
             result = {'numbers': verify_numbering(args.main)}
+        elif args.command == 'migrate-statement':
+            if args.component is None or args.formal_lines is None:
+                parser.error('migrate-statement requires --component ID --formal-lines FIRST LAST')
+            result = migrate_statement(args.main.resolve(strict=True), args.component, *args.formal_lines)
         else:
             result, _ = parse(args.main)
     except (OSError, ValueError) as exc:
