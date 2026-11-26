@@ -149,11 +149,15 @@ def make_comparison_source(source, entrypoint, baseline_source, temporary):
     old.write_text(strip_baseline_color(strip_previous_diff(baseline_source)), encoding="utf-8")
     new.write_text(revised, encoding="utf-8")
     style.write_text(ADDITION_PREAMBLE, encoding="utf-8")
-    process = subprocess.run(
-        [executable, "--no-del", "--no-label", "--math-markup=whole",
-         "--graphics-markup=none", "--preamble", str(style), str(old), str(new)],
-        cwd=temporary, capture_output=True, text=True, encoding="utf-8",
-    )
+    command = [executable, "--encoding=utf8", "--no-del", "--no-label", "--math-markup=whole",
+               "--graphics-markup=none", "--preamble", str(style), str(old), str(new)]
+    options = dict(cwd=temporary, capture_output=True, text=True, encoding="utf-8")
+    process = subprocess.run(command, **options)
+    if (process.returncode != 0 and "Can't locate Encode/Locale.pm" in process.stderr
+            and sys.platform == "darwin"):
+        # TeX Live selects Perl through PATH. Homebrew Perl may lack a module
+        # shipped with macOS Perl.
+        process = subprocess.run(["/usr/bin/perl", *command], **options)
     writer.require(process.returncode == 0 and process.stdout.strip(),
                    "Could not produce TeX comparison. Supply --marked-tex if the document needs manual markup."
                    + (f"\n{process.stderr.strip()}" if process.stderr.strip() else ""))

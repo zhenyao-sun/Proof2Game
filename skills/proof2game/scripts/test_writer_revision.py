@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import shutil
+import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -49,6 +50,20 @@ class WriterRevisionTests(unittest.TestCase):
         with (patch.object(writer, "verify_delivery", return_value=receipt),
               patch.object(writer, "applicable_inputs", return_value={"snapshot_digest": "synthetic-snapshot"})):
             return writer_revision.compare(self.main, self.bundle, self.baseline, **options)
+
+    def test_macos_retries_latexdiff_with_system_perl_when_locale_module_is_missing(self):
+        tex = HEADER + "Example.\n" + FOOTER
+        (self.source / "main.tex").write_text(tex, encoding="utf-8")
+        tool = "/Library/TeX/texbin/latexdiff"
+        outcomes = [subprocess.CompletedProcess([], 1, "", "Can't locate Encode/Locale.pm in @INC"),
+                    subprocess.CompletedProcess([], 0, tex, "")]
+        with (patch.object(writer_revision.sys, "platform", "darwin"),
+              patch.object(writer_revision.shutil, "which", return_value=tool),
+              patch.object(writer_revision.subprocess, "run", side_effect=outcomes) as run):
+            writer_revision.make_comparison_source(self.source, "main.tex", tex, self.root)
+        first, retry = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(first[:2], [tool, "--encoding=utf8"])
+        self.assertEqual(retry, ["/usr/bin/perl", *first])
 
     @unittest.skipUnless(shutil.which("latexdiff"), "latexdiff unavailable")
     def test_marks_additions_in_tex_and_retains_equations_and_citations(self):
