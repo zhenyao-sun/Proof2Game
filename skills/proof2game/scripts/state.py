@@ -20,11 +20,9 @@ import manuscript
 REVIEW_LIMIT = 10
 STATEMENT_EXPRESSION_POLICY = 1
 
-GATES = {
-    "statement": ("expression", "self_contained", "mathematics", "sources", "reuse"),
-    "proof": ("expression", "decomposition", "self_contained", "mathematics", "sources", "reuse"),
-    "convention": ("opening", "expression", "self_contained", "mathematics", "sources", "reuse"),
-}
+GATES = manuscript.GATES
+EXTERNAL_THEOREM_GATE = manuscript.EXTERNAL_THEOREM_GATE
+THEOREM_DEFECTS = ("counterexample", "proof-error")
 STATE_FILE = "state.json"
 JOURNAL_FILE = "state.pending.json"
 SCRIPT_SUFFIXES = {
@@ -133,6 +131,7 @@ def init(task, target, live, request):
         "round": None, "loop_active": False, "actions": {}, "used_sessions": {},
         "counters": {"rounds": 0, "loops": 0, "explorations": 0}, "history": [],
         "round_serial": 0, "optional_unavailable": {}, "findings": [], "source_results": {},
+        "external_theorem_results": {},
         "explored_digest": None, "route": None, "attempt": None, "checkpoints": [],
         "delivery": None, "superseded": [], "pause": None, "decision": None,
         "withdrawal": None,
@@ -185,13 +184,60 @@ def role_action(state, role, **context):
     return state["actions"][token]
 
 
-def review_action(state, component, review):
+def gate_plan(state, component, review):
+    if "gate_plan" in review:
+        return review["gate_plan"]
+    # A round already in progress keeps its saved gate positions and source waits.
+    # Its old passes will be eligible for a supplemental review at the boundary.
     typ = components(state["snapshot"])[component]["type"]
-    gate = GATES[typ][review["gate_position"]]
+    return [gate for gate in GATES[typ] if gate != EXTERNAL_THEOREM_GATE]
+
+
+def prior_source_rows(state, component):
+    # Legacy source_results stores the sources receipt first and the reuse receipt second.
+    return next(iter(state["source_results"].get(component, [])), [])
+
+
+def pending_theorem_reviews(state):
+    if state.get("withdrawal") or state["entry"] == "refactor":
+        return set()
+    reviewed = state.get("external_theorem_results", {})
+    eligible = (set(state["safe"]) & set(state["snapshot"]["cone"])) - reviewed.keys()
+    return {cid for cid in eligible if prior_source_rows(state, cid)}
+
+
+def theorem_key(row):
+    require(isinstance(row, dict), "each external theorem must identify a source and result locator")
+    return tuple(evidence(row.get(field), field=field) for field in ("id", "sha256", "locator"))
+
+
+def source_theorem_keys(rows):
+    return {(row["id"], row["sha256"], locator) for row in rows
+            for locator in row.get("locators", row.get("cited_locations_physical_pages", {}))}
+
+
+def review_action(state, component, review):
+    plan = gate_plan(state, component, review)
+    gate = plan[review["gate_position"]]
+    context = {}
+    if gate == EXTERNAL_THEOREM_GATE:
+        supplemental = plan == [EXTERNAL_THEOREM_GATE]
+        checked = next((row for row in review["gates"] if row["gate"] == "sources"), {})
+        rows = prior_source_rows(state, component) if supplemental else checked["sources"]
+        uses = checked.get("theorem_uses")
+        keys = source_theorem_keys(rows) if uses is None else {theorem_key(row) for row in uses}
+        prior = [item for cid, result in state.get("external_theorem_results", {}).items()
+                 if cid != component for item in result["theorems"] if theorem_key(item) in keys]
+        confirmed = [{"finding": event["finding"], "evidence": event["evidence"],
+                      "verification": event["verification"]}
+                     for event in state["history"] if event["kind"] == "external-theorem-defect-confirmed"
+                     and theorem_key(event["finding"]) in keys]
+        context = {"theorem_sources": rows, "theorem_uses": uses, "prior_theorem_judgments": prior,
+                   "confirmed_theorem_defects": confirmed, "supplemental": supplemental}
     return role_action(state, "reviewer", round=state["round"]["id"], component=component,
-                       gate=gate, source_blind=gate not in ("sources", "reuse"),
+                       gate=gate, source_blind=gate not in manuscript.LITERATURE_GATES,
                        independent_of_target=state["target"]["project_type"] == "public",
-                       identity=review["identity"], source_resolution=review.get("source_resolution"))
+                       identity=review["identity"], source_resolution=review.get("source_resolution"), **context)
 
 
 def add_reviews(state):
@@ -240,8 +286,7 @@ def refresh_statement_expression(state):
     if not recheck:
         return False
     state["safe"] = ordered(state, set(state["safe"]) - recheck)
-    for cid in recheck:
-        state["source_results"].pop(cid, None)
+    retain_safe_evidence(state)
     state["route"] = None
     record(state, "statement-expression-policy", policy=STATEMENT_EXPRESSION_POLICY,
            recheck=ordered(state, recheck))
@@ -267,12 +312,17 @@ def dispatch(state, task):
     todo = unsafe(state) & set(snapshot["cone"])
     if not state["round_serial"]:
         todo |= unsafe(state) & set(snapshot["main_results"])
-    if todo:
+    supplements = pending_theorem_reviews(state)
+    if todo or supplements:
         if not state["loop_active"]:
             state["loop_active"] = True
         state["round_serial"] += 1
-        reviews = {cid: {"gate_position": 0, "identity": None, "gates": [], "verdict": None}
-                   for cid in ordered(state, todo)}
+        byid = components(snapshot)
+        reviews = {
+            cid: {"gate_position": 0, "identity": None, "gates": [], "verdict": None,
+                  "gate_plan": [EXTERNAL_THEOREM_GATE] if cid in supplements else list(GATES[byid[cid]["type"]])}
+            for cid in ordered(state, todo | supplements)
+        }
         state["round"] = {"id": state["round_serial"], "reviews": reviews, "issues": {},
                           "dispositions": {}, "batch": None, "staging": None}
         state["phase"] = "review"
@@ -299,6 +349,11 @@ def dispatch(state, task):
         state["phase"] = "compare"
         role_action(state, "simplification", checkpoint=state["attempt"]["checkpoint"],
                     prior_attempts=route_attempt_history(state))
+        return
+    if (route := state["route"]) and route["verdict"] in ("pass", "no-simplification") \
+            and route["snapshot_digest"] == live_digest(state) \
+            and route["report_sha256"] == report_digest(task, state["findings"]):
+        finish_route(state)
         return
     state["phase"] = "route"
     role = "public_route" if state["target"]["project_type"] == "public" else "simplification"
@@ -347,7 +402,10 @@ def replace(state, request):
     del state["actions"][action["token"]]
     if action["role"] == "reviewer":
         reopen_review(state)
-        review = state["round"]["reviews"][action["component"]]
+        cid = action["component"]
+        review = state["round"]["reviews"][cid]
+        if "gate_plan" not in review:
+            review["gate_plan"] = list(GATES[components(state["snapshot"])[cid]["type"]])
         review.update(gate_position=0, identity=None, gates=[], source_resolution=None)
         add_reviews(state)
         return
@@ -370,7 +428,8 @@ def source_wait_version(version):
 
 def wait_source(state, action, request):
     if action["role"] == "reviewer":
-        require(action["gate"] in ("sources", "reuse"), "source-blind gate cannot request external material")
+        require(action["gate"] in manuscript.SOURCE_REVIEW_GATES,
+                "only sources and reuse gates can queue a citation PDF wait")
     role_specific = request.get("required")
     require(isinstance(role_specific, bool), "mark a source as required or optional")
     source = intake.identifier(request.get("source"))
@@ -440,27 +499,82 @@ def resolve_source(task, state, request):
     record(state, "source-resolution", action=action["token"], **resolution)
 
 
-def verify_source_rows(task, state, rows):
+def source_citations(task, state, rows):
     require(isinstance(rows, list), "provide sources: [] when this decision uses no outside sources")
-    if rows:
-        normalized = []
-        for row in rows:
-            require(isinstance(row, dict), "each cited source must be an object")
-            item = dict(row)
-            if "locators" in item:
-                locators = item.pop("locators")
-                require(item.get("cited_locations_physical_pages", locators) == locators,
-                        "conflicting physical page locators")
-                item["cited_locations_physical_pages"] = locators
-            normalized.append(item)
-        intake.verify_citations(task.parent.parent, {"task_id": state["target"]["id"], "sources": normalized})
+    if not rows:
+        return []
+    normalized = []
+    for row in rows:
+        require(isinstance(row, dict), "each cited source must be an object")
+        item = dict(row)
+        if "locators" in item:
+            locators = item.pop("locators")
+            require(item.get("cited_locations_physical_pages", locators) == locators,
+                    "conflicting physical page locators")
+            item["cited_locations_physical_pages"] = locators
+        normalized.append(item)
+    return intake.verify_citations(task.parent.parent, {
+        "task_id": state["target"]["id"], "sources": normalized,
+    })["sources"]
+
+
+def verify_source_rows(task, state, rows):
+    source_citations(task, state, rows)
     return rows
 
 
 def check_bound_sources(task, state):
-    for cid in state["safe"]:
+    for cid in set(state["safe"]) & set(state["snapshot"]["cone"]):
         for rows in state["source_results"].get(cid, []):
             verify_source_rows(task, state, rows)
+
+
+def theorem_rows(rows, allowed, *required_fields):
+    require(isinstance(rows, list), "external theorem records must be an array")
+    seen = set()
+    for row in rows:
+        key = theorem_key(row)
+        require(key in allowed, "external theorem receipt must match a verified sources locator")
+        require(key not in seen, "record each external theorem once per component")
+        seen.add(key)
+        for field in required_fields:
+            evidence(row.get(field), field=field)
+    return seen
+
+
+def check_theorem_materials(row):
+    materials = row.get("materials", [])
+    require(isinstance(materials, list), "theorem assessment materials must be an array")
+    for material in materials:
+        require(isinstance(material, dict), "assessment materials need a source and locator")
+        evidence(material.get("source"), field="materials.source")
+        evidence(material.get("locator"), field="materials.locator")
+
+
+def check_theorem_finding(finding, allowed):
+    require(theorem_key(finding) in allowed, "theorem finding must match a verified sources locator")
+    require(finding.get("kind") in ("uncertain", *THEOREM_DEFECTS), "unknown external theorem finding kind")
+    check_theorem_materials(finding)
+
+
+def external_theorem_result(action, request, result):
+    allowed = source_theorem_keys(action["theorem_sources"])
+    if result["verdict"] == "pass":
+        require("theorem_finding" not in request, "a theorem finding requires nonpass")
+        checks = request.get("theorems")
+        reviewed = theorem_rows(checks, allowed, "reason")
+        if action["theorem_uses"] is not None:
+            require(reviewed == {theorem_key(row) for row in action["theorem_uses"]},
+                    "record a judgment for every external theorem identified at the sources gate")
+        for check in checks:
+            check_theorem_materials(check)
+        result["theorems"] = checks
+    else:
+        require("theorems" not in request, "a nonpass reports the specific theorem issue")
+        if "theorem_finding" in request:
+            finding = request["theorem_finding"]
+            check_theorem_finding(finding, allowed)
+            result["theorem_finding"] = finding
 
 
 def review_result(task, state, action, request):
@@ -480,10 +594,25 @@ def review_result(task, state, action, request):
         require(verdict == "nonpass", "reviewer must report missing indispensable evidence as nonpass")
     result = {"gate": action["gate"], "verdict": verdict, "evidence": evidence(request.get("evidence")),
               "session": action["identity"]["session"], "snapshot_digest": live_digest(state)}
-    if not action["source_blind"] and (verdict == "pass" or "sources" in request):
+    gate = action["gate"]
+    if gate in manuscript.SOURCE_REVIEW_GATES and (verdict == "pass" or "sources" in request):
         result["sources"] = verify_source_rows(task, state, request.get("sources"))
     else:
-        require("sources" not in request, "source-blind gate cannot receive literature evidence")
+        require("sources" not in request, "only sources and reuse gates can record proof citations")
+    if "theorem_uses" in request:
+        require(gate == "sources" and verdict == "pass", "theorem uses belong to a sources pass")
+        uses = request["theorem_uses"]
+        theorem_rows(uses, source_theorem_keys(result["sources"]), "statement", "use")
+        result["theorem_uses"] = uses
+    elif gate == "sources" and verdict == "pass" and EXTERNAL_THEOREM_GATE in gate_plan(state, cid, review):
+        require(not result["sources"], "list the actual theorem_uses for the verified sources")
+        result["theorem_uses"] = []
+    if gate == EXTERNAL_THEOREM_GATE:
+        verify_source_rows(task, state, action["theorem_sources"])
+        external_theorem_result(action, request, result)
+    else:
+        require("theorems" not in request and "theorem_finding" not in request,
+                "external theorem judgments belong to the external theorem gate")
     if verdict == "pass" and resolution and resolution["required"] and resolution["status"] == "available":
         reference_id = resolution.get("reference_id")
         sha256 = resolution.get("reference_sha256")
@@ -499,13 +628,50 @@ def review_result(task, state, action, request):
         result["issue"] = evidence(request.get("issue"), field="issue")
         current["issues"][action["token"]] = {"component": cid, **result}
         review["verdict"] = verdict
-    elif review["gate_position"] + 1 == len(GATES[components(state["snapshot"])[cid]["type"]]):
+        if result.get("theorem_finding", {}).get("kind") == "counterexample":
+            record(state, "external-theorem-counterexample", issue=action["token"], component=cid)
+    elif review["gate_position"] + 1 == len(gate_plan(state, cid, review)):
         review["verdict"] = "pass"
     else:
         review["gate_position"] += 1
         review["source_resolution"] = None
         review_action(state, cid, review)
     advance_review(state)
+
+
+def retain_safe_evidence(state):
+    safe = set(state["safe"])
+    for key in ("source_results", "external_theorem_results"):
+        state[key] = {cid: rows for cid, rows in state.get(key, {}).items() if cid in safe}
+
+
+def theorem_consumers(state, finding, *, reviews=()):
+    key = theorem_key(finding)
+    checked = state.get("external_theorem_results", {})
+    active = set(state["snapshot"]["cone"])
+    matches = set()
+    for cid in active:
+        if cid in checked:
+            if any(theorem_key(row) == key for row in checked[cid]["theorems"]):
+                matches.add(cid)
+        elif key in source_theorem_keys(prior_source_rows(state, cid)):
+            matches.add(cid)
+    for cid, review in reviews:
+        if cid in active and any(theorem_key(row) == key for gate in review["gates"]
+                                 for row in gate.get("theorems", [])):
+            matches.add(cid)
+    return matches
+
+
+def affected_components(state, resolution):
+    require(isinstance(resolution, dict) and resolution.get("status") in ("confirmed", "refuted"),
+            "theorem resolution needs an independent confirmed or refuted judgment")
+    evidence(resolution.get("evidence"))
+    affected = resolution.get("affected_components", [])
+    require(isinstance(affected, list) and all(isinstance(cid, str) for cid in affected)
+            and set(affected) <= set(state["snapshot"]["cone"]), "affected components must be in the dependency union")
+    require(not affected or resolution["status"] == "confirmed", "a refuted finding cannot invalidate other components")
+    return set(affected)
 
 
 def finish_round(state, invalidated):
@@ -515,10 +681,32 @@ def finish_round(state, invalidated):
             "complete every independent review before closing its round")
     require(set(current["dispositions"]) == set(current["issues"]), "each finding needs a Fixer disposition")
     passed = {cid for cid, item in current["reviews"].items() if item["verdict"] == "pass"}
-    state["safe"] = ordered(state, (set(state["safe"]) | passed) & set(state["universe"]) - invalidated)
+    failed = current["reviews"].keys() - passed
+    for issue_id, issue in current["issues"].items():
+        finding = issue.get("theorem_finding", {})
+        if finding.get("kind") not in THEOREM_DEFECTS:
+            continue
+        resolution = current["dispositions"][issue_id].get("theorem_resolution")
+        require(resolution is not None, "Fixer must confirm or refute the concrete theorem defect")
+        if resolution["status"] == "confirmed":
+            affected = theorem_consumers(state, finding, reviews=current["reviews"].items())
+            affected.update(resolution.get("affected_components", []))
+            affected.add(issue["component"])
+            invalidated |= affected
+            record(state, "external-theorem-defect-confirmed", finding=finding, affected=ordered(state, affected),
+                   snapshot_digest=issue["snapshot_digest"], evidence=issue["evidence"], verification=resolution["evidence"])
+    if failed or invalidated:
+        state["route"] = None
+    state["safe"] = ordered(state, ((set(state["safe"]) | passed) & set(state["universe"])) - failed - invalidated)
     for cid in passed & set(state["safe"]):
-        state["source_results"][cid] = [gate["sources"] for gate in current["reviews"][cid]["gates"] if "sources" in gate]
-    state["source_results"] = {cid: results for cid, results in state["source_results"].items() if cid in state["safe"]}
+        gates = current["reviews"][cid]["gates"]
+        citations = [gate["sources"] for gate in gates if "sources" in gate]
+        if citations:
+            state["source_results"][cid] = citations
+        for gate in gates:
+            if gate["gate"] == EXTERNAL_THEOREM_GATE:
+                state.setdefault("external_theorem_results", {})[cid] = gate
+    retain_safe_evidence(state)
     state["round"] = None
     state["counters"]["rounds"] += 1
     record(state, "round", round=current, invalidated=ordered(state, invalidated), safe=state["safe"],
@@ -536,6 +724,13 @@ def record_fix(state, action, request):
             require(disposition.get("status") in ("fixed", "resolved", "irrelevant", "clarified", "disagreed", "blocked"),
                     "unknown finding disposition")
             evidence(disposition.get("evidence"))
+            previous = current["dispositions"].get(issue, {}).get("theorem_resolution")
+            if "theorem_resolution" in disposition or previous:
+                require(current["issues"][issue].get("theorem_finding", {}).get("kind") in THEOREM_DEFECTS,
+                        "there is no concrete theorem defect to confirm or refute")
+                resolution = disposition.get("theorem_resolution", previous)
+                affected_components(state, resolution)
+                disposition = {**disposition, "theorem_resolution": resolution}
             current["dispositions"][issue] = {**disposition, "session": action["identity"]["session"]}
 
 
@@ -560,7 +755,7 @@ def finish_explore(state):
     after = set(state["snapshot"]["cone"])
     state["universe"] = ordered(state, after)
     state["safe"] = ordered(state, set(state["safe"]) & after)
-    state["source_results"] = {cid: rows for cid, rows in state["source_results"].items() if cid in state["safe"]}
+    retain_safe_evidence(state)
     state["explored_digest"] = live_digest(state)
     state["counters"]["explorations"] += 1
     record(state, "exploration", added=ordered(state, after - before), removed=sorted(before - after),
@@ -592,7 +787,7 @@ def result(task, state, request):
         if "sources" in request:
             verify_source_rows(task, state, request["sources"])
         if action.get("purpose") == "incident":
-            check_incident_result(task, state, request)
+            check_incident_result(task, state, action, request)
             return
         record_fix(state, action, request)
         if "report_findings" in request:
@@ -672,6 +867,9 @@ def set_proposal(state, request, updater):
 
 
 def route_result(task, state, action, request):
+    if pending_theorem_reviews(state):
+        return_to_validation(state)
+        return
     verdict = request.get("verdict")
     result = {"verdict": verdict, "evidence": evidence(request.get("evidence")),
               "session": action["identity"]["session"], "snapshot_digest": live_digest(state)}
@@ -699,7 +897,7 @@ def route_result(task, state, action, request):
         if refresh_statement_expression(state):
             state["phase"] = "dispatch"
         else:
-            state["phase"] = "approved" if state["entry"] == "guided" else "complete"
+            finish_route(state)
         return
     plan = evidence(request.get("plan"))
     checkpoint = ensure_checkpoint(task, state)
@@ -708,6 +906,19 @@ def route_result(task, state, action, request):
     record(state, "route-attempt", checkpoint=checkpoint["commit"], plan=plan, route_review=result)
     state["phase"] = "implement"
     role_action(state, "refactor", plan=plan, route_result=result, cutoff=state["target"].get("cutoff"))
+
+
+def finish_route(state):
+    delivery = state["delivery"]
+    if state["entry"] != "guided":
+        state["phase"] = "complete"
+    elif (delivery and delivery.get("pending_theorem_review")
+          and delivery["approval"].get("route_review_result") == state["route"]):
+        delivery.pop("pending_theorem_review")
+        state["phase"] = "delivery"
+        finish_delivery_if_ready(state)
+    else:
+        state["phase"] = "approved"
 
 
 def script_files(root, excluded=()):
@@ -748,6 +959,7 @@ def ensure_checkpoint(task, state):
     files = live_files(task, state["target"])
     baseline = {key: copy.deepcopy(state[key]) for key in
                 ("snapshot", "universe", "safe", "source_results", "explored_digest", "route", "findings")}
+    baseline["external_theorem_results"] = copy.deepcopy(state.get("external_theorem_results", {}))
     baseline["statement_expression_policy"] = state.get("statement_expression_policy", 0)
     same = next((entry for entry in reversed(state["checkpoints"]) if entry["files"] == files and entry["branch"] == branch
                  and entry["baseline"] == baseline), None)
@@ -763,7 +975,8 @@ def ensure_checkpoint(task, state):
     else:
         require(different.returncode == 0, different.stderr.decode(errors="replace"))
     commit = git(root, "rev-parse", "HEAD").stdout.decode().strip()
-    checkpoint = {"commit": commit, "branch": branch, "files": files, "baseline": baseline}
+    checkpoint = {"commit": commit, "branch": branch, "files": files, "baseline": baseline,
+                  "history_offset": len(state["history"])}
     state["checkpoints"].append(checkpoint)
     record(state, "checkpoint", commit=commit, branch=branch)
     return checkpoint
@@ -859,6 +1072,7 @@ def apply_candidate(task, state, request):
         finish_round(state, invalidated)
     else:
         state["safe"] = ordered(state, set(state["safe"]) - invalidated)
+        retain_safe_evidence(state)
         if updater == "optimizer":
             finish_explore(state)
         elif state["entry"] == "refactor":
@@ -901,6 +1115,13 @@ def rollback(task, state, request):
     record(state, "route-resolution", attempt=attempt, decision="rollback",
            reason=attempt["rollback_reason"], evidence=evidence(request.get("evidence")), discarded_round=state["round"])
     state.update(copy.deepcopy(checkpoint["baseline"]))
+    state["external_theorem_results"] = copy.deepcopy(checkpoint["baseline"].get("external_theorem_results", {}))
+    reopened = set()
+    for item in state["history"][checkpoint.get("history_offset", 0):]:
+        if item["kind"] == "external-theorem-defect-confirmed":
+            reopened.update(theorem_consumers(state, item["finding"]))
+    state["safe"] = ordered(state, set(state["safe"]) - reopened)
+    retain_safe_evidence(state)
     state["statement_expression_policy"] = checkpoint["baseline"].get("statement_expression_policy", 0)
     state["attempt"] = None
     state["round"] = None
@@ -1003,6 +1224,7 @@ def verify_approval(task, state):
     require(state["explored_digest"] == live_digest(state)
             and set(state["snapshot"]["cone"]) <= set(state["safe"])
             and not state["snapshot"]["open_obligations"], "dependency review and proof closure required")
+    require(not pending_theorem_reviews(state), "supplemental external theorem review is still pending")
     report = report_digest(task, state["findings"])
     require(state["route"]["report_sha256"] == report, "hard finding documentation changed after route review")
     build = Path(tempfile.mkdtemp(prefix=".snapshot-", dir=task / "staging"))
@@ -1150,6 +1372,8 @@ def deliverable(task, state, request):
             "no active delivery approval")
     delivery = independent or state["delivery"]
     require(delivery is not None, "this product is outside the active delivery")
+    if not independent and state["phase"] == "delivery":
+        require(not pending_theorem_reviews(state), "advance to the supplemental external theorem review before delivery")
     require("snapshot_digest" in request and request["snapshot_digest"] == delivery["snapshot_digest"],
             "artifact must be bound to the active delivery snapshot")
     approval_path = confined(task, delivery.get("paper_approval_path", delivery["approval_path"])
@@ -1207,36 +1431,55 @@ def supersede(state, reason):
         state["delivery"] = None
 
 
-def incident(task, state, request):
-    require(state["phase"] in ("delivery", "complete") and state["delivery"], "there is no active delivery to suspend")
-    require(request.get("snapshot_digest") == state["delivery"]["snapshot_digest"], "incident applies to an earlier delivery")
-    reason = evidence(request.get("evidence"))
-    require(request.get("kind") in ("script", "counterexample"), "only shared substantial math incidents suspend deliveries")
-    require(not state["withdrawal"] or request["kind"] == "counterexample",
-            "report-only withdrawal requires a counterexample incident")
-    cites = set(request.get("components", []))
-    require(cites <= set(state["snapshot"]["cone"]), "incident components must lie in the delivery dependency union")
-    record(state, "incident", details=request)
+def separate_paper_delivery(task, state):
     delivery = state["delivery"]
-    approval_path = confined(task, delivery["approval_path"])
-    previous = delivery["approval"]
-    revoked = {**previous, "math_review": "invalidated", "route_review": "invalidated", "revoked": reason}
-    on_disk = read_json(approval_path)
-    require(on_disk in (previous, revoked), "delivery approval changed on disk")
-    if previous["project_type"] == "unpublished" and "paper" in delivery["products"]:
+    if delivery["approval"]["project_type"] == "unpublished" and "paper" in delivery["products"]:
         retained = retain_paper_input(task, delivery)
         retained["products"] = {"paper": delivery["products"].pop("paper")}
         state["independent_paper"] = retained
         delivery.pop("paper_approval_path", None)
         record(state, "paper-delivery-retained", snapshot_digest=retained["snapshot_digest"])
+
+
+def revoke_delivery(task, state, reason):
+    delivery = state["delivery"]
+    separate_paper_delivery(task, state)
+    approval_path = confined(task, delivery["approval_path"])
+    previous = delivery["approval"]
+    revoked = {**previous, "math_review": "invalidated", "route_review": "invalidated", "revoked": reason}
+    on_disk = read_json(approval_path)
+    require(on_disk in (previous, revoked), "delivery approval changed on disk")
     if on_disk == previous:
         atomic_write(approval_path, json_bytes(revoked))
     supersede(state, reason)
+    state["goal_complete"] = None
+
+
+def incident(task, state, request):
+    require(state["phase"] in ("delivery", "complete") and state["delivery"], "there is no active delivery to suspend")
+    require(request.get("snapshot_digest") == state["delivery"]["snapshot_digest"], "incident applies to an earlier delivery")
+    reason = evidence(request.get("evidence"))
+    kind = request.get("kind")
+    require(kind in ("script", "counterexample", "external-theorem"), "only shared substantial math incidents suspend deliveries")
+    require(not state["withdrawal"] or kind == "counterexample",
+            "report-only withdrawal requires a counterexample incident")
+    cites = set(request.get("components", []))
+    require(cites <= set(state["snapshot"]["cone"]), "incident components must lie in the delivery dependency union")
+    record(state, "incident", details=request)
+    if kind == "external-theorem":
+        finding = request.get("theorem_finding")
+        allowed = source_theorem_keys([row for cid in state["snapshot"]["cone"] for row in prior_source_rows(state, cid)])
+        check_theorem_finding(finding, allowed)
+        require(finding["kind"] in THEOREM_DEFECTS, "delivery incidents need a concrete external theorem defect")
+        separate_paper_delivery(task, state)
+        queue_external_incident(state, request, state["phase"])
+        return
+    revoke_delivery(task, state, reason)
     state["route"] = None
     state["safe"] = ordered(state, set(state["safe"]) - (cites or set(state["snapshot"]["cone"])))
+    retain_safe_evidence(state)
     state["explored_digest"] = None
-    state["goal_complete"] = None
-    if request["kind"] == "counterexample":
+    if kind == "counterexample":
         state["phase"] = "incident-check"
         role_action(state, "fixer", purpose="incident", incident=request, withdrawal=state["withdrawal"],
                     findings=state["findings"], cutoff=state["target"].get("cutoff"))
@@ -1244,12 +1487,37 @@ def incident(task, state, request):
         return_to_validation(state)
 
 
-def check_incident_result(task, state, request):
+def queue_external_incident(state, incident, resume_phase):
+    state["phase"] = "incident-check"
+    role_action(state, "fixer", purpose="incident", incident=incident, resume_phase=resume_phase,
+                cutoff=state["target"].get("cutoff"))
+
+
+def check_incident_result(task, state, action, request):
     verdict = request.get("verdict")
     require(verdict in ("confirmed", "refuted", "blocked"), "counterexample recheck needs an evidenced outcome")
     if "report_findings" in request:
         finding_records(task, state, request["report_findings"])
-    if verdict == "blocked":
+    incident = action["incident"]
+    if incident["kind"] == "external-theorem":
+        if verdict == "blocked":
+            queue_external_incident(state, incident, action["resume_phase"])
+            pause(state, "mathematical-blocker", request["evidence"])
+        elif verdict == "refuted":
+            state["phase"] = action["resume_phase"]
+            finish_delivery_if_ready(state)
+        else:
+            finding = incident["theorem_finding"]
+            affected = theorem_consumers(state, finding)
+            affected.update(affected_components(state, {**request, "status": verdict}))
+            require(affected, "identify consumers still relying on the confirmed theorem defect")
+            revoke_delivery(task, state, request["evidence"])
+            state["safe"] = ordered(state, set(state["safe"]) - affected)
+            retain_safe_evidence(state)
+            record(state, "external-theorem-defect-confirmed", finding=finding, affected=ordered(state, affected),
+                   evidence=incident["evidence"], verification=request["evidence"])
+            return_to_validation(state)
+    elif verdict == "blocked":
         pause(state, "withdrawal-evidence" if state["withdrawal"] else "mathematical-blocker", request["evidence"])
     elif state["withdrawal"]:
         if verdict == "confirmed":
@@ -1261,14 +1529,30 @@ def check_incident_result(task, state, request):
         return_to_validation(state)
 
 
+def defer_theorem_delivery(state):
+    state["delivery"]["pending_theorem_review"] = True
+    state["phase"] = "dispatch"
+    record(state, "delivery-awaiting-external-theorem-review", components=ordered(state, pending_theorem_reviews(state)))
+
+
 def select_release(state, request):
     selected = evidence(request.get("tool_release"))
     require(selected != state["tool_release"], "the task already uses this release")
     evidence(request.get("approval"))
     evidence(request.get("compatibility"))
     require(request.get("schema") == state["schema"], "new release must support the exact task state schema")
-    require(state["phase"] not in ("apply", "approved", "delivery"),
+    phase = state["phase"]
+    supplements = pending_theorem_reviews(state)
+    require(phase != "apply" and (phase not in ("approved", "delivery") or supplements),
             "settle the staged write or prepared delivery before switching its loaded release")
+    if supplements and phase in ("route", "compare", "approved", "delivery"):
+        if phase == "delivery":
+            defer_theorem_delivery(state)
+        else:
+            for action in state["actions"].values():
+                record(state, "review-approval-deferred", action=action)
+            state["actions"] = {}
+            state["phase"] = "dispatch"
     previous = state["tool_release"]
     state["tool_release"] = selected
     state["models"]["paper_writer"] = default_models()["paper_writer"]
@@ -1331,12 +1615,17 @@ def start_entry(task, state, request):
 def operation(task, state, request):
     op = request["op"]
     writes = {}
+    history_offset = len(state["history"])
     if op == "advance":
         if state["phase"] == "approved":
             if refresh_statement_expression(state):
                 state["phase"] = "dispatch"
+            elif pending_theorem_reviews(state):
+                state["phase"] = "dispatch"
             else:
                 verify_approval(task, state)
+        elif state["phase"] == "delivery" and pending_theorem_reviews(state):
+            defer_theorem_delivery(state)
         elif state["phase"] == "withdrawn":
             withdrawal_delivery(task, state)
         elif state["phase"] == "review":
@@ -1386,6 +1675,15 @@ def operation(task, state, request):
         state["goal_complete"] = evidence(request.get("evidence"))
     else:
         raise Rejected(f"unknown operation: {op}")
+    if delivery := state.get("delivery"):
+        working_digest = delivery["approval"].get("working_snapshot_digest")
+        confirmed = next((event for event in state["history"][history_offset:]
+                          if event["kind"] == "external-theorem-defect-confirmed"
+                          and event.get("snapshot_digest") == working_digest), None)
+        if confirmed:
+            revoke_delivery(task, state, confirmed["verification"])
+        elif delivery.get("pending_theorem_review") and (state["route"] is None or state["phase"] == "approved"):
+            revoke_delivery(task, state, "The earlier delivery needs a new approval after supplemental theorem review.")
     return writes
 
 
@@ -1453,10 +1751,12 @@ def replay_journal(task):
 
 def display(state, *, stale=None, pending=False):
     if state is None:
-        return {"state": None, "actions": [], "unsafe": [], "stale": stale, "pending_write": pending}
+        return {"state": None, "actions": [], "unsafe": [], "theorem_supplements": [],
+                "stale": stale, "pending_write": pending}
     actions = [] if stale or pending or state["phase"] == "paused" else list(state["actions"].values())
-    return {"state": state, "actions": actions, "unsafe": ordered(state, unsafe(state)), "stale": stale,
-            "pending_write": pending}
+    return {"state": state, "actions": actions, "unsafe": ordered(state, unsafe(state)),
+            "theorem_supplements": ordered(state, pending_theorem_reviews(state)),
+            "stale": stale, "pending_write": pending}
 
 
 def transact(task, request):

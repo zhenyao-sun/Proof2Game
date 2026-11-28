@@ -29,6 +29,18 @@ COMMON = {
         "eligible original PDF. A necessary missing PDF requires a source wait with its exact identity and use. "
         "A nonpublic dependency is a source defect."
     ),
+    manuscript.EXTERNAL_THEOREM_GATE: (
+        "Independently decide whether each external theorem actually relied on by this component stands up. "
+        "Ignore citations used only for background, comparison, or attribution. Judge the full cited theorem "
+        "even when the script needs only a special case. "
+        "Choose your own methods, tools, whether to read the original proof and how far to pursue its dependencies. "
+        "Prior judgments for the same verified source and locator are optional input. You own the current decision. "
+        "Investigate doubts. If still unsure or if you find a material error, return nonpass with the specific "
+        "problem and where the script relies on the result. A source that states the theorem without proving it may "
+        "remain cited when you judge it true. A cited source that gives a materially faulty proof is a nonpass even "
+        "if a later independent proof establishes the same theorem. If a counterexample defeats the full statement, "
+        "explain its scope and why the actual special case stands if you can substantiate it."
+    ),
     "reuse": (
         "Investigate concrete opportunities to replace nontrivial repeated derivation with a verified eligible "
         "reference. A nonpass requires a current unresolved issue in attribution, relation to known work, or needless "
@@ -132,7 +144,7 @@ def require(condition, explanation):
         raise ValueError(explanation)
 
 
-def build_packet(main, action, *, cutoff=None):
+def build_packet(main, action, *, cutoff=None, theorem_sources=()):
     require(action["role"] == "reviewer" and not action.get("waiting"), "review action must be available")
     require(isinstance(action["token"], str) and action["token"], "current review token required")
     packet = manuscript.review_payload(main, action["component"], action["gate"])
@@ -140,7 +152,16 @@ def build_packet(main, action, *, cutoff=None):
     require(action["source_blind"] is packet["source_blind"], "gate has the wrong source boundary")
     packet["token"] = action["token"]
     packet["target_independent"] = action.get("independent_of_target") is True
-    if not packet["source_blind"]:
+    if packet["gate"] == manuscript.EXTERNAL_THEOREM_GATE:
+        packet["theorem_sources"] = list(theorem_sources)
+        packet["theorem_uses"] = action["theorem_uses"]
+        packet["prior_theorem_judgments"] = action["prior_theorem_judgments"]
+        packet["confirmed_theorem_defects"] = action["confirmed_theorem_defects"]
+        packet["supplemental"] = action["supplemental"]
+        if packet["target_independent"]:
+            require(isinstance(cutoff, str) and cutoff, "public validation cutoff is missing")
+            packet["script_reference_cutoff"] = cutoff
+    elif not packet["source_blind"]:
         if packet["target_independent"]:
             require(isinstance(cutoff, str) and cutoff, "public validation cutoff is missing")
             packet["source_cutoff"] = cutoff
@@ -168,6 +189,26 @@ def worker_prompt(packet, path, packet_sha256):
             "searches and PDFs. In the mathematics gate take fully stated external interfaces as provisional premises. "
             "Omit the sources field entirely at this gate."
         )
+    elif gate == manuscript.EXTERNAL_THEOREM_GATE:
+        lines.append(
+            "Use the verified exact source bindings and supplied script context. You may consult relevant evidence "
+            "using tools you choose. Keep this material within this gate and the Fixer's diagnosis. "
+            "Later counterexamples, corrections or independent proofs are allowed for judgment, even after "
+            "script_reference_cutoff. They are not references or proof methods for the script or its repair. "
+            "The supplementary gate uses the old sources receipt. Identify actual theorem uses from the current "
+            "component and its interfaces if theorem_uses is null. Consider any supplied evidence of an earlier "
+            "confirmed defect if the script still cites that result."
+        )
+        lines.append(
+            "For pass, return theorems as an array. For each actual theorem, include id, sha256, locator "
+            "(the exact label from the verified source), and a one-sentence reason. Add materials for specific "
+            'evidence used, as objects like {"source":"edition, DOI or URL", "locator":"Theorem 2, p. 4"}. '
+            "Use theorems:[] and say there is no applicable dependency when appropriate. Do not rewrite a proof. "
+            "For nonpass, include issue and location. When the issue concerns a verified result, attach "
+            "theorem_finding with its id, sha256, locator, and kind: uncertain, counterexample, or proof-error, "
+            "plus materials when used. Report all substantive details of a counterexample or proof error in evidence. "
+            "Omit sources. If investigation cannot resolve the issue, report a specific nonpass rather than a source wait."
+        )
     else:
         lines.append(
             "Outside the packet, use only source material separately granted by the coordinator for this gate. For a "
@@ -189,7 +230,7 @@ def worker_prompt(packet, path, packet_sha256):
             if resolution["required"] else
             "Continue without that optional source and assess the self-contained current argument."
         )
-    if not packet["source_blind"]:
+    if gate in manuscript.SOURCE_REVIEW_GATES:
         lines.append(
             "For pass, include sources as an array of objects with id, sha256, and locators mapping result locations "
             'to arrays of integer physical PDF page numbers, e.g. {"Theorem 2": [8], "Lemma 3": [9, 10]}. '
@@ -201,6 +242,13 @@ def worker_prompt(packet, path, packet_sha256):
             "required (boolean), and exact location. Set source_version to the exact known edition or omit it if unknown. "
             "Identify the missing external work and its use in evidence."
         )
+        if gate == "sources":
+            lines.append(
+                "On pass also list theorem_uses, one object per actual external theorem required by the component. "
+                "Each object has id, sha256 and locator matching a result in sources, plus the exact cited statement "
+                "and use (where the script requires it, including use through an interface). Use theorem_uses:[] if "
+                "there are none. A reference mentioned only for comparison, background or attribution is not a theorem use."
+            )
     command = shlex.join(["python3", "-c", READ_CHUNK, str(path), packet_sha256, "0"])
     format_receipt = shlex.join(["python3", "-c", FORMAT_RECEIPT, str(path), packet_sha256])
     lines.extend([
@@ -241,7 +289,13 @@ def current_review(task, token):
     action = next((item for item in status["actions"] if item["token"] == token), None)
     require(action is not None, "no current assignment matches this review token")
     cutoff = status["state"]["target"].get("cutoff")
-    packet = build_packet(task / "main.tex", action, cutoff=cutoff)
+    theorem_sources = []
+    if action.get("gate") == manuscript.EXTERNAL_THEOREM_GATE:
+        allowed = ("id", "sha256", "title", "version", "public_date", "source_url", "pdf_path",
+                   "cited_locations_physical_pages")
+        theorem_sources = [{key: row[key] for key in allowed}
+                           for row in state.source_citations(task, status["state"], action["theorem_sources"])]
+    packet = build_packet(task / "main.tex", action, cutoff=cutoff, theorem_sources=theorem_sources)
     return status["state"]["revision"], action, packet
 
 
@@ -272,7 +326,8 @@ def accept_receipt(task, token, session, receipt):
     binding["packet_sha256"] = hashlib.sha256(packet_bytes(packet)).hexdigest()
     require(all(receipt.get(key) == value for key, value in binding.items()),
             "receipt does not match the current detached review packet")
-    fields = ("verdict", "evidence", "issue", "location", "sources", "source", "source_version", "required")
+    fields = ("verdict", "evidence", "issue", "location", "sources", "source", "source_version", "required",
+              "theorem_uses", "theorems", "theorem_finding")
     request = {key: receipt[key] for key in fields if key in receipt}
     return state.transact(task, {**request, **binding, "op": "result",
                                 "expected_revision": revision, "session": session})

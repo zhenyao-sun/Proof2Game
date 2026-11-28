@@ -1,4 +1,5 @@
 """Deterministic ledger regressions. All worker returns here are synthetic fixtures."""
+import hashlib
 from pathlib import Path
 import shutil
 import tempfile
@@ -7,6 +8,7 @@ from unittest.mock import patch
 
 import game_developer
 import intake
+import review_dispatch
 import state
 from test_intake import make_pdf, source_data
 
@@ -59,8 +61,24 @@ class Ledger(unittest.TestCase):
 
     def result(self, action, verdict, **fields):
         action = self.bind(action)
-        if action["role"] == "reviewer" and action["gate"] in ("sources", "reuse") and verdict == "pass":
-            fields.setdefault("sources", [])
+        if action["role"] == "reviewer" and verdict == "pass":
+            if action["gate"] in ("sources", "reuse"):
+                fields.setdefault("sources", [])
+                review = self.data["state"]["round"]["reviews"][action["component"]]
+                if action["gate"] == "sources" and state.EXTERNAL_THEOREM_GATE in review.get("gate_plan", []):
+                    fields.setdefault("theorem_uses", [
+                        {"id": ref, "sha256": digest, "locator": location,
+                         "statement": "Synthetic theorem statement.", "use": "Fixture proof dependency."}
+                        for ref, digest, location in sorted(state.source_theorem_keys(fields["sources"]))
+                    ])
+            elif action["gate"] == state.EXTERNAL_THEOREM_GATE:
+                uses = action["theorem_uses"]
+                keys = (sorted(state.source_theorem_keys(action["theorem_sources"])) if uses is None
+                        else [state.theorem_key(row) for row in uses])
+                fields.setdefault("theorems", [
+                    {"id": ref, "sha256": digest, "locator": location, "reason": "Synthetic theorem judgment."}
+                    for ref, digest, location in keys
+                ])
         return self.change("result", verdict=verdict, token=action["token"], snapshot_digest=action["snapshot_digest"],
                            session=action["identity"]["session"], evidence=f"synthetic {verdict} fixture", **fields)
 
@@ -68,18 +86,56 @@ class Ledger(unittest.TestCase):
         while self.actions(role="reviewer", component=cid):
             self.result(self.action(role="reviewer", component=cid), "pass")
 
-    def evaluate(self):
+    def evaluate(self, citations=None):
+        citations = citations or {}
         for _ in range(70):
             phase = self.data["state"]["phase"]
             if phase == "dispatch":
                 self.change("advance")
             elif phase == "review":
-                self.result(self.action(role="reviewer"), "pass")
+                action = self.action(role="reviewer")
+                rows = citations.get((action["component"], action["gate"]))
+                self.result(action, "pass", **({"sources": rows} if rows is not None else {}))
             elif phase == "explore":
                 self.result(self.action(role="explorer"), "no-change")
             else:
                 return phase
         self.fail("fixture failed to reach a route decision")
+
+    def reference(self, ref_id="fixture-reference", public_date="2022-01-01"):
+        pdf = self.project / f"{ref_id}.pdf"
+        make_pdf(pdf)
+        return intake.register_reference(self.project, {
+            **source_data(public_date=public_date), "id": ref_id, "work_key": ref_id, "pdf": str(pdf),
+        })
+
+    def source_row(self, reference, locator="Theorem A"):
+        return {"id": reference["id"], "sha256": reference["sha256"], "locators": {locator: [1]}}
+
+    def theorem(self, reference, locator="Theorem A"):
+        return {"id": reference["id"], "sha256": reference["sha256"], "locator": locator}
+
+    def until_gate(self, component, gate):
+        action = self.action(component=component)
+        while action["gate"] != gate:
+            self.result(action, "pass")
+            action = self.action(component=component)
+        return action
+
+    def save_legacy_ledger(self):
+        """Persist the shape of a ledger written before gate plans or theorem judgments."""
+        ledger = self.data["state"]
+        ledger.pop("external_theorem_results", None)
+        if ledger["round"]:
+            for review in ledger["round"]["reviews"].values():
+                review.pop("gate_plan", None)
+        for event in ledger["history"]:
+            if event["kind"] == "round":
+                for review in event["round"]["reviews"].values():
+                    review.pop("gate_plan", None)
+        for checkpoint in ledger["checkpoints"]:
+            checkpoint["baseline"].pop("external_theorem_results", None)
+        (self.task / "state.json").write_bytes(state.json_bytes(ledger))
 
     def staged(self, folder="edit"):
         output = self.task / "staging" / folder
@@ -327,6 +383,259 @@ class Ledger(unittest.TestCase):
         self.result(self.action(role="simplification"), "no-simplification")
         self.assertEqual(self.data["state"]["phase"], "complete")
 
+    def test_theorem_gate_uses_exact_source_and_keeps_later_evidence_out_of_citations(self):
+        self.init(kind="public")
+        original = self.reference()
+        later = self.reference("later-study", public_date="2024-01-01")
+        use = {**self.theorem(original), "statement": "The exact external theorem.",
+               "use": "The first assertion of the statement."}
+        self.change("advance")
+        self.pass_component("setting")
+        sources = self.bind(self.until_gate("main", "sources"))
+        with self.assertRaisesRegex(state.Rejected, "list the actual theorem_uses"):
+            self.change("result", token=sources["token"], snapshot_digest=sources["snapshot_digest"],
+                        session=sources["identity"]["session"], verdict="pass",
+                        sources=[self.source_row(original)], evidence="A source receipt without theorem uses.")
+        self.result(sources, "pass", sources=[self.source_row(original)], theorem_uses=[use])
+        reviewer = self.action(component="main", gate=state.EXTERNAL_THEOREM_GATE)
+        self.assertEqual(reviewer["identity"], self.action(component="main")["identity"])
+        self.assertNotEqual(reviewer["token"], sources["token"])
+        self.assertEqual(reviewer["theorem_uses"], [use])
+        _, _, packet = review_dispatch.current_review(self.task, reviewer["token"])
+        self.assertEqual(packet["script_reference_cutoff"], "2023-01-01")
+        self.assertNotIn("source_cutoff", packet)
+        self.assertEqual(packet["theorem_sources"][0]["version"], original["version"])
+        self.assertTrue(Path(packet["theorem_sources"][0]["pdf_path"]).is_file())
+        with self.assertRaisesRegex(state.Rejected, "every external theorem"):
+            self.result(reviewer, "pass", theorems=[])
+        with self.assertRaisesRegex(state.Rejected, "verified sources locator"):
+            self.result(reviewer, "pass", theorems=[{**use, "locator": "Wrong theorem", "reason": "Fixture."}])
+        with self.assertRaisesRegex(state.Rejected, "record proof citations"):
+            self.result(reviewer, "pass", sources=[self.source_row(later)])
+        with self.assertRaisesRegex(state.Rejected, "only sources and reuse gates"):
+            self.result(reviewer, "waiting-source", source="later-study", required=True, location="External theorem")
+        current = self.action(component="main")
+        judgment = {**self.theorem(original), "reason": "An independently proved equivalent form covers the complete claim.",
+                    "materials": [{"source": later["source_url"] + " (2024 version)", "locator": "Theorem B, page 1"}]}
+        digest = hashlib.sha256(review_dispatch.packet_bytes(packet)).hexdigest()
+        result = review_dispatch.accept_receipt(self.task, reviewer["token"], current["identity"]["session"], {
+            **{key: packet[key] for key in ("token", "snapshot_digest", "component", "gate")},
+            "packet_sha256": digest, "verdict": "pass", "evidence": "Synthetic theorem assessment.",
+            "theorems": [judgment],
+        })
+        self.data = result
+        reuse = self.action(component="main", gate="reuse")
+        with self.assertRaisesRegex(ValueError, "after the target version cutoff"):
+            self.result(reuse, "pass", sources=[self.source_row(later)])
+        self.result(reuse, "pass")
+        recorded = self.data["state"]
+        self.assertEqual(recorded["external_theorem_results"]["main"]["theorems"], [judgment])
+        self.assertEqual(recorded["source_results"]["main"], [[self.source_row(original)], []])
+        self.assertEqual(recorded["external_theorem_results"]["setting"]["theorems"], [])
+        self.change("advance")
+        self.result(self.action(role="explorer"), "no-change")
+        self.change("advance")
+        proof_sources = self.until_gate("main-proof", "sources")
+        self.assertNotIn("prior_theorem_judgments", proof_sources)
+        self.result(proof_sources, "pass", sources=[self.source_row(original)], theorem_uses=[use])
+        self.assertEqual(self.action(component="main-proof")["prior_theorem_judgments"], [judgment])
+
+    def test_theorem_gate_accepts_no_dependency_for_a_background_citation(self):
+        self.init(kind="public")
+        reference = self.reference()
+        self.change("advance")
+        self.result(self.until_gate("setting", "sources"), "pass",
+                    sources=[self.source_row(reference)], theorem_uses=[])
+        action = self.action(component="setting", gate=state.EXTERNAL_THEOREM_GATE)
+        self.assertEqual(action["theorem_uses"], [])
+        self.result(action, "pass", theorems=[])
+        self.assertEqual(self.action(component="setting")["gate"], "reuse")
+
+    def test_upgrade_of_legacy_delivery_runs_only_the_new_gate_and_retains_old_approval(self):
+        self.init("guided", "public")
+        reference = self.reference()
+        original_gates = {typ: tuple(gate for gate in plan if gate != state.EXTERNAL_THEOREM_GATE)
+                          for typ, plan in state.GATES.items()}
+        with patch.object(state, "GATES", original_gates), patch.object(state, "pending_theorem_reviews", return_value=set()):
+            self.assertEqual(self.evaluate({("main", "sources"): [self.source_row(reference)],
+                                            ("setting", "reuse"): [self.source_row(reference)]}), "route")
+            self.result(self.action(role="public_route"), "pass")
+            self.change("advance")
+        self.save_legacy_ledger()
+        previous = self.data["state"]
+        product = previous["delivery"]
+        with self.assertRaisesRegex(state.Rejected, "supplemental external theorem review before delivery"):
+            self.change("deliverable", kind="game", status="blocked", snapshot_digest=product["snapshot_digest"],
+                        evidence="A synthetic product check before the upgrade supplement.")
+        self.change("select-release", schema=1, tool_release="new-fixture-release",
+                    approval="Synthetic upgrade approval.", compatibility="Compatible schema.")
+        self.change("advance")
+        self.assertEqual([(row["component"], row["gate"]) for row in self.actions()],
+                         [("main", state.EXTERNAL_THEOREM_GATE)])
+        pending = self.action(component="main")
+        self.assertTrue(pending["supplemental"])
+        self.assertIsNone(pending["identity"])
+        self.assertEqual(pending["theorem_sources"], previous["source_results"]["main"][0])
+        with self.assertRaisesRegex(state.Rejected, "no active delivery approval"):
+            self.change("deliverable", kind="referee", status="blocked", snapshot_digest=product["snapshot_digest"],
+                        evidence="A supplemental round is still active.")
+        self.result(pending, "pass")
+        after_round = self.data["state"]
+        self.assertEqual(after_round["safe"], previous["safe"])
+        self.assertEqual(after_round["source_results"], previous["source_results"])
+        self.assertEqual(after_round["history"][:len(previous["history"])], previous["history"])
+        completed = after_round["history"][-1]["round"]["reviews"]["main"]
+        self.assertEqual([gate["gate"] for gate in completed["gates"]], [state.EXTERNAL_THEOREM_GATE])
+        self.assertEqual(after_round["counters"]["rounds"], previous["counters"]["rounds"] + 1)
+        resumed = self.change("advance")
+        self.assertEqual(resumed["phase"], "delivery")
+        self.assertEqual(self.data["state"]["route"], previous["route"])
+        self.assertEqual(self.data["state"]["delivery"], product)
+        self.assertFalse(self.actions())
+        self.assertEqual(self.data["theorem_supplements"], [])
+        self.assertEqual(resumed["counters"]["loops"], previous["counters"]["loops"] + 1)
+        self.assertEqual(self.change("advance")["counters"], resumed["counters"])
+
+    def test_legacy_in_flight_reuse_reopens_only_after_failed_supplement(self):
+        self.init(kind="public")
+        reference = self.reference()
+        original_gates = {typ: tuple(gate for gate in plan if gate != state.EXTERNAL_THEOREM_GATE)
+                          for typ, plan in state.GATES.items()}
+        with patch.object(state, "GATES", original_gates):
+            self.change("advance")
+            self.pass_component("setting")
+            old_sources = self.until_gate("main", "sources")
+            self.result(old_sources, "pass", sources=[self.source_row(reference)])
+        legacy_reuse = self.bind(self.action(component="main", gate="reuse"))
+        self.save_legacy_ledger()
+        self.result(legacy_reuse, "pass")
+        self.assertIn("main", self.data["state"]["safe"])
+        self.change("advance")
+        supplement = self.bind(self.action(component="main", gate=state.EXTERNAL_THEOREM_GATE))
+        self.change("replace", token=supplement["token"], snapshot_digest=supplement["snapshot_digest"],
+                    session=supplement["identity"]["session"], evidence="Synthetic review session disappeared.")
+        supplement = self.action(component="main", gate=state.EXTERNAL_THEOREM_GATE)
+        self.assertTrue(supplement["supplemental"])
+        self.assertIsNone(supplement["identity"])
+        self.result(supplement, "nonpass", issue="The source does not settle the uniform estimate.",
+                    location="Statement, first cited estimate",
+                    theorem_finding={**self.theorem(reference), "kind": "uncertain"})
+        self.assertFalse(self.actions(gate="reuse"))
+        self.result(self.action(role="batcher"), "complete", issue_ids=[supplement["token"]])
+        self.result(self.action(role="fixer"), "no-change", issues={
+            supplement["token"]: {"status": "resolved", "evidence": "A synthetic independent check calls for fresh review."},
+        })
+        self.assertIn("main", self.data["unsafe"])
+        self.assertIn("setting", self.data["state"]["safe"])
+        self.change("advance")
+        self.assertEqual([(row["component"], row["gate"]) for row in self.actions()], [("main", "expression")])
+
+    def test_legacy_scope_ignores_out_of_cone_safe_and_reuse_only_sources(self):
+        main = self.task / "main.tex"
+        source = main.read_text()
+        main.write_text(source.replace(r"\MScomponent{main-proof}", (
+            r"\MSstatement{retired}{components/retired.tex}{retired-proof}{Lemma}{}" + "\n"
+            + r"\MScomponent{main-proof}"
+        )).replace(r"\MSendnode" + "\n" + r"\MSendnode", (
+            r"\MSendnode" + "\n" + r"\MSnode{retired}{}" + "\n"
+            + r"\MScomponent{retired-proof}{proof}{components/retired-proof.tex}{retired}{}{}" + "\n"
+            + r"\MSendnode" + "\n" + r"\MSendnode"
+        )))
+        (self.task / "components/retired.tex").write_text(
+            "\\begin{MSresult}\nThe segregated fixture assertion.\n\\end{MSresult}\n")
+        (self.task / "components/retired-proof.tex").write_text("A segregated fixture argument.\n")
+        self.init(kind="public")
+        reference = self.reference()
+        ledger = self.data["state"]
+        ledger["round_serial"] = 1
+        ledger["universe"] = ["setting", "main", "retired"]
+        ledger["safe"] = ["setting", "main", "retired"]
+        ledger["source_results"] = {"setting": [[], [self.source_row(reference)]],
+                                    "main": [[self.source_row(reference)], []],
+                                    "retired": [[self.source_row(reference)], []]}
+        self.assertNotIn("retired", ledger["snapshot"]["cone"])
+        self.save_legacy_ledger()
+        self.change("advance")
+        self.assertEqual([(row["component"], row["gate"]) for row in self.actions()],
+                         [("main", state.EXTERNAL_THEOREM_GATE)])
+
+    def test_confirmed_theorem_defect_reopens_matching_consumers_and_keeps_cutoff_for_fixes(self):
+        self.init(kind="public")
+        reference = self.reference()
+        later = self.reference("late-proof", public_date="2024-02-17")
+        self.change("advance")
+        setting = self.until_gate("setting", "sources")
+        self.result(setting, "pass", sources=[self.source_row(reference, "Other Theorem")])
+        self.pass_component("setting")
+        self.result(self.until_gate("main", "sources"), "pass", sources=[self.source_row(reference)])
+        self.pass_component("main")
+        self.change("advance")
+        self.result(self.action(role="explorer"), "no-change")
+        self.change("advance")
+        self.pass_component("lower-bound")
+        self.pass_component("lower-bound-proof")
+        self.result(self.until_gate("main-proof", "sources"), "pass", sources=[self.source_row(reference)])
+        reporter = self.action(component="main-proof", gate=state.EXTERNAL_THEOREM_GATE)
+        issue = {**self.theorem(reference), "kind": "proof-error",
+                 "materials": [{"source": "Independent 2024 proof", "locator": "Theorem A and erratum, page 2"}]}
+        self.result(reporter, "nonpass", issue="The cited proof drops an essential hypothesis.",
+                    location="The first paragraph of the proof", theorem_finding=issue)
+        self.assertFalse(self.actions(gate="reuse"))
+        self.assertIn("main", self.data["state"]["safe"])
+        self.result(self.action(role="batcher"), "complete", issue_ids=[reporter["token"]])
+        fixer = self.bind(self.action(role="fixer"))
+        self.assertEqual(fixer["cutoff"], "2023-01-01")
+        self.assertEqual(fixer["issues"][reporter["token"]]["theorem_finding"], issue)
+        disposition = {"status": "resolved", "evidence": "Determine the affected dependency."}
+        with self.assertRaisesRegex(state.Rejected, "must confirm or refute"):
+            self.result(fixer, "no-change", issues={reporter["token"]: disposition})
+        disposition["theorem_resolution"] = {"status": "confirmed", "evidence": "Located the missing hypothesis."}
+        with self.assertRaisesRegex(ValueError, "after the target version cutoff"):
+            self.result(fixer, "no-change", sources=[self.source_row(later)], issues={reporter["token"]: disposition})
+        self.result(fixer, "no-change", issues={reporter["token"]: disposition})
+        self.assertEqual(set(self.data["unsafe"]), {"main", "main-proof"})
+        self.assertIn("setting", self.data["state"]["safe"])
+        self.assertNotIn("main", self.data["state"]["external_theorem_results"])
+        self.change("advance")
+        self.assertEqual([(row["component"], row["gate"]) for row in self.actions()],
+                         [("main", "expression"), ("main-proof", "expression")])
+        self.result(self.until_gate("main", "sources"), "pass", sources=[self.source_row(reference)])
+        followup = self.action(component="main", gate=state.EXTERNAL_THEOREM_GATE)
+        self.assertEqual(followup["confirmed_theorem_defects"][0]["finding"], issue)
+
+    def test_external_counterexample_suspends_delivery_before_fixers_confirmation(self):
+        self.init("guided", "public")
+        reference = self.reference()
+        uses = {("main", "sources"): [self.source_row(reference)],
+                ("main-proof", "sources"): [self.source_row(reference)],
+                ("setting", "sources"): [self.source_row(reference, "Unrelated theorem")]}
+        self.assertEqual(self.evaluate(uses), "route")
+        self.result(self.action(role="public_route"), "pass")
+        self.change("advance")
+        earlier = self.data["state"]
+        delivery = earlier["delivery"]
+        approval = self.task / delivery["approval_path"]
+        issue = {**self.theorem(reference), "kind": "counterexample",
+                 "materials": [{"source": "2024 corrigendum", "locator": "Example 4"}]}
+        request = {"kind": "external-theorem", "theorem_finding": issue, "snapshot_digest": delivery["snapshot_digest"],
+                   "components": ["main"], "evidence": "Synthetic purported counterexample to the full external theorem."}
+        pending = self.change("incident", **request)
+        self.assertEqual(pending["phase"], "incident-check")
+        self.assertEqual(pending["safe"], earlier["safe"])
+        with self.assertRaisesRegex(state.Rejected, "no active delivery approval"):
+            self.change("deliverable", kind="game", snapshot_digest=delivery["snapshot_digest"],
+                        status="blocked", evidence="Delivery is suspended.")
+        self.result(self.action(role="fixer"), "refuted")
+        self.assertEqual(self.data["state"]["phase"], "delivery")
+        self.assertEqual(self.data["state"]["delivery"], delivery)
+        self.assertEqual(state.read_json(approval), delivery["approval"])
+        self.change("incident", **request)
+        self.result(self.action(role="fixer"), "confirmed")
+        self.assertEqual(self.data["state"]["phase"], "dispatch")
+        self.assertEqual(set(self.data["unsafe"]), {"main", "main-proof"})
+        self.assertEqual(state.read_json(approval)["math_review"], "invalidated")
+        self.assertIsNone(self.data["state"]["delivery"])
+
     def test_missing_pdf_stops_at_fixer_and_keeps_completed_peers_on_replacement(self):
         self.init(kind="public")
         self.change("advance")
@@ -479,7 +788,7 @@ class Ledger(unittest.TestCase):
         self.result(current, "pass", sources=[{
             "id": correct["id"], "sha256": correct["sha256"], "locators": {"Theorem A": [1]},
         }])
-        self.result(self.action(component="main"), "pass")
+        self.pass_component("main")
         self.assertIn("main", self.data["state"]["safe"])
 
     def test_user_can_select_an_eligible_alternative_edition_in_the_same_wait(self):
@@ -690,7 +999,7 @@ class Ledger(unittest.TestCase):
             self.result(resumed, "pass", sources=[{
                 "id": reference["id"], "sha256": reference["sha256"], "locators": {"Theorem A": [1]},
             }])
-            self.result(self.action(component="setting"), "pass")
+            self.pass_component("setting")
             fresh = self.action(component="main")
             self.assertNotEqual(fresh["token"], queued["token"])
             self.assertIsNone(fresh["identity"])

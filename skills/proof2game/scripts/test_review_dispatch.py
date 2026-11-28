@@ -41,10 +41,14 @@ class ReviewDispatchTest(unittest.TestCase):
             "role": "reviewer", "token": "pending-gate", "waiting": None,
             "component": component, "gate": gate,
             "snapshot_digest": manuscript.parse(self.main)[0]["snapshot_digest"],
-            "source_blind": gate not in ("sources", "reuse"),
+            "source_blind": gate not in manuscript.LITERATURE_GATES,
             "independent_of_target": True, "identity": None,
             "model": "gpt-6-luna", "effort": "high", "tool_release": "installed-release",
             "prior_findings": "PREVIOUS_FINDING_CANARY",
+            "theorem_uses": None,
+            "prior_theorem_judgments": [{"reason": "EXACT_THEOREM_JUDGMENT_CANARY"}],
+            "confirmed_theorem_defects": [],
+            "supplemental": False,
             "target_path": "TARGET_FILE_CANARY.pdf",
             "source_resolution": {
                 "source": "EXTERNAL_CITATION_CANARY", "required": False,
@@ -63,7 +67,8 @@ class ReviewDispatchTest(unittest.TestCase):
                 self.assertTrue(packet["source_blind"])
                 self.assertTrue(packet["target_independent"])
                 for forbidden in ("PAIRED_PROOF_CANARY", "TARGET_FILE_CANARY", "PREVIOUS_FINDING_CANARY",
-                                  "EXTERNAL_CITATION_CANARY", "UNPUBLISHED_WORKER_NOTE_CANARY", CUTOFF):
+                                  "EXTERNAL_CITATION_CANARY", "UNPUBLISHED_WORKER_NOTE_CANARY",
+                                  "EXACT_THEOREM_JUDGMENT_CANARY", CUTOFF):
                     self.assertNotIn(forbidden, serialized)
                 self.assertIn("current_text", packet)
                 message = review_dispatch.worker_prompt(packet, self.scratch / "gate.json", "sha256")
@@ -89,7 +94,7 @@ class ReviewDispatchTest(unittest.TestCase):
         self.append_component("main.tex", r"The Statement invokes \cite{visible}.")
         self.append_component("main-proof.tex", r"APPLICATION_CANARY verifies \cite{visible} here.")
         self.append_component("main-proof.tex", r"UNRELATED_CANARY uses \cite{proof-only}.")
-        for gate in ("sources", "reuse"):
+        for gate in manuscript.LITERATURE_GATES:
             with self.subTest(gate=gate):
                 packet = review_dispatch.build_packet(self.main, self.action("main", gate), cutoff=CUTOFF)
                 proof = packet["paired_proof_limited_application_check"]["text"]
@@ -98,6 +103,32 @@ class ReviewDispatchTest(unittest.TestCase):
                 self.assertNotIn("proof-only", proof)
         proof = review_dispatch.build_packet(self.main, self.action("main-proof", "sources"), cutoff=CUTOFF)
         self.assertIn("UNRELATED_CANARY", proof["current_text"])
+
+    def test_only_theorem_gate_allows_later_judgment_material_and_prior_judgments(self):
+        gate = manuscript.EXTERNAL_THEOREM_GATE
+        action = self.action("main", gate)
+        action["theorem_uses"] = [{"statement": "THEOREM_STATEMENT_CANARY", "use": "SCRIPT_USE_CANARY"}]
+        verified = [{"id": "exact-paper", "version": "v4", "pdf_path": "VERIFIED_PDF_CANARY.pdf"}]
+        packet = review_dispatch.build_packet(self.main, action, cutoff=CUTOFF, theorem_sources=verified)
+        serialized = json.dumps(packet)
+        self.assertEqual(packet["script_reference_cutoff"], CUTOFF)
+        self.assertNotIn("source_cutoff", packet)
+        self.assertNotIn("source_resolution", packet)
+        for field in ("EXACT_THEOREM_JUDGMENT_CANARY", "THEOREM_STATEMENT_CANARY", "SCRIPT_USE_CANARY",
+                      "VERIFIED_PDF_CANARY"):
+            self.assertIn(field, serialized)
+        for field in ("TARGET_FILE_CANARY", "PREVIOUS_FINDING_CANARY"):
+            self.assertNotIn(field, serialized)
+        prompt = review_dispatch.worker_prompt(packet, self.scratch / "gate.json", "sha256")
+        self.assertIn("Choose your own methods, tools", prompt)
+        self.assertIn("corrections or independent proofs are allowed", prompt)
+        self.assertIn("gives a materially faulty proof is a nonpass", prompt)
+        self.assertIn("one-sentence reason", prompt)
+        self.assertNotIn("Exclude results, arguments and corrections", prompt)
+        reuse = review_dispatch.build_packet(self.main, self.action("main", "reuse"), cutoff=CUTOFF)
+        self.assertEqual(reuse["source_cutoff"], CUTOFF)
+        self.assertNotIn("prior_theorem_judgments", reuse)
+        self.assertNotIn("theorem_sources", reuse)
 
     def test_statement_expression_explains_blank_adjacent_prose(self):
         packet = review_dispatch.build_packet(self.main, self.action("main", "expression"), cutoff=CUTOFF)

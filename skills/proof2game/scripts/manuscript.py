@@ -703,10 +703,13 @@ def migrate_statement(main, cid, first_line, last_line):
     return {'component': cid, 'file': component['path'], 'removed_heading_lines': sorted(markers)}
 
 
+EXTERNAL_THEOREM_GATE = 'external_theorems'
+SOURCE_REVIEW_GATES = ('sources', 'reuse')
+LITERATURE_GATES = ('sources', EXTERNAL_THEOREM_GATE, 'reuse')
 GATES = {
-    'convention': ('opening', 'expression', 'self_contained', 'mathematics', 'sources', 'reuse'),
-    'statement': ('expression', 'self_contained', 'mathematics', 'sources', 'reuse'),
-    'proof': ('expression', 'decomposition', 'self_contained', 'mathematics', 'sources', 'reuse'),
+    'convention': ('opening', 'expression', 'self_contained', 'mathematics', *LITERATURE_GATES),
+    'statement': ('expression', 'self_contained', 'mathematics', *LITERATURE_GATES),
+    'proof': ('expression', 'decomposition', 'self_contained', 'mathematics', *LITERATURE_GATES),
 }
 
 
@@ -732,7 +735,7 @@ def review_payload(main, cid, gate):
     out = {
         'component': cid, 'type': component['type'], 'gate': gate,
         'snapshot_digest': snap['snapshot_digest'], 'component_digest': component['digest'],
-        'source_blind': gate not in ('sources', 'reuse'), 'heading': component['heading'],
+        'source_blind': gate not in LITERATURE_GATES, 'heading': component['heading'],
         'location': component['location'], 'adoption_prefix': component['adoption_prefix'],
         'adoption': [{'id': cid, 'location': byid[cid]['location']} for cid in component['ambient']],
         'current_text': body, 'ambient': [item(dep) for dep in component['ambient']],
@@ -741,7 +744,7 @@ def review_payload(main, cid, gate):
     if component['type'] == 'proof':
         out['paired_statement'] = item(component['paired'])
     if component['type'] == 'statement':
-        if gate in ('sources', 'reuse'):
+        if gate in LITERATURE_GATES:
             interface_keys = cited_keys(body)
             for interface in out['ambient'] + out['direct_statement_interfaces']:
                 interface_keys.update(cited_keys(interface['text']))

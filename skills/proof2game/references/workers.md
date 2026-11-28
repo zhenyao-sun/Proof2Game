@@ -2,7 +2,7 @@
 
 Use this reference for creating or continuing a worker. The main coordinator follows [verification.md](verification.md). Use [roles.json](roles.json) for defaults and apply explicit project overrides by role. Explorer and Interface Optimizer use the same `explorer` configuration and session. Keep `simplification` and `public_route` independently configurable. Dispatch on the host using actual supported model and reasoning parameters. Confirm the current main session's configuration through host or launch evidence. Prompt text cannot change or establish a session's model. If the host cannot use or confirm a configured model, reasoning level, independent session, or required continuation, report the capability gap and preserve work. A user may explicitly choose a supported override. Unpublished paper writing uses the fixed `paper_writer` model and effort. The public referee report uses `writer`. Follow [the paper handoff](writer.md#complete-paper) for its fresh session and materials.
 
-The coordinator assembles each worker's applicable instructions and needed materials, supplies the version selected by the main session, and records the host session identity, model, reasoning level, operation, and exact input binding. Workers use that selected release. They skip release discovery. Use fresh independent contexts with no forked author or coordinator conversation wherever a fresh session is specified. Keep prior reviews, Fixer judgments, other workers' findings, and the expected answer out of review packets. Ask for precise locations, evidence, and concise checkable reasons. Reissue malformed requests to the same worker where possible. No role gets to approve its own revised mathematics by assigning a safe classification.
+The coordinator assembles each worker's applicable instructions and needed materials, supplies the version selected by the main session, and records the host session identity, model, reasoning level, operation, and exact input binding. Workers use that selected release. They skip release discovery. Use fresh independent contexts with no forked author or coordinator conversation wherever a fresh session is specified. Keep prior reviews, Fixer judgments, other workers' findings, and the expected answer out of review packets, apart from matching theorem judgments at the external-theorem gate. Ask for precise locations, evidence, and concise checkable reasons. Reissue malformed requests to the same worker where possible. No role gets to approve its own revised mathematics by assigning a safe classification.
 
 ## Host session lifecycle
 
@@ -16,7 +16,7 @@ For a source wait, preserve the assigned session for resumption and let its curr
 
 One fresh Reviewer per component per round, up to ten concurrently, and the same reviewer for the component's successive gates. A passing gate retains its running slot for the next gate. Send only the current gate and its allowed materials. Each component can advance independently as capacity permits. Stop that component's round at its first substantive `nonpass`. Optional polish never blocks. Return `pass` when the gate finds no substantive defect, `nonpass` with the actionable defect and its evidence, or a source wait when a required input for that gate is missing. Record each result as an English mathematical finding. The reviewer describes problems and can suggest a repair without owning implementation. The Statement, Convention, and Proof verdicts remain separate.
 
-For each current ledger assignment, run `python3 scripts/review_dispatch.py --task <task-directory> --token <current-token>` from the skill directory. Check the returned version, model and effort, then pass the returned **message** to a fresh un-forked Reviewer or the specified continuing session. Keep the detached packet separate from project and ledger files. Record the actual host session, and check the returned token, snapshot, component, gate and packet SHA-256 before accepting the result. Source-blind gates return `pass` or `nonpass` and can raise packet delivery problems separately with the coordinator. Only source-enabled gates return `waiting-source`, identifying the missing external work and its use. The script verifies the packet contents; the coordinator retains responsibility for actual host isolation and evidencing results.
+For each current ledger assignment, run `python3 scripts/review_dispatch.py --task <task-directory> --token <current-token>` from the skill directory. Check the returned version, model and effort, then pass the returned **message** to a fresh un-forked Reviewer or the specified continuing session. Keep the detached packet separate from project and ledger files. Record the actual host session, and check the returned token, snapshot, component, gate and packet SHA-256 before accepting the result. Source-blind gates return `pass` or `nonpass` and can raise packet delivery problems separately with the coordinator. Only the sources and reuse gates return `waiting-source`, identifying the missing external work and its use. The script verifies the packet contents. The coordinator retains responsibility for actual host isolation and evidencing results.
 
 After observing the host session return the receipt, record it with `python3 scripts/review_dispatch.py --task TASK --token TOKEN --session SESSION --receipt -` and supply the receipt JSON on stdin. A file path may replace `-`. The command verifies the live assignment, host session binding, and exact packet digest before invoking the ledger result transaction. If the ledger revision changes concurrently, refresh it and retry only if the receipt still matches the current assignment. The coordinator retains responsibility for actual host isolation and evidencing results.
 
@@ -26,15 +26,16 @@ After observing the host session return the receipt, record it with `python3 scr
 - The text, decomposition, self-containment, and correctness gates are source-blind. Exclude external documents, OCR, search results, summaries, and source access instructions, even if the coordinator already gathered material. Tell the Reviewer to use only its detached packet during those gates and to defer external reads. Provide any later allowed source evidence only after earlier passes. Treat a fully stated external interface as a provisional assumption during internal correctness, and check how the current manuscript uses it. No later source material may excuse an earlier defect.
 - Packets must have actual allowed text and give no broad project link, inherited chat, state log, or deeper dependency traversal. A path or sibling file in a shared checkout grants no additional reading permission. Describe this as scoped worker input, with only the access controls the host actually provides.
 - For public-literature projects tell the ordinary Reviewer, “Judge this manuscript independently. The target publication must not influence your mathematical judgment.” Keep its route and published status out of that judgment. The source gate can consult narrow evidence needed for a cited interface under the same source rules. The independent end-of-run route reviewer has a different remit and receives the actual target edition.
-- All validation roles use only external evidence eligible under the exact target version's publication cutoff for a public project. See [intake.md](intake.md) for evidence, references-first lookup and version selection. This restriction covers later results and techniques, including corrigenda, even when familiar to the worker.
+- The public target's publication cutoff applies to script references, proof techniques, and repairs. See [intake.md](intake.md) for eligible editions. The external-theorem gate may inspect later evidence to judge a theorem. A Fixer may inspect that evidence to confirm the reported defect and must use only eligible evidence and techniques in the script repair.
 
 ### Statement gates in order
 
 1. **Expression and readability.** Include the actual immediately preceding mathematical prose or component, the complete Statement, and its rendered environment mode and embedded headings. Require the minimum mathematical transition needed when objects or tasks change. In legacy mode the whole component is inside the theorem. Return a located nonpass for misplaced orientation, transitions, method previews or follow-up commentary, even without bold headings. A clean formal legacy component can pass. Keep mathematical definitions, hypotheses, quantifiers and conclusions in their proper scope. Check result kind, optional title and proof navigation.
 2. **Self-containment.** Require a consumable specification across the surrounding prose and formal environment. Check domains, assumptions, quantifiers, scope, variables, normalization, and stated external interfaces.
-3. **Mathematical correctness.** Check well-formedness, conditions, notation, legitimate contextual instances and logical content of the Statement. Proof existence and correctness belong to the separate Proof review. The source/reuse checks may inspect the existing paired proof only to locate specialization and applicability arguments.
+3. **Mathematical correctness.** Check well-formedness, conditions, notation, legitimate contextual instances and logical content of the Statement. Proof existence and correctness belong to the separate Proof review. The literature gates may inspect the limited existing paired-proof excerpts only to locate specialization and actual use.
 4. **External sources.** Verify the cited interface by direct inspection of the correct, eligible original PDF, including conditions and scope. A narrow paired-proof check can locate evidence about applicability. The Statement still supplies its own complete interface.
-5. **Literature reuse.** Use the common rule below. The same limited paired-proof inspection applies.
+5. **External theorem correctness.** Use the common rule below for the actual external dependencies of the Statement.
+6. **Literature reuse.** Use the common rule below. The same limited paired-proof inspection applies.
 
 ### Convention gates in order
 
@@ -43,7 +44,8 @@ After observing the host session return the receipt, record it with `python3 scr
 3. **Self-containment.** Require the complete local interfaces, definitions and standing hypotheses used by downstream components.
 4. **Mathematical correctness.** Check consistency, notation, scope, definitions, and actual use of inherited settings. Accept a fully specified and directly cited external result as a provisional interface in this gate, including a labelled theorem-like declaration with a nontrivial external proof. Check the exact source and applicability at the external-sources gate. Flag any manuscript claim or nontrivial transfer argument that requires its own Statement and Proof. The responsibility here is the new Convention, including any conflicts or invalid inherited instantiation.
 5. **External sources.** Verify cited mathematics and the existence specifications, including one common witness where consumers need to share one.
-6. **Literature reuse.** Use the common rule below.
+6. **External theorem correctness.** Use the common rule below for external results required by the script, including actively used interfaces in this Convention.
+7. **Literature reuse.** Use the common rule below.
 
 ### Proof gates in order
 
@@ -52,7 +54,34 @@ After observing the host session return the receipt, record it with `python3 scr
 3. **Self-containment.** Require the mathematical inputs needed to read and apply the steps, with actual interfaces and contexts.
 4. **Mathematical correctness.** The paired Statement is the obligation. Verify all nontrivial steps, actual dependency applicability, coverage and edge cases, circularity, limits and interchange, convergence and uniformity. A uniquely mechanical inference with no hidden condition may remain implicit. A nontrivial gap requires an argument in the manuscript even if the reviewer knows one.
 5. **External sources.** Check the exact original PDF against the specific use and instantiation. Routine background may need no citation. Verify new applications of a cited result to new parameters, objects, or hypotheses.
-6. **Literature reuse.** Use the common rule below.
+6. **External theorem correctness.** Use the common rule below for results on which the deductions rely, including calls through an external interface.
+7. **Literature reuse.** Use the common rule below.
+
+### External theorem decisions
+
+At the sources gate, record the external theorem uses separately from the source
+bindings. Identify the cited statement and where the script actually needs it.
+Background, comparison, and attribution alone do not create a theorem use.
+On an upgrade, the supplemental gate receives the legacy sources receipt and
+current interfaces, so distinguish actual uses from other citation material.
+
+At `external_theorems`, independently judge each actual cited theorem. Choose the
+methods, tools, whether to read the original proof, and how far to follow its
+dependencies. You may consider the supplied prior judgments for the same cited
+version and result, including earlier confirmed defects. You own the current
+judgment. On pass, give a one-sentence
+reason per theorem and locators for any specific material actually used. A source
+such as a survey that states a valid theorem can remain cited. Later independent
+proofs, corrections or counterexamples can inform this judgment even in a public
+project. Record them as assessment material.
+
+Investigate concrete doubts. If still undecided or if there is a substantive defect,
+return `nonpass` with the problem and affected script use. Report a faulty proof
+given in the cited version even if another proof establishes the same result.
+Report a counterexample to the full cited theorem even when the script uses a
+valid special case. Explain the scope of the counterexample and why the special
+case holds if substantiated. The Fixer narrows the script to the case it can justify.
+See [state.md](state.md) for the receipt and confirmation fields.
 
 ### Source and reuse decisions
 
@@ -70,7 +99,15 @@ The Fixer independently verifies diagnoses, causal assumptions and proposed edit
 
 In public-literature projects the Fixer consults the exact target version at the relevant original argument, follows the original core route where sound, and runs any necessary departure through the hard-error procedure. It may annotate uncertainties without elevating them to confirmed errors. Verify the counterexample or other evidence before asserting an original defect, and use a documented detour only as allowed in [verification.md](verification.md).
 
-If the active Fixer session is lost, supply a fresh Fixer with the full finding list, staged candidate, and prior dispositions. It checks and retains valid completed changes, then resumes the remainder. If an active Reviewer is lost, replace it for that component and restart at the first gate. Keep all other still-valid findings and passes. Preserve actual session identities and supersession in the project record.
+For a concrete external-theorem defect, independently confirm or refute the finding.
+Inspect the actual still-used dependencies, including consumers that cite the
+same false theorem under a different source or locator. Name any such additional
+consumers with supporting evidence. If only one cited proof is wrong, the
+affected consumers are those still relying on that proof. Look for an eligible
+supporting result or provide a self-contained argument. The script cutoff applies
+to the repair, including when a later source helped diagnose the problem.
+
+If the active Fixer session is lost, supply a fresh Fixer with the full finding list, staged candidate, and prior dispositions. It checks and retains valid completed changes, then resumes the remainder. If an active Reviewer is lost, replace it for that component and restart at the first gate in its assigned plan. A supplement's plan contains only the new gate. Keep all other still-valid findings and passes. Preserve actual session identities and supersession in the project record.
 
 ## Explorer and Refactor implementation
 

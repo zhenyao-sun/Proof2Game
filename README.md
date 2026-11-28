@@ -28,7 +28,7 @@ You can attach a LaTeX file, Markdown notes, or a PDF, or paste an arXiv link. A
 | **Your unpublished work** | A shareable game and an independently written paper in PDF and LaTeX. |
 | **A public paper** | A game that follows the edition you chose, plus a generic English referee report in Markdown based on the original paper and the final reviewed game script. |
 
-Proof2Game keeps your original and builds a separate English game script. Independent Codex reviewers check the argument and the cited results. For public papers, a separate reviewer checks the route against the exact edition you supplied. For unpublished work, the team explores whether the proof can be made simpler.
+Proof2Game keeps your original and builds a separate English game script. Independent Codex reviewers check the argument, verify source citations, and judge the external theorems the proof relies on. For public papers, a separate reviewer checks the route against the exact edition you supplied. For unpublished work, the team explores whether the proof can be made simpler.
 
 The Summary opens with one sentence stating the paper’s main contribution. The Assessment opens with the overall judgment, including the number of major issues and their collective impact when any are present. Major Issues and Minor Issues follow. Each item locates the original passage, quotes it in italics and states exactly what is wrong there and gives just enough evidence to check the diagnosis. All verbatim excerpts appear in italics, including inline quotations and quoted formulas. The authors decide how to address it. You can request a fresh report from the same approved manuscript. The public referee Writer uses the bundled [Humanizer v4.0.0](skills/proof2game/references/humanizer/SKILL.md) when drafting, revising and checking the report.
 
@@ -55,7 +55,7 @@ One Codex session coordinates the work. Each specialist takes a different part o
       <p align="center"><img src="docs/agents/reviewer.webp" width="144" alt="An owl examining a proof page with a magnifying glass"></p>
       <strong>Reviewer</strong><br>
       <em>“Does this step follow?”</em><br>
-      Independently checks definitions, assumptions, deductions, and what each citation supports.
+      Independently checks definitions, assumptions, deductions, source citations, and the external theorems the proof relies on.
     </td>
   </tr>
   <tr>
